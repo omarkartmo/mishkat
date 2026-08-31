@@ -62,4 +62,19 @@ router.post('/mark-all-read', authenticateToken, async (req: Request, res: Respo
   }
 });
 
+// DELETE /api/v1/notifications/clear
+router.delete('/clear', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const userRole = req.user!.role;
+    await db.query(
+      "DELETE FROM notifications WHERE recipient_id = $1 OR (recipient_role = $2 AND recipient_id = $2)",
+      [userId, userRole]
+    );
+    res.json({ success: true, data: { cleared: true } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 export default router;

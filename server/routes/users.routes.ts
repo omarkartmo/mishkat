@@ -189,4 +189,23 @@ router.post('/roster-import', authenticateToken, requireRole('admin'), async (re
   }
 });
 
+// POST /api/v1/users/:id/reset-password
+router.post('/:id/reset-password', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { newPassword = '123' } = req.body || {};
+
+  try {
+    const passHash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passHash, id]);
+    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'RESET_PASSWORD', 'user', id, null, req);
+
+    res.json({
+      success: true,
+      data: { message: 'تمت إعادة تعيين كلمة المرور بنجاح في الخادم المركزي.', newPassword },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 export default router;

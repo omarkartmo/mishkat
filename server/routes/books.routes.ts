@@ -135,6 +135,51 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/books/bulk (Admin bulk add digital books)
+router.post('/bulk', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { books } = req.body;
+  if (!Array.isArray(books) || books.length === 0) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'مصفوفة الكتب مطلوبة.' } });
+  }
+
+  try {
+    let addedCount = 0;
+    await db.transaction(async (client) => {
+      for (const b of books) {
+        const id = b.id || `dig-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+        await client.query(`
+          INSERT INTO books (
+            id, type, title, author, category_id, format, file_size, file_url,
+            pages_count, summary, cover_image, source_origin, uploaded_by, tags,
+            download_count, read_count, table_of_contents, sample_content
+          ) VALUES ($1, 'digital', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 0, 0, $14, $15)
+        `, [
+          id,
+          b.title,
+          b.author,
+          b.categoryId || 'cat-general',
+          b.format || 'pdf',
+          b.fileSize || '1.5 MB',
+          b.fileUrl || null,
+          b.pagesCount || 0,
+          b.summary || '',
+          b.coverImage || null,
+          b.sourceOrigin || null,
+          req.user!.id,
+          b.tags || [],
+          JSON.stringify(b.tableOfContents || []),
+          JSON.stringify(b.sampleContent || []),
+        ]);
+        addedCount++;
+      }
+    });
+
+    res.status(201).json({ success: true, data: { count: addedCount, message: `تمت إضافة ${addedCount} كتاب بنجاح.` } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 // POST /api/v1/books (Admin only)
 router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
   const book = req.body;

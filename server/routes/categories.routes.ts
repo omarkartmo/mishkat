@@ -61,9 +61,28 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req: Request,
 // DELETE /api/v1/categories/:id
 router.delete('/:id', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   const { id } = req.params;
+  const { targetCategoryId = 'cat-general' } = req.body || {};
   try {
-    await db.query('DELETE FROM categories WHERE id = $1', [id]);
-    res.json({ success: true, data: { message: 'تم حذف التصنيف بنجاح.' } });
+    await db.transaction(async (client) => {
+      await client.query('UPDATE books SET category_id = $1 WHERE category_id = $2', [targetCategoryId, id]);
+      await client.query('DELETE FROM categories WHERE id = $1', [id]);
+    });
+    res.json({ success: true, data: { message: 'تم حذف التصنيف وإعادة تعيين الكتب بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/categories/:id/reassign-delete
+router.post('/:id/reassign-delete', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { targetCategoryId = 'cat-general' } = req.body;
+  try {
+    await db.transaction(async (client) => {
+      await client.query('UPDATE books SET category_id = $1 WHERE category_id = $2', [targetCategoryId, id]);
+      await client.query('DELETE FROM categories WHERE id = $1', [id]);
+    });
+    res.json({ success: true, data: { message: 'تم حذف التصنيف وإعادة تعيين الكتب بنجاح.' } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }

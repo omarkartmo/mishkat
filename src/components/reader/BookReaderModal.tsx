@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { DigitalBook, StudentNote } from '../../types/library';
 import { getRichBookPage, BookPageContent } from '../../data/richBookContent';
+import { apiClient } from '../../services/apiClient';
 
 interface BookReaderModalProps {
   book: DigitalBook;
@@ -61,14 +62,24 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [bookmarks, setBookmarks] = useState<number[]>(() => {
-    try {
-      const saved = localStorage.getItem(`bookmarks_${book.id}`);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [bookmarks, setBookmarks] = useState<number[]>([]);
+
+  // Load Bookmarks from Central API on mount
+  useEffect(() => {
+    let isMounted = true;
+    apiClient.get<any[]>('/bookmarks').then((res) => {
+      if (isMounted && res.success && Array.isArray(res.data)) {
+        const bookBms = res.data
+          .filter((bm) => bm.bookId === book.id)
+          .map((bm) => Number(bm.currentPage))
+          .filter((p) => !isNaN(p));
+        setBookmarks(Array.from(new Set(bookBms)).sort((a, b) => a - b));
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [book.id]);
 
   // Note creation form state
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -113,15 +124,27 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPage, totalPages, layoutMode, isFullscreen, onClose]);
 
-  // Toggle Bookmark
+  // Toggle Bookmark via Central API
   const toggleBookmark = (page: number) => {
-    setBookmarks((prev) => {
-      const next = prev.includes(page) ? prev.filter((p) => p !== page) : [...prev, page].sort((a, b) => a - b);
-      try {
-        localStorage.setItem(`bookmarks_${book.id}`, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+    const isCurrentlyBookmarked = bookmarks.includes(page);
+    const next = isCurrentlyBookmarked ? bookmarks.filter((p) => p !== page) : [...bookmarks, page].sort((a, b) => a - b);
+    setBookmarks(next);
+
+    if (isCurrentlyBookmarked) {
+      // Delete bookmark on central server
+      apiClient.delete(`/bookmarks/bm-${book.id}-${page}`).catch(() => {});
+    } else {
+      // Save bookmark on central server
+      apiClient.post('/bookmarks', {
+        id: `bm-${book.id}-${page}`,
+        bookId: book.id,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        currentPage: page,
+        totalPages: totalPages,
+        chapterOrTopic: `صفحة ${page}`,
+      }).catch(() => {});
+    }
   };
 
   const handleCreateNote = (e: React.FormEvent) => {

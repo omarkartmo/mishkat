@@ -69,4 +69,45 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/reading-progress/dismiss
+router.post('/dismiss', authenticateToken, async (req: Request, res: Response) => {
+  const { bookId } = req.body;
+  const studentId = req.user!.id;
+  try {
+    await db.query(
+      'UPDATE reading_progress SET is_dismissed = true WHERE student_id = $1 AND book_id = $2',
+      [studentId, bookId]
+    );
+    res.json({ success: true, data: { dismissed: true, bookId } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/reading-progress/clear-completed
+router.post('/clear-completed', authenticateToken, async (req: Request, res: Response) => {
+  const studentId = req.user!.id;
+  try {
+    await db.query(
+      'UPDATE reading_progress SET is_dismissed = true WHERE student_id = $1 AND is_completed = true',
+      [studentId]
+    );
+    res.json({ success: true, data: { cleared: true } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// DELETE /api/v1/reading-progress/:bookId
+router.delete('/:bookId', authenticateToken, async (req: Request, res: Response) => {
+  const { bookId } = req.params;
+  const studentId = req.user!.id;
+  try {
+    await db.query('DELETE FROM reading_progress WHERE student_id = $1 AND book_id = $2', [studentId, bookId]);
+    res.json({ success: true, data: { message: 'تم حذف سجل القراءة بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 export default router;

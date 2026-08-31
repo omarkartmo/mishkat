@@ -147,23 +147,49 @@ const INITIAL_STUDENT_PROGRESS: StudentReadingProgress[] = [
   },
 ];
 
-// Helper for local storage with fallback
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : fallback;
-  } catch (e) {
-    console.warn(`Error reading ${key} from storage:`, e);
-    return fallback;
+// Purge legacy persistent library keys from client localStorage (Phase 1.7 Directive)
+const LEGACY_KEYS_TO_PURGE = [
+  'almanara_categories',
+  'almanara_physical_books',
+  'almanara_digital_books',
+  'almanara_students',
+  'almanara_admin',
+  'almanara_loans',
+  'almanara_loan_requests',
+  'almanara_notifications',
+  'almanara_portals',
+  'almanara_submissions',
+  'almanara_config',
+  'almanara_notes',
+  'almanara_progress',
+  'almanara_favorites',
+  'almanara_search_history',
+  'almanara_open_books',
+  'almanara_bookmarks',
+  'almanara_summaries',
+];
+
+try {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    LEGACY_KEYS_TO_PURGE.forEach((k) => localStorage.removeItem(k));
+    // Also remove any bookmarks_*
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith('bookmarks_') || (k.startsWith('almanara_') && k !== 'almanara_theme')) {
+        localStorage.removeItem(k);
+      }
+    });
   }
+} catch (e) {
+  // Ignore storage access errors
 }
 
-function saveToStorage<T>(key: string, data: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
-    console.error(`Error saving ${key} to storage:`, e);
-  }
+// In-Memory Storage Helper (No persistent library storage on client)
+function loadFromStorage<T>(_key: string, fallback: T): T {
+  return fallback;
+}
+
+function saveToStorage<T>(_key: string, _data: T): void {
+  // No-op: Persistent storage is strictly centralized on the Node.js/PostgreSQL server
 }
 
 export class StorageService {
