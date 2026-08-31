@@ -325,27 +325,7 @@ export class StorageService {
    */
   public async syncWithServer(): Promise<boolean> {
     try {
-      // 1. Books
-      const booksRes = await apiClient.get('/books');
-      if (booksRes.success && Array.isArray(booksRes.data)) {
-        const pBooks: PhysicalBook[] = [];
-        const dBooks: DigitalBook[] = [];
-        booksRes.data.forEach((b: any) => {
-          if (b.format || b.fileSize || b.tableOfContents) {
-            dBooks.push(b);
-          } else {
-            pBooks.push(b);
-          }
-        });
-        if (pBooks.length > 0) {
-          this.physicalBooks = pBooks;
-          saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
-        }
-        if (dBooks.length > 0) {
-          this.digitalBooks = dBooks;
-          saveToStorage(STORAGE_KEYS.DIGITAL_BOOKS, this.digitalBooks);
-        }
-      }
+      // [Book synchronization removed in Phase 1.7.3-B - Books are now managed exclusively via BookRepository]
 
       // [Category synchronization removed in Phase 1.7.3-A - Categories are now managed exclusively via CategoryRepository]
 
@@ -527,12 +507,14 @@ export class StorageService {
     return { success: true, user: student };
   }
 
-  // --- Physical Books ---
+  // --- Legacy Physical Books (Deprecated in Phase 1.7.3-B - Use BookRepository) ---
+  /** @deprecated Use BookRepository.getPhysicalBooks() instead. */
   public getPhysicalBooks(): PhysicalBook[] {
     this.syncBookAvailability();
     return this.physicalBooks;
   }
 
+  /** @deprecated Use BookRepository.createPhysicalBook() instead. */
   public addPhysicalBook(book: Omit<PhysicalBook, 'id' | 'addedAt'>): PhysicalBook {
     const total = typeof book.totalCopies === 'number' && book.totalCopies > 0 ? book.totalCopies : 1;
     const newBook: PhysicalBook = {
@@ -548,6 +530,7 @@ export class StorageService {
     return newBook;
   }
 
+  /** @deprecated Use BookRepository.updatePhysicalBook() instead. */
   public updatePhysicalBook(id: string, updates: Partial<PhysicalBook>): PhysicalBook | null {
     const index = this.physicalBooks.findIndex(b => b.id === id);
     if (index === -1) return null;
@@ -558,6 +541,7 @@ export class StorageService {
     return this.physicalBooks[index];
   }
 
+  /** @deprecated Use BookRepository.deleteBook() instead. */
   public deletePhysicalBook(id: string): boolean {
     const activeLoans = this.loans.filter(l => l.bookId === id && l.status !== 'returned');
     if (activeLoans.length > 0) {
@@ -569,11 +553,13 @@ export class StorageService {
     return true;
   }
 
-  // --- Digital Books ---
+  // --- Legacy Digital Books (Deprecated in Phase 1.7.3-B - Use BookRepository) ---
+  /** @deprecated Use BookRepository.getDigitalBooks() instead. */
   public getDigitalBooks(): DigitalBook[] {
     return this.digitalBooks;
   }
 
+  /** @deprecated Use BookRepository.createDigitalBook() or BookRepository.bulkImportDigitalBooks() instead. */
   public addDigitalBook(book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>): DigitalBook {
     const newBook: DigitalBook = {
       ...book,
@@ -592,6 +578,7 @@ export class StorageService {
     return newBook;
   }
 
+  /** @deprecated Use BookRepository.incrementReadCount() instead. */
   public incrementReadCount(bookId: string): void {
     const book = this.digitalBooks.find(b => b.id === bookId);
     if (book) {
@@ -1609,6 +1596,7 @@ export class StorageService {
     return this.submitBookForReview(data);
   }
 
+  /** @deprecated Use BookRepository.incrementReadCount() instead. */
   public incrementDigitalReadCount(bookId: string) {
     this.incrementReadCount(bookId);
   }

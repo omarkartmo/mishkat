@@ -336,6 +336,20 @@ router.put('/:id', authenticateToken, requireRole('admin', 'librarian'), async (
 router.delete('/:id', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
+    const { rows: activeLoans } = await db.query(
+      "SELECT id FROM loans WHERE book_id = $1 AND status != 'returned'",
+      [id]
+    );
+    if (activeLoans.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'ACTIVE_LOANS_EXIST',
+          message: `لا يمكن حذف هذا الكتاب لوجود ${activeLoans.length} عملية إعارة نشطة مرتبطة به حالياً.`,
+        },
+      });
+    }
+
     await db.query('DELETE FROM books WHERE id = $1', [id]);
     await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'DELETE_BOOK', 'book', id, null, req);
     res.json({ success: true, data: { message: 'تم حذف الكتاب من الخادم المركزي بنجاح.' } });

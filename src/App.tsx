@@ -36,6 +36,8 @@ import { SearchResultsView } from './components/search/SearchResultsView';
 import { LoginView } from './components/auth/LoginView';
 import { useAuth } from './context/AuthContext';
 import { categoryRepository } from './services/categoryRepository';
+import { bookRepository } from './services/bookRepository';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const { user: authUser, isAuthenticated, isLoading, login, logout, setUser: setAuthUser } = useAuth();
@@ -51,8 +53,13 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
-  const [physicalBooks, setPhysicalBooks] = useState<PhysicalBook[]>(() => storage.getPhysicalBooks());
-  const [digitalBooks, setDigitalBooks] = useState<DigitalBook[]>(() => storage.getDigitalBooks());
+
+  // Server-authoritative Books State (Phase 1.7.3-B)
+  const [physicalBooks, setPhysicalBooks] = useState<PhysicalBook[]>([]);
+  const [digitalBooks, setDigitalBooks] = useState<DigitalBook[]>([]);
+  const [isBooksLoading, setIsBooksLoading] = useState(false);
+  const [booksError, setBooksError] = useState<string | null>(null);
+
   const [loans, setLoans] = useState<LoanRecord[]>(() => storage.getLoans());
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
@@ -90,6 +97,35 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative books (Phase 1.7.3-B)
+  const loadBooks = async () => {
+    setIsBooksLoading(true);
+    try {
+      const [physRes, digRes] = await Promise.all([
+        bookRepository.getPhysicalBooks(),
+        bookRepository.getDigitalBooks(),
+      ]);
+
+      if (physRes.success && Array.isArray(physRes.data)) {
+        setPhysicalBooks(physRes.data);
+      }
+      if (digRes.success && Array.isArray(digRes.data)) {
+        setDigitalBooks(digRes.data);
+      }
+
+      if (!physRes.success || !digRes.success) {
+        const errMsg = physRes.error?.message || digRes.error?.message || 'تعذر استرجاع فهرس الكتب من الخادم المركزي.';
+        setBooksError(errMsg);
+      } else {
+        setBooksError(null);
+      }
+    } catch (err: any) {
+      setBooksError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الكتب.');
+    } finally {
+      setIsBooksLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -107,8 +143,7 @@ export default function App() {
   // Re-sync all state helper
   const refreshAllState = (targetUser?: User) => {
     loadCategories();
-    setPhysicalBooks(storage.getPhysicalBooks());
-    setDigitalBooks(storage.getDigitalBooks());
+    loadBooks();
     setLoans(storage.getLoans());
     setSubmissions(storage.getSubmissions());
     setUsers(storage.getUsers());
@@ -129,6 +164,7 @@ export default function App() {
   // Synchronize with Central Server on mount
   useEffect(() => {
     loadCategories();
+    loadBooks();
     storage.syncWithServer().then(() => {
       refreshAllState();
     });
@@ -300,17 +336,101 @@ export default function App() {
     refreshAllState();
   };
 
-  // Bulk add digital books
-  const handleBulkAddDigitalBooks = (newBooks: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => {
-    newBooks.forEach((b) => {
-      storage.addDigitalBook(b);
-    });
-    refreshAllState();
+  // Server-Authoritative Book Operations (Phase 1.7.3-B)
+  const handleAddPhysicalBook = async (book: Omit<PhysicalBook, 'id' | 'addedAt' | 'availableCopies'>) => {
+    try {
+      const res = await bookRepository.createPhysicalBook(book);
+      if (res.success) {
+        await loadBooks();
+      } else {
+        alert(res.error?.message || 'فشل إضافة الكتاب الورقي في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إضافة الكتاب.');
+    }
+  };
+
+  const handleUpdatePhysicalBook = async (id: string, updates: Partial<PhysicalBook>) => {
+    try {
+      const res = await bookRepository.updatePhysicalBook(id, updates);
+      if (res.success) {
+        await loadBooks();
+      } else {
+        alert(res.error?.message || 'فشل تحديث بيانات الكتاب في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تحديث بيانات الكتاب.');
+    }
+  };
+
+  const handleDeletePhysicalBook = async (id: string) => {
+    try {
+      const res = await bookRepository.deleteBook(id);
+      if (res.success) {
+        await loadBooks();
+      } else {
+        alert(res.error?.message || 'فشل حذف الكتاب من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حذف الكتاب.');
+    }
+  };
+
+  const handleAddDigitalBook = async (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => {
+    try {
+      const res = await bookRepository.createDigitalBook(book);
+      if (res.success) {
+        await loadBooks();
+      } else {
+        alert(res.error?.message || 'فشل إضافة الكتاب الرقمي في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إضافة الكتاب الرقمي.');
+    }
+  };
+
+  // Bulk add digital books via BookRepository
+  const handleBulkAddDigitalBooks = async (newBooks: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => {
+    try {
+      const res = await bookRepository.bulkImportDigitalBooks(newBooks);
+      if (res.success) {
+        await loadBooks();
+      } else {
+        alert(res.error?.message || 'فشل استيراد حزمة الكتب الرقمية.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء استيراد الكتب الرقمية.');
+    }
+  };
+
+  const handleOpenDigitalReader = (book: DigitalBook) => {
+    bookRepository.incrementReadCount(book.id).catch(() => {});
+    setDigitalBooks((prev) =>
+      prev.map((b) => (b.id === book.id ? { ...b, readCount: (b.readCount || 0) + 1 } : b))
+    );
+    setActiveReadingBook(book);
   };
 
   // Admin Approval Queue Actions
-  const handleApproveSubmission = (submissionId: string, categoryId?: string) => {
+  const handleApproveSubmission = async (submissionId: string, categoryId?: string) => {
+    const sub = submissions.find((s) => s.id === submissionId);
+    if (sub) {
+      const catId = categoryId || sub.suggestedCategoryId;
+      await bookRepository.createDigitalBook({
+        title: sub.title,
+        author: sub.author,
+        categoryId: catId,
+        format: sub.format,
+        fileSize: '8.5 MB',
+        pagesCount: sub.pagesEstimated || 250,
+        sourceOrigin: sub.sourcePortalName,
+        summary: sub.summary,
+        tags: ['مرفوع من الطالب', sub.sourcePortalName],
+        uploadedBy: sub.studentId,
+      });
+    }
     storage.approveSubmission(submissionId, categoryId);
+    await loadBooks();
     refreshAllState();
   };
 
@@ -353,11 +473,7 @@ export default function App() {
   const handleDeleteCategoryWithReassign = async (categoryId: string, targetCategoryId: string) => {
     const res = await categoryRepository.reassignAndDeleteCategory(categoryId, targetCategoryId);
     if (res.success) {
-      await loadCategories();
-      storage.syncWithServer().then(() => {
-        setPhysicalBooks(storage.getPhysicalBooks());
-        setDigitalBooks(storage.getDigitalBooks());
-      });
+      await Promise.all([loadCategories(), loadBooks()]);
       return {
         success: true,
         reassignedPhysicalCount: physicalBooks.filter((b) => b.categoryId === categoryId).length,
@@ -536,10 +652,7 @@ export default function App() {
           physicalBooks={physicalBooks}
           digitalBooks={digitalBooks}
           categories={categories}
-          onOpenBookReader={(book) => {
-            storage.incrementDigitalReadCount(book.id);
-            setActiveReadingBook(book);
-          }}
+          onOpenBookReader={handleOpenDigitalReader}
           onOpenPhysicalBookmark={(book) => {
             const bm = physicalBookmarks.find((b) => b.bookId === book.id);
             setActivePhysicalBookmarkModal({
@@ -549,6 +662,23 @@ export default function App() {
             });
           }}
         />
+
+        {/* Global Error Banner for Central Server Catalog Sync */}
+        {booksError && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center justify-between gap-3 text-amber-400 text-xs">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{booksError}</span>
+            </div>
+            <button
+              onClick={() => loadBooks()}
+              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg font-medium flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>إعادة المحاولة</span>
+            </button>
+          </div>
+        )}
 
         {/* Dynamic Screen View Container */}
         <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/95 scroll-smooth">
@@ -569,10 +699,7 @@ export default function App() {
                 setIsNewLoanModalOpen(true);
                 setActiveTab('loans');
               }}
-              onOpenBookReader={(book) => {
-                storage.incrementDigitalReadCount(book.id);
-                setActiveReadingBook(book);
-              }}
+              onOpenBookReader={handleOpenDigitalReader}
               onOpenPhysicalBookmark={(bookmark, loan) => {
                 const book = physicalBooks.find((p) => p.id === (loan?.bookId || bookmark?.bookId));
                 setActivePhysicalBookmarkModal({
@@ -609,18 +736,9 @@ export default function App() {
                   bookmark: bm || null,
                 });
               }}
-              onAddBook={(newBook) => {
-                storage.addPhysicalBook(newBook);
-                refreshAllState();
-              }}
-              onUpdateBook={(id, updates) => {
-                storage.updatePhysicalBook(id, updates);
-                refreshAllState();
-              }}
-              onDeleteBook={(id) => {
-                storage.deletePhysicalBook(id);
-                refreshAllState();
-              }}
+              onAddBook={handleAddPhysicalBook}
+              onUpdateBook={handleUpdatePhysicalBook}
+              onDeleteBook={handleDeletePhysicalBook}
               onIssueLoanForBook={(book) => {
                 handleQuickLoanFromBook(book.id);
               }}
@@ -656,14 +774,8 @@ export default function App() {
               userRole={currentUser.role}
               favorites={favorites}
               onToggleFavorite={handleToggleFavorite}
-              onOpenReader={(book) => {
-                storage.incrementDigitalReadCount(book.id);
-                setActiveReadingBook(book);
-              }}
-              onAddDigitalBook={(newBook) => {
-                storage.addDigitalBook(newBook);
-                refreshAllState();
-              }}
+              onOpenReader={handleOpenDigitalReader}
+              onAddDigitalBook={handleAddDigitalBook}
               onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
             />
           )}
@@ -745,10 +857,7 @@ export default function App() {
               notes={studentNotes}
               submissions={submissions}
               physicalBookmarks={physicalBookmarks}
-              onOpenReader={(book) => {
-                storage.incrementDigitalReadCount(book.id);
-                setActiveReadingBook(book);
-              }}
+              onOpenReader={handleOpenDigitalReader}
               onNavigate={handleNavigateToTab}
               onDismissProgress={handleDismissReadingProgress}
               onClearCompletedProgress={handleClearCompletedProgress}
@@ -780,10 +889,7 @@ export default function App() {
                 }
               }}
               onDeleteNote={handleDeleteNote}
-              onOpenDigitalBook={(book) => {
-                storage.incrementDigitalReadCount(book.id);
-                setActiveReadingBook(book);
-              }}
+              onOpenDigitalBook={handleOpenDigitalReader}
               onNavigateTab={handleNavigateToTab}
             />
           )}
@@ -797,10 +903,7 @@ export default function App() {
               currentUser={currentUser}
               systemConfig={config}
               onToggleFavorite={handleToggleFavorite}
-              onOpenReader={(book) => {
-                storage.incrementDigitalReadCount(book.id);
-                setActiveReadingBook(book);
-              }}
+              onOpenReader={handleOpenDigitalReader}
               onRequestLoanSubmit={handleRequestLoanSubmit}
               onNavigate={handleNavigateToTab}
             />
@@ -815,10 +918,7 @@ export default function App() {
               currentUser={currentUser}
               favoriteBookIds={favorites}
               onToggleFavorite={handleToggleFavorite}
-              onOpenReader={(book) => {
-                storage.incrementDigitalReadCount(book.id);
-                setActiveReadingBook(book);
-              }}
+              onOpenReader={handleOpenDigitalReader}
               onOpenPhysicalBookmark={(book) => {
                 const bm = physicalBookmarks.find((b) => b.bookId === book.id);
                 setActivePhysicalBookmarkModal({
@@ -830,10 +930,7 @@ export default function App() {
               onRequestLoanSubmit={handleRequestLoanSubmit}
               onQuickLoan={handleQuickLoanFromBook}
               onNavigateTab={handleNavigateToTab}
-              onAddDigitalBook={(newBook) => {
-                storage.addDigitalBook(newBook);
-                refreshAllState();
-              }}
+              onAddDigitalBook={handleAddDigitalBook}
               onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
             />
           )}
