@@ -12,6 +12,9 @@ import {
   X,
   Layers,
   ShieldAlert,
+  RefreshCw,
+  ServerCrash,
+  Loader2,
 } from 'lucide-react';
 import { Category, PhysicalBook, DigitalBook } from '../../types/library';
 
@@ -19,18 +22,24 @@ interface CategoryManagerViewProps {
   categories: Category[];
   physicalBooks: PhysicalBook[];
   digitalBooks: DigitalBook[];
-  onAddCategory: (category: Omit<Category, 'id'>) => void;
-  onUpdateCategory: (id: string, updates: Partial<Category>) => void;
-  onDeleteCategoryWithReassign: (categoryId: string, targetCategoryId: string) => {
-    reassignedPhysicalCount: number;
-    reassignedDigitalCount: number;
-  };
+  error?: string | null;
+  isLoading?: boolean;
+  onRefresh?: () => void;
+  onAddCategory: (category: Omit<Category, 'id'>) => Promise<void> | void;
+  onUpdateCategory: (id: string, updates: Partial<Category>) => Promise<void> | void;
+  onDeleteCategoryWithReassign: (
+    categoryId: string,
+    targetCategoryId: string
+  ) => Promise<{ success: boolean; error?: string; reassignedPhysicalCount?: number; reassignedDigitalCount?: number } | { reassignedPhysicalCount: number; reassignedDigitalCount: number }> | { reassignedPhysicalCount: number; reassignedDigitalCount: number };
 }
 
 export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
   categories = [],
   physicalBooks = [],
   digitalBooks = [],
+  error,
+  isLoading = false,
+  onRefresh,
   onAddCategory,
   onUpdateCategory,
   onDeleteCategoryWithReassign,
@@ -39,6 +48,8 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
   const [targetCategoryId, setTargetCategoryId] = useState<string>('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Counts per category
   const getPhysicalCount = (catId: string) => (physicalBooks || []).filter((b) => b.categoryId === catId).length;
@@ -58,14 +69,46 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>إضافة قسم / تصنيف جديد</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isLoading}
+              className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              title="تحديث من الخادم المركزي"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
+            </button>
+          )}
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>إضافة قسم / تصنيف جديد</span>
+          </button>
+        </div>
       </div>
+
+      {/* Server Error Alert Banner */}
+      {error && (
+        <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 flex items-center justify-between gap-3 text-rose-300 text-xs">
+          <div className="flex items-center gap-3">
+            <ServerCrash className="w-5 h-5 text-rose-400 shrink-0" />
+            <div>
+              <span className="font-bold">خطأ في الاتصال بالخادم المركزي:</span> {error}
+            </div>
+          </div>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-200 border border-rose-500/40 rounded-lg text-xs font-medium transition-colors"
+            >
+              إعادة المحاولة
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Safety Policy Notice */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-start gap-3">
@@ -80,12 +123,25 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
         </div>
       </div>
 
+      {/* Loading Skeleton or Empty State */}
+      {isLoading && categories.length === 0 ? (
+        <div className="p-12 text-center space-y-3 bg-slate-900/40 border border-slate-800 rounded-2xl">
+          <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
+          <p className="text-xs text-slate-400">جاري تحميل التصنيفات من الخادم المركزي...</p>
+        </div>
+      ) : categories.length === 0 && !error ? (
+        <div className="p-12 text-center space-y-3 bg-slate-900/40 border border-slate-800 rounded-2xl">
+          <FolderTree className="w-10 h-10 text-slate-600 mx-auto" />
+          <p className="text-sm font-semibold text-slate-300">لا توجد تصنيفات مسجلة في الخادم المركزي.</p>
+          <p className="text-xs text-slate-500">انقر على زر "إضافة قسم / تصنيف جديد" للبدء في تنظيم مكتبتك.</p>
+        </div>
+      ) : null}
+
       {/* Categories Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {categories.map((cat) => {
           const physCount = getPhysicalCount(cat.id);
           const digCount = getDigitalCount(cat.id);
-          const totalBooks = physCount + digCount;
 
           return (
             <div
@@ -115,6 +171,7 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
                       <button
                         onClick={() => {
                           setDeletingCategory(cat);
+                          setDeleteError(null);
                           const remainingCats = categories.filter((c) => c.id !== cat.id);
                           setTargetCategoryId(remainingCats[0]?.id || '');
                         }}
@@ -129,9 +186,14 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
 
                 {/* Name & Description */}
                 <div>
-                  <h3 className="font-bold text-slate-100 text-base group-hover:text-indigo-300 transition-colors">
-                    {cat.name}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-100 text-base group-hover:text-indigo-300 transition-colors">
+                      {cat.name}
+                    </h3>
+                    {cat.nameEn && (
+                      <span className="text-[11px] text-slate-400 font-mono">({cat.nameEn})</span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-400 mt-1 leading-relaxed">{cat.description}</p>
                 </div>
               </div>
@@ -163,8 +225,8 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
       {isAddModalOpen && (
         <AddCategoryModal
           onClose={() => setIsAddModalOpen(false)}
-          onSave={(data) => {
-            onAddCategory(data);
+          onSave={async (data) => {
+            await onAddCategory(data);
             setIsAddModalOpen(false);
           }}
         />
@@ -175,8 +237,8 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
         <EditCategoryModal
           category={editingCategory}
           onClose={() => setEditingCategory(null)}
-          onSave={(updates) => {
-            onUpdateCategory(editingCategory.id, updates);
+          onSave={async (updates) => {
+            await onUpdateCategory(editingCategory.id, updates);
             setEditingCategory(null);
           }}
         />
@@ -191,14 +253,23 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
                 <AlertTriangle className="w-5 h-5 text-rose-400" />
                 حذف التصنيف وإعادة التوجيه الإجباري
               </h3>
-              <button onClick={() => setDeletingCategory(null)} className="text-slate-400 hover:text-slate-200">
+              <button
+                onClick={() => !isDeleting && setDeletingCategory(null)}
+                className="text-slate-400 hover:text-slate-200"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
+            {deleteError && (
+              <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-rose-300 text-xs">
+                {deleteError}
+              </div>
+            )}
+
             <div className="text-xs text-slate-300 space-y-2">
               <p>
-                أنت على وشك حذف تصنيف <strong className="text-rose-400">"{deletingCategory.name}"</strong>.
+                أنت على وشك حذف تصنيف <strong className="text-rose-400">"{deletingCategory.name}"</strong> من الخادم المركزي.
               </p>
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
                 <div>
@@ -223,7 +294,8 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
               <select
                 value={targetCategoryId}
                 onChange={(e) => setTargetCategoryId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-medium outline-none focus:border-indigo-500"
+                disabled={isDeleting}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-medium outline-none focus:border-indigo-500 disabled:opacity-50"
               >
                 {categories
                   .filter((c) => c.id !== deletingCategory.id)
@@ -237,26 +309,40 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
               <button
+                type="button"
                 onClick={() => setDeletingCategory(null)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs"
+                disabled={isDeleting}
+                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs disabled:opacity-50"
               >
                 إلغاء
               </button>
               <button
-                onClick={() => {
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
                   if (!targetCategoryId) {
-                    alert('يرجى اختيار التصنيف البديل');
+                    setDeleteError('يرجى اختيار التصنيف البديل.');
                     return;
                   }
-                  const res = onDeleteCategoryWithReassign(deletingCategory.id, targetCategoryId);
-                  alert(
-                    `تم حذف التصنيف بنجاح ونقل ${res.reassignedPhysicalCount} كتاب ورقي و ${res.reassignedDigitalCount} كتاب رقمي إلى التصنيف الجديد.`
-                  );
-                  setDeletingCategory(null);
+                  setIsDeleting(true);
+                  setDeleteError(null);
+                  try {
+                    const res = await onDeleteCategoryWithReassign(deletingCategory.id, targetCategoryId);
+                    if (res && 'success' in res && !res.success) {
+                      setDeleteError(res.error || 'فشل حذف التصنيف وإعادة التوجيه في الخادم المركزي.');
+                    } else {
+                      setDeletingCategory(null);
+                    }
+                  } catch (err: any) {
+                    setDeleteError(err?.message || 'تعذر الاتصال بالخادم المركزي لتنفيذ عملية الحذف.');
+                  } finally {
+                    setIsDeleting(false);
+                  }
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-rose-600/30"
+                className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-rose-600/30 disabled:opacity-50 cursor-pointer"
               >
-                تأكيد النقل والحذف
+                {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeleting ? 'جاري التنفيذ في الخادم...' : 'تأكيد النقل والحذف'}</span>
               </button>
             </div>
           </div>
@@ -269,24 +355,36 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
 // Add Category Modal
 interface AddCategoryModalProps {
   onClose: () => void;
-  onSave: (data: any) => void;
+  onSave: (data: any) => Promise<void>;
 }
 
 const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) => {
   const [name, setName] = useState('');
+  const [nameEn, setNameEn] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState('#6366f1');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name) return;
+    if (!name.trim()) return;
 
-    onSave({
-      name,
-      description,
-      color,
-      icon: 'FolderTree',
-    });
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await onSave({
+        name: name.trim(),
+        nameEn: nameEn.trim() || undefined,
+        description: description.trim(),
+        color,
+        iconName: 'FolderTree',
+      });
+    } catch (err: any) {
+      setError(err?.message || 'فشل حفظ التصنيف في الخادم المركزي.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -297,16 +395,35 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
           إضافة تصنيف علمي جديد
         </h3>
 
+        {error && (
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-rose-300 text-xs">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اسم القسم / التصنيف *</label>
+            <label className="block text-slate-300 font-medium mb-1">اسم القسم / التصنيف (بالعربية) *</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="مثال: العلوم والتكنولوجيا المعاصرة"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+              disabled={isSubmitting}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-medium mb-1">اسم القسم (بالإنجليزية - اختياري)</label>
+            <input
+              type="text"
+              value={nameEn}
+              onChange={(e) => setNameEn(e.target.value)}
+              placeholder="e.g. Science & Technology"
+              disabled={isSubmitting}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50 font-mono"
             />
           </div>
 
@@ -317,7 +434,8 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="بيان نطاق وتخصص المراجع التابعة لهذا القسم..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none"
+              disabled={isSubmitting}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
             />
           </div>
 
@@ -328,6 +446,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
+                disabled={isSubmitting}
                 className="w-10 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
               />
               <span className="font-mono text-slate-300">{color}</span>
@@ -338,15 +457,18 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium disabled:opacity-50"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30"
+              disabled={isSubmitting}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
             >
-              إضافة التصنيف
+              {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isSubmitting ? 'جاري الحفظ في الخادم...' : 'إضافة التصنيف'}</span>
             </button>
           </div>
         </form>
@@ -359,23 +481,35 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
 interface EditCategoryModalProps {
   category: Category;
   onClose: () => void;
-  onSave: (updates: Partial<Category>) => void;
+  onSave: (updates: Partial<Category>) => Promise<void>;
 }
 
 const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category, onClose, onSave }) => {
   const [name, setName] = useState(category.name);
+  const [nameEn, setNameEn] = useState(category.nameEn || '');
   const [description, setDescription] = useState(category.description);
   const [color, setColor] = useState(category.color);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name) return;
+    if (!name.trim()) return;
 
-    onSave({
-      name,
-      description,
-      color,
-    });
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await onSave({
+        name: name.trim(),
+        nameEn: nameEn.trim() || undefined,
+        description: description.trim(),
+        color,
+      });
+    } catch (err: any) {
+      setError(err?.message || 'فشل تحديث بيانات التصنيف في الخادم المركزي.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -386,15 +520,33 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category, onClose
           تعديل بيانات التصنيف
         </h3>
 
+        {error && (
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-rose-300 text-xs">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اسم القسم / التصنيف *</label>
+            <label className="block text-slate-300 font-medium mb-1">اسم القسم / التصنيف (بالعربية) *</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+              disabled={isSubmitting}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-medium mb-1">اسم القسم (بالإنجليزية - اختياري)</label>
+            <input
+              type="text"
+              value={nameEn}
+              onChange={(e) => setNameEn(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50 font-mono"
             />
           </div>
 
@@ -404,7 +556,8 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category, onClose
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none"
+              disabled={isSubmitting}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
             />
           </div>
 
@@ -415,6 +568,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category, onClose
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
+                disabled={isSubmitting}
                 className="w-10 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
               />
               <span className="font-mono text-slate-300">{color}</span>
@@ -425,15 +579,18 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category, onClose
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium disabled:opacity-50"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30"
+              disabled={isSubmitting}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
             >
-              حفظ التعديلات
+              {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}</span>
             </button>
           </div>
         </form>

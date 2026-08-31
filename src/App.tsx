@@ -35,6 +35,7 @@ import { PhysicalBookmarkModal } from './components/reading/PhysicalBookmarkModa
 import { SearchResultsView } from './components/search/SearchResultsView';
 import { LoginView } from './components/auth/LoginView';
 import { useAuth } from './context/AuthContext';
+import { categoryRepository } from './services/categoryRepository';
 
 export default function App() {
   const { user: authUser, isAuthenticated, isLoading, login, logout, setUser: setAuthUser } = useAuth();
@@ -47,7 +48,9 @@ export default function App() {
   );
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const [categories, setCategories] = useState<Category[]>(() => storage.getCategories());
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
   const [physicalBooks, setPhysicalBooks] = useState<PhysicalBook[]>(() => storage.getPhysicalBooks());
   const [digitalBooks, setDigitalBooks] = useState<DigitalBook[]>(() => storage.getDigitalBooks());
   const [loans, setLoans] = useState<LoanRecord[]>(() => storage.getLoans());
@@ -69,6 +72,24 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Load server-authoritative categories
+  const loadCategories = async () => {
+    setIsCategoriesLoading(true);
+    try {
+      const res = await categoryRepository.getCategories();
+      if (res.success && res.data) {
+        setCategories(res.data);
+        setCategoryError(null);
+      } else {
+        setCategoryError(res.error?.message || 'تعذر استرجاع قائمة التصنيفات من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setCategoryError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع التصنيفات.');
+    } finally {
+      setIsCategoriesLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -85,7 +106,7 @@ export default function App() {
 
   // Re-sync all state helper
   const refreshAllState = (targetUser?: User) => {
-    setCategories(storage.getCategories());
+    loadCategories();
     setPhysicalBooks(storage.getPhysicalBooks());
     setDigitalBooks(storage.getDigitalBooks());
     setLoans(storage.getLoans());
@@ -107,6 +128,7 @@ export default function App() {
 
   // Synchronize with Central Server on mount
   useEffect(() => {
+    loadCategories();
     storage.syncWithServer().then(() => {
       refreshAllState();
     });
@@ -297,11 +319,58 @@ export default function App() {
     refreshAllState();
   };
 
-  // Category Safe Delete with Reassign
-  const handleDeleteCategoryWithReassign = (categoryId: string, targetCategoryId: string) => {
-    const res = storage.deleteCategoryWithReassign(categoryId, targetCategoryId);
-    refreshAllState();
-    return res;
+  // Category Server-Authoritative Operations (Phase 1.7.3-A)
+  const handleAddCategory = async (cat: Omit<Category, 'id'>) => {
+    const res = await categoryRepository.createCategory({
+      name: cat.name,
+      nameEn: cat.nameEn,
+      description: cat.description,
+      color: cat.color,
+      iconName: cat.iconName || 'FolderTree',
+    });
+    if (res.success) {
+      await loadCategories();
+    } else {
+      throw new Error(res.error?.message || 'فشل إضافة التصنيف في الخادم المركزي.');
+    }
+  };
+
+  const handleUpdateCategory = async (id: string, updates: Partial<Category>) => {
+    const res = await categoryRepository.updateCategory(id, {
+      name: updates.name,
+      nameEn: updates.nameEn,
+      description: updates.description,
+      color: updates.color,
+      iconName: updates.iconName,
+    });
+    if (res.success) {
+      await loadCategories();
+    } else {
+      throw new Error(res.error?.message || 'فشل تحديث التصنيف في الخادم المركزي.');
+    }
+  };
+
+  const handleDeleteCategoryWithReassign = async (categoryId: string, targetCategoryId: string) => {
+    const res = await categoryRepository.reassignAndDeleteCategory(categoryId, targetCategoryId);
+    if (res.success) {
+      await loadCategories();
+      storage.syncWithServer().then(() => {
+        setPhysicalBooks(storage.getPhysicalBooks());
+        setDigitalBooks(storage.getDigitalBooks());
+      });
+      return {
+        success: true,
+        reassignedPhysicalCount: physicalBooks.filter((b) => b.categoryId === categoryId).length,
+        reassignedDigitalCount: digitalBooks.filter((b) => b.categoryId === categoryId).length,
+      };
+    } else {
+      return {
+        success: false,
+        error: res.error?.message || 'فشل حذف التصنيف وإعادة توجيه الكتب في الخادم المركزي.',
+        reassignedPhysicalCount: 0,
+        reassignedDigitalCount: 0,
+      };
+    }
   };
 
   // Reader Progress Save
@@ -658,14 +727,11 @@ export default function App() {
               categories={categories}
               physicalBooks={physicalBooks}
               digitalBooks={digitalBooks}
-              onAddCategory={(cat) => {
-                storage.addCategory(cat);
-                refreshAllState();
-              }}
-              onUpdateCategory={(id, updates) => {
-                storage.updateCategory(id, updates);
-                refreshAllState();
-              }}
+              error={categoryError}
+              isLoading={isCategoriesLoading}
+              onRefresh={loadCategories}
+              onAddCategory={handleAddCategory}
+              onUpdateCategory={handleUpdateCategory}
               onDeleteCategoryWithReassign={handleDeleteCategoryWithReassign}
             />
           )}

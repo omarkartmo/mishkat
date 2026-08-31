@@ -347,12 +347,7 @@ export class StorageService {
         }
       }
 
-      // 2. Categories
-      const catRes = await apiClient.get('/categories');
-      if (catRes.success && Array.isArray(catRes.data) && catRes.data.length > 0) {
-        this.categories = catRes.data;
-        saveToStorage(STORAGE_KEYS.CATEGORIES, this.categories);
-      }
+      // [Category synchronization removed in Phase 1.7.3-A - Categories are now managed exclusively via CategoryRepository]
 
       // 3. Loans
       const loansRes = await apiClient.get('/loans');
@@ -605,7 +600,8 @@ export class StorageService {
     }
   }
 
-  // --- Categories & Bulk Reclassification ---
+  // --- Legacy Categories (Deprecated in Phase 1.7.3-A - Use CategoryRepository) ---
+  /** @deprecated Use CategoryRepository.getCategories() instead. */
   public getCategories(): Category[] {
     return this.categories.map(cat => ({
       ...cat,
@@ -615,6 +611,7 @@ export class StorageService {
     }));
   }
 
+  /** @deprecated Use CategoryRepository.createCategory() instead. */
   public addCategory(cat: Omit<Category, 'id'>): Category {
     const newCat: Category = {
       ...cat,
@@ -625,6 +622,7 @@ export class StorageService {
     return newCat;
   }
 
+  /** @deprecated Use CategoryRepository.updateCategory() instead. */
   public updateCategory(id: string, updates: Partial<Category>): Category | null {
     const index = this.categories.findIndex(c => c.id === id);
     if (index === -1) return null;
@@ -634,6 +632,7 @@ export class StorageService {
   }
 
   // Safe deletion with bulk reassign
+  /** @deprecated Use CategoryRepository.reassignAndDeleteCategory() instead. */
   public deleteCategoryWithReassign(categoryIdToDelete: string, targetCategoryId: string): { reclassifiedPhysical: number; reclassifiedDigital: number } {
     if (categoryIdToDelete === targetCategoryId) {
       throw new Error('لا يمكن إعادة تصنيف الكتب إلى نفس التصنيف المراد حذفه');
