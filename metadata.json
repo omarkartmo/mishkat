@@ -1,0 +1,6 @@
+{
+  "name": "منارة المعرفة - المنظومة المركزية لتسيير المكتبة المدرسية",
+  "description": "تطبيق حاسوبي متكامل (Desktop App) لتسيير المكتبة الورقية والرقمية، إدارة الإعارات، وبوابات المخطوطات المعتمدة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+}
+
+@layer base {
+  body {
+    font-family: 'Tajawal', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+.font-amiri {
+  font-family: 'Amiri', 'Traditional Arabic', serif;
+}
+
+.font-scheherazade {
+  font-family: 'Scheherazade New', serif;
+}
+
+.font-ruqaa {
+  font-family: 'Aref Ruqaa', cursive;
+}
+
+.font-tajawal {
+  font-family: 'Tajawal', sans-serif;
+}
+
+/* Light / Dark Mode root helper colors */
+html.dark {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+/* Custom scrollbar for modern desktop look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 9999px;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.5);
+}
+
+

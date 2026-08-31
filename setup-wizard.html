@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تهيئة نظام المشكاة للمكتبات المدرسية</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      background: #090d16;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 24px;
+      padding: 36px 32px;
+      max-width: 580px;
+      width: 100%;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      text-align: center;
+    }
+    .logo-badge {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #4f46e5, #059669);
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4);
+    }
+    h1 { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+    p.subtitle { font-size: 13px; color: #94a3b8; margin-bottom: 28px; line-height: 1.6; }
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; text-align: right; }
+    .option-card {
+      background: #1e293b;
+      border: 2px solid #334155;
+      border-radius: 18px;
+      padding: 20px 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .option-card:hover { border-color: #6366f1; transform: translateY(-2px); }
+    .option-card.selected { border-color: #10b981; background: #064e3b22; }
+    .option-title { font-weight: 700; font-size: 15px; color: #fff; display: flex; items-center; gap: 8px; }
+    .option-desc { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+    .input-box {
+      display: none;
+      text-align: right;
+      margin-bottom: 20px;
+      background: #020617;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid #334155;
+    }
+    .input-box label { display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 8px; font-weight: 600; }
+    .input-box input {
+      width: 100%;
+      padding: 12px;
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      direction: ltr;
+      text-align: left;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #4f46e5, #10b981);
+      border: none;
+      border-radius: 14px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .submit-btn:hover { opacity: 0.9; }
+    .footer-note { font-size: 11px; color: #64748b; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-badge">📖</div>
+    <h1>نظام المشكاة لإدارة المكتبات المدرسية</h1>
+    <p class="subtitle">مرحباً بك في معالج التثبيت الذكي. حدد دور هذا الجهاز لمرة واحدة فقط للمتابعة:</p>
+
+    <div class="options-grid">
+      <div class="option-card" id="card-server" onclick="selectRole('server')">
+        <div class="option-title">🖥️ خادم رئيسي (Server)</div>
+        <div class="option-desc">لحاسوب أمين المكتبة المركزي. يستضيف قاعدة البيانات ويوفر رابطاً للأجهزة والهواتف الأخرى.</div>
+      </div>
+
+      <div class="option-card" id="card-client" onclick="selectRole('client')">
+        <div class="option-title">💻 محطة مطالعة (Client)</div>
+        <div class="option-desc">لحواسيب الطلبة المحمولة. تتصل بالخادم المركزي تلقائياً للبحث والقراءة وطلب الإعارات.</div>
+      </div>
+    </div>
+
+    <div class="input-box" id="client-ip-box">
+      <label for="server-ip">عنوان IP الخادم المركزي (اختياري / يكتشف تلقائياً):</label>
+      <input type="text" id="server-ip" placeholder="مثال: 192.168.1.15 أو اتركه فارغاً">
+    </div>
+
+    <!-- Desktop Shortcut Suggestion Checkbox -->
+    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 14px 16px; margin-bottom: 20px; text-align: right; display: flex; align-items: center; gap: 12px; cursor: pointer;" onclick="toggleShortcutCheckbox()">
+      <input type="checkbox" id="create-shortcut" checked style="width: 18px; height: 18px; accent-color: #10b981; cursor: pointer;" onclick="event.stopPropagation()">
+      <label for="create-shortcut" style="font-size: 13px; color: #f1f5f9; font-weight: 600; cursor: pointer; user-select: none;">
+        📌 إنشاء أيقونة واختصار للمكتبة على سطح المكتب (Desktop Shortcut) لسهولة الدخول
+      </label>
+    </div>
+
+    <button class="submit-btn" id="confirm-btn" onclick="saveAndStart()">تأكيد وبدء تشغيل نظام المشكاة 🚀</button>
+
+    <p class="footer-note">يمكنك دائماً الدخول عبر المتصفح أو الهاتف النقال من خلال الرابط المحلي المشترك.</p>
+  </div>
+
+  <script>
+    let selectedRole = 'server';
+    selectRole('server');
+
+    function selectRole(role) {
+      selectedRole = role;
+      document.getElementById('card-server').className = 'option-card ' + (role === 'server' ? 'selected' : '');
+      document.getElementById('card-client').className = 'option-card ' + (role === 'client' ? 'selected' : '');
+      document.getElementById('client-ip-box').style.display = role === 'client' ? 'block' : 'none';
+    }
+
+    function toggleShortcutCheckbox() {
+      const chk = document.getElementById('create-shortcut');
+      chk.checked = !chk.checked;
+    }
+
+    function saveAndStart() {
+      const serverIp = document.getElementById('server-ip').value.trim();
+      const createShortcut = document.getElementById('create-shortcut')?.checked ?? true;
+      if (window.electronAPI) {
+        window.electronAPI.saveSetup({ role: selectedRole, serverIp, createShortcut });
+      } else {
+        localStorage.setItem('mishkat_setup_role', selectedRole);
+        if (serverIp) localStorage.setItem('mishkat_server_ip', serverIp);
+        window.location.href = selectedRole === 'server' ? 'http://localhost:3000' : (serverIp ? `http://${serverIp}:3000` : 'http://localhost:3000');
+      }
+    }
+  </script>
+</body>
+</html>

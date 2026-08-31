@@ -1,0 +1,1141 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Globe2,
+  Lock,
+  Upload,
+  Search,
+  BookOpen,
+  Sparkles,
+  ShieldCheck,
+  Plus,
+  Trash2,
+  Layers,
+  ArrowRight,
+  Filter,
+  CheckCircle2,
+  RotateCcw,
+  Maximize2,
+  Minimize2,
+  Compass,
+  FileDown,
+  Monitor,
+  Share2,
+  X,
+  BookMarked,
+  Info,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Star,
+  Edit3,
+} from 'lucide-react';
+import { WhitelistedPortal, User, Category } from '../../types/library';
+import { BookIngestionModal } from './BookIngestionModal';
+import { PORTAL_CATALOG_DATABASE, PortalBookItem } from '../../data/portalCatalogs';
+import { isSafeUrl, sanitizeText } from '../../utils/security';
+
+interface WhitelistedPortalsViewProps {
+  portals: WhitelistedPortal[];
+  currentUser: User;
+  categories: Category[];
+  onSubmitIngestion: (data: any) => void;
+  onAddPortal: (portal: Omit<WhitelistedPortal, 'id'>) => void;
+  onDeletePortal: (id: string) => void;
+  onUpdatePortal?: (id: string, updates: Partial<WhitelistedPortal>) => void;
+  onToggleFeatured?: (id: string) => void;
+}
+
+export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
+  portals,
+  currentUser,
+  categories,
+  onSubmitIngestion,
+  onAddPortal,
+  onDeletePortal,
+  onUpdatePortal,
+  onToggleFeatured,
+}) => {
+  const [selectedPortal, setSelectedPortal] = useState<WhitelistedPortal>(portals[0] || ({} as WhitelistedPortal));
+  const [viewMode, setViewMode] = useState<'explorer' | 'browser'>('explorer');
+  const [portalSearch, setPortalSearch] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [activeReadingPortalBook, setActiveReadingPortalBook] = useState<PortalBookItem | null>(null);
+  const [activeChapterIndex, setActiveChapterIndex] = useState<number>(0);
+  const [iframeKey, setIframeKey] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [iframeWarningDismissed, setIframeWarningDismissed] = useState(false);
+  const [ingestionModalData, setIngestionModalData] = useState<{
+    portalName: string;
+    url?: string;
+    prefill?: any;
+  } | null>(null);
+  const [isAddPortalOpen, setIsAddPortalOpen] = useState(false);
+  const [editingPortal, setEditingPortal] = useState<WhitelistedPortal | null>(null);
+  const [portalToDelete, setPortalToDelete] = useState<WhitelistedPortal | null>(null);
+
+  // New Portal form state
+  const [newPortalName, setNewPortalName] = useState('');
+  const [newPortalUrl, setNewPortalUrl] = useState('');
+  const [newPortalDesc, setNewPortalDesc] = useState('');
+  const [newPortalDomains, setNewPortalDomains] = useState('');
+  const [newPortalIsFeatured, setNewPortalIsFeatured] = useState(false);
+
+  // Edit Portal form state
+  const [editPortalName, setEditPortalName] = useState('');
+  const [editPortalUrl, setEditPortalUrl] = useState('');
+  const [editPortalDesc, setEditPortalDesc] = useState('');
+  const [editPortalDomains, setEditPortalDomains] = useState('');
+  const [editPortalIsFeatured, setEditPortalIsFeatured] = useState(false);
+
+  // Keep selected portal synchronized with portals list
+  useEffect(() => {
+    if (!selectedPortal || !portals.some((p) => p.id === selectedPortal.id)) {
+      setSelectedPortal(portals[0] || ({} as WhitelistedPortal));
+    }
+  }, [portals, selectedPortal]);
+
+  // Close fullscreen on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  // Fetch books for selected portal or generate fallback catalog for custom added portals
+  const portalBooks = useMemo(() => {
+    if (!selectedPortal?.id) return [];
+    const direct = PORTAL_CATALOG_DATABASE.filter((b) => b.portalId === selectedPortal.id);
+    if (direct.length > 0) return direct;
+
+    // Synthesize rich catalog items for newly added portals (like custom Ibadi or academic repos)
+    return [
+      {
+        id: `custom-${selectedPortal.id}-1`,
+        portalId: selectedPortal.id,
+        title: `مخطوطات ومصنفات ${selectedPortal.name}`,
+        author: 'نخبة من علماء ومحققي التراث',
+        categoryName: 'الدراسات والمخطوطات التوثيقية',
+        categorySuggestion: 'cat-islamic',
+        volumeInfo: 'المجموعة الأولى المعتمدة',
+        pagesCount: 350,
+        publishYear: 'مرجع معتمد',
+        summary: `خلاصة المراجع والمؤلفات المفهرسة في موقع ${selectedPortal.name} مع إمكانية الاطلاع والاستيراد المباشر.`,
+        tags: ['تراث', 'توثيق', selectedPortal.name],
+        sampleChapters: [
+          {
+            title: `المبحث الأول: مدخل تعريفي بمصادر ${selectedPortal.name}`,
+            page: 1,
+            previewText: `بسم الله الرحمن الرحيم. يتضمن هذا المرجع أهم الأصول والقواعد التوثيقية المستخرجة من بوابة ${selectedPortal.name} لحفظ المراجع والعلوم النافعة.`,
+          },
+          {
+            title: 'المبحث الثاني: الشواهد والقضايا التوثيقية والمسائل المعاصرة',
+            page: 45,
+            previewText: 'دراسة مستفيضة للأدلة والمصادر مع ربط الفروع بالأصول ومقارنة الآراء المعتمدة.',
+          },
+        ],
+      },
+      {
+        id: `custom-${selectedPortal.id}-2`,
+        portalId: selectedPortal.id,
+        title: `الفهرس الشامل للكتب الرقمية - ${selectedPortal.name}`,
+        author: 'لجنة الفهرسة والتوثيق الإلكتروني',
+        categoryName: 'الفهارس والمعاجم',
+        categorySuggestion: 'cat-general',
+        volumeInfo: 'الفهرس العام',
+        pagesCount: 220,
+        publishYear: '2024 م',
+        summary: `دليل استرشادي شامل لجميع المواد المتاحة في قاعدة بيانات ${selectedPortal.name}.`,
+        tags: ['فهارس', 'معاجم', 'إلكتروني'],
+        sampleChapters: [
+          {
+            title: 'مقدمة الفهرسة ومنهجية التبويب والاسترجاع',
+            page: 1,
+            previewText: 'يقدم هذا الفهرس تصنيفاً منهجياً للمواد وفق التقسيمات الموضوعية للمكتبات المعتمدة.',
+          },
+        ],
+      },
+    ];
+  }, [selectedPortal]);
+
+  // Filtered books
+  const filteredPortalBooks = useMemo(() => {
+    return portalBooks.filter((book) => {
+      const matchSearch =
+        !portalSearch.trim() ||
+        book.title.includes(portalSearch.trim()) ||
+        book.author.includes(portalSearch.trim()) ||
+        book.summary.includes(portalSearch.trim()) ||
+        book.tags.some((t) => t.includes(portalSearch.trim()));
+
+      const matchCat = selectedCategoryFilter === 'all' || book.categorySuggestion === selectedCategoryFilter;
+      return matchSearch && matchCat;
+    });
+  }, [portalBooks, portalSearch, selectedCategoryFilter]);
+
+  const handleCreatePortal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPortalName.trim() || !newPortalUrl.trim()) return;
+
+    const domains = newPortalDomains
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean);
+
+    onAddPortal({
+      name: newPortalName.trim(),
+      url: newPortalUrl.trim(),
+      description: newPortalDesc.trim() || `موقع معتمد لتصفح المراجع والكتب الرقمية: ${newPortalName.trim()}`,
+      allowedDomains: domains.length > 0 ? domains : [newPortalUrl.replace(/https?:\/\//, '').split('/')[0]],
+      isFeatured: newPortalIsFeatured,
+    });
+
+    setNewPortalName('');
+    setNewPortalUrl('');
+    setNewPortalDesc('');
+    setNewPortalDomains('');
+    setNewPortalIsFeatured(false);
+    setIsAddPortalOpen(false);
+  };
+
+  const handleOpenEditModal = (portal: WhitelistedPortal) => {
+    setEditingPortal(portal);
+    setEditPortalName(portal.name);
+    setEditPortalUrl(portal.url);
+    setEditPortalDesc(portal.description);
+    setEditPortalDomains(portal.allowedDomains.join(', '));
+    setEditPortalIsFeatured(!!portal.isFeatured);
+  };
+
+  const handleSaveEditPortal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPortal || !editPortalName.trim() || !editPortalUrl.trim()) return;
+
+    const domains = editPortalDomains
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean);
+
+    const updates: Partial<WhitelistedPortal> = {
+      name: editPortalName.trim(),
+      url: editPortalUrl.trim(),
+      description: editPortalDesc.trim() || `موقع معتمد لتصفح المراجع والكتب الرقمية: ${editPortalName.trim()}`,
+      allowedDomains: domains.length > 0 ? domains : [editPortalUrl.replace(/https?:\/\//, '').split('/')[0]],
+      isFeatured: editPortalIsFeatured,
+    };
+
+    if (onUpdatePortal) {
+      onUpdatePortal(editingPortal.id, updates);
+    }
+
+    if (selectedPortal?.id === editingPortal.id) {
+      setSelectedPortal((prev) => ({
+        ...prev,
+        ...updates,
+      }));
+    }
+
+    setEditingPortal(null);
+  };
+
+  return (
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      {/* Whitelist Security Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 whitespace-nowrap">
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              <span>بيئة تصفح مقيدة ومحمية داخلياً (Closed Sandbox)</span>
+            </span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 break-words">
+            <Globe2 className="w-5 h-5 text-sky-500 shrink-0" />
+            <span className="break-words">بوابة المكتبات العالمية المعتمدة وتصفح المواقع</span>
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed break-words">
+            تصفح مباشر ومحمي للمواقع المعتمدة (المكتبة الشاملة الإباضية، الشاملة العامة، المعاجم) مع قراءة فورية للمتون واستيراد وتوثيق أي كتاب للمكتبة المركزية
+          </p>
+        </div>
+
+        {/* Top actions */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => setIsAddPortalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 text-sky-500 shrink-0" />
+              <span>إضافة موقع معتمد</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              const defaultBook = portalBooks[0];
+              setIngestionModalData({
+                portalName: selectedPortal?.name || 'المكتبة الشاملة الإباضية',
+                url: selectedPortal?.url,
+                prefill: defaultBook
+                  ? {
+                      title: defaultBook.title,
+                      author: defaultBook.author,
+                      categorySuggestion: defaultBook.categorySuggestion,
+                      summary: defaultBook.summary,
+                      pages: defaultBook.pagesCount,
+                      tags: defaultBook.tags,
+                      sourceUrl: selectedPortal?.url,
+                    }
+                  : undefined,
+              });
+            }}
+            className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-sky-600/30 transition-all cursor-pointer whitespace-nowrap"
+          >
+            <Upload className="w-4 h-4 shrink-0" />
+            <span>استيراد وتوثيق كتاب للمكتبة</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Portals Horizontal Navigation Selector */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {portals.map((portal) => {
+          const isSelected = selectedPortal?.id === portal.id;
+          return (
+            <div
+              key={portal.id}
+              onClick={() => {
+                setSelectedPortal(portal);
+                setActiveReadingPortalBook(null);
+              }}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group shadow-sm ${
+                isSelected
+                  ? 'bg-sky-50 dark:bg-sky-950/40 border-sky-500 ring-2 ring-sky-500/20'
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div
+                  className={`p-2.5 rounded-xl border ${
+                    isSelected
+                      ? 'bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/40'
+                      : 'bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {portal.isFeatured ? (
+                    <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md font-bold border border-amber-500/20 flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                      <span>رئيسي</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-md font-medium border border-slate-200 dark:border-slate-700">
+                      فرعي / تخصصي
+                    </span>
+                  )}
+                  {currentUser?.role === 'admin' && onToggleFeatured && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFeatured(portal.id);
+                      }}
+                      className={`p-1 rounded-lg border transition-all cursor-pointer ${
+                        portal.isFeatured
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 hover:bg-amber-500/20'
+                          : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500'
+                      }`}
+                      title={portal.isFeatured ? 'إلغاء وسم رئيسي (جعله فرعياً)' : 'تعيين كوسم رئيسي (مصدر أساسي)'}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${portal.isFeatured ? 'fill-amber-500 text-amber-500' : ''}`} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm group-hover:text-sky-600 dark:group-hover:text-sky-300 transition-colors truncate">
+                {portal.name}
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                {portal.description}
+              </p>
+
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                <span className="font-mono text-sky-600 dark:text-sky-400 truncate max-w-[130px]">
+                  {portal.allowedDomains.join(', ')}
+                </span>
+                {currentUser?.role === 'admin' && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEditModal(portal);
+                      }}
+                      className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors p-1 rounded-md cursor-pointer"
+                      title="تعديل معلومات الموقع ورابطه"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPortalToDelete(portal);
+                      }}
+                      className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors p-1 rounded-md cursor-pointer"
+                      title="حذف من القائمة المعتمدة"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Main Portal Explorer Container */}
+      {selectedPortal && (
+        <div
+          className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-all ${
+            isFullscreen
+              ? 'fixed inset-0 z-50 rounded-none w-screen h-screen flex flex-col shadow-2xl overflow-hidden'
+              : 'rounded-3xl overflow-hidden shadow-lg flex flex-col'
+          }`}
+        >
+          {/* Top Browser Address & Mode Ribbon */}
+          <div className="bg-slate-100 dark:bg-slate-950 p-3 sm:p-3.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+            {/* Window Dots & Security Status */}
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-1.5">
+                <div
+                  className="w-3 h-3 rounded-full bg-rose-400/80 hover:bg-rose-500 cursor-pointer transition-colors"
+                  onClick={() => setIsFullscreen(false)}
+                  title={isFullscreen ? 'الخروج من وضع ملء الشاشة' : ''}
+                />
+                <div className="w-3 h-3 rounded-full bg-amber-400/80" />
+                <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
+              </div>
+
+              {/* Secure Address Bar */}
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs shadow-inner">
+                <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="text-slate-400 hidden md:inline text-[11px]">موقع معتمد:</span>
+                <span className="text-slate-800 dark:text-slate-200 font-mono font-semibold truncate max-w-[200px] sm:max-w-[280px]">
+                  {selectedPortal.url}
+                </span>
+                <button
+                  onClick={() => setIframeKey((k) => k + 1)}
+                  className="text-slate-400 hover:text-sky-500 transition-colors p-0.5"
+                  title="تحديث الصفحة"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+                {currentUser?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(selectedPortal)}
+                    className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-0.5"
+                    title="تعديل بيانات هذا الموقع"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {isFullscreen && (
+                <span className="hidden lg:flex items-center gap-1 px-2.5 py-1 bg-sky-500/10 border border-sky-500/20 text-sky-600 dark:text-sky-300 rounded-xl text-[11px] font-medium">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>تصفح داخلي كامل وآمن</span>
+                </span>
+              )}
+            </div>
+
+            {/* Mode Switcher & Fullscreen Action Buttons */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                <button
+                  onClick={() => {
+                    setViewMode('explorer');
+                    setActiveReadingPortalBook(null);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    viewMode === 'explorer'
+                      ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>المستكشف التفاعلي للمخطوطات والكتب ({portalBooks.length})</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('browser')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    viewMode === 'browser'
+                      ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span>إطار الويب المباشر</span>
+                </button>
+              </div>
+
+              {/* Fullscreen Immersion Button */}
+              <button
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  isFullscreen
+                    ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                    : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30'
+                }`}
+                title={isFullscreen ? 'الخروج من وضع ملء الشاشة (Esc)' : 'تصفح بملء الشاشة داخل التطبيق'}
+              >
+                {isFullscreen ? (
+                  <>
+                    <Minimize2 className="w-3.5 h-3.5" />
+                    <span>تصغير (Esc)</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>ملء الشاشة</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Mode 1: Comprehensive Interactive Portal Explorer (Never Fails, Rich Ingestion & Direct Reading) */}
+          {viewMode === 'explorer' && (
+            <div className={`flex-1 flex flex-col p-4 sm:p-6 space-y-5 overflow-y-auto ${isFullscreen ? 'h-[calc(100vh-4rem)]' : 'min-h-[580px]'}`}>
+              {/* Search & Filter Header inside portal */}
+              <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <div className="p-2 bg-sky-500/10 text-sky-600 dark:text-sky-400 rounded-xl">
+                    <Search className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      محرك البحث والتصفية في {selectedPortal.name}:
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      ابحث في العناوين، المؤلفين، المتون، أو التراجم
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <input
+                    type="text"
+                    value={portalSearch}
+                    onChange={(e) => setPortalSearch(e.target.value)}
+                    placeholder="بحث في الكتب والمخطوطات..."
+                    className="w-full md:w-72 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500 shadow-inner"
+                  />
+
+                  <select
+                    value={selectedCategoryFilter}
+                    onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                    className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                  >
+                    <option value="all">كافة الأقسام</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Active Book Reader Modal inside Portal (If user opened a book from the portal) */}
+              {activeReadingPortalBook ? (
+                <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-md animate-in fade-in">
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setActiveReadingPortalBook(null)}
+                        className="p-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                        <span>العودة لقائمة الكتب</span>
+                      </button>
+                      <div>
+                        <h4 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                          {activeReadingPortalBook.title}
+                        </h4>
+                        <p className="text-xs text-slate-500">{activeReadingPortalBook.author} • {activeReadingPortalBook.volumeInfo || 'طبعة معتمدة'}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        setIngestionModalData({
+                          portalName: selectedPortal.name,
+                          url: selectedPortal.url,
+                          prefill: {
+                            title: activeReadingPortalBook.title,
+                            author: activeReadingPortalBook.author,
+                            categorySuggestion: activeReadingPortalBook.categorySuggestion,
+                            summary: activeReadingPortalBook.summary,
+                            pages: activeReadingPortalBook.pagesCount,
+                            tags: activeReadingPortalBook.tags,
+                          },
+                        })
+                      }
+                      className="flex items-center gap-2 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>استيراد هذا الكتاب للمكتبة المركزية</span>
+                    </button>
+                  </div>
+
+                  {/* Chapter Selector Tabs */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                    {activeReadingPortalBook.sampleChapters.map((ch, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveChapterIndex(idx)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                          activeChapterIndex === idx
+                            ? 'bg-sky-600 text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {ch.title}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Chapter Manuscript Preview Sheet */}
+                  <div className="bg-[#f7f0e1] dark:bg-[#151c28] text-[#342718] dark:text-slate-100 p-8 rounded-2xl border border-[#e4d4bc] dark:border-slate-800 font-amiri shadow-inner space-y-4">
+                    <div className="border-b border-[#dfceb6] dark:border-slate-800 pb-3 flex items-center justify-between text-xs font-sans text-[#6e5842] dark:text-slate-400">
+                      <span>{activeReadingPortalBook.sampleChapters[activeChapterIndex]?.title}</span>
+                      <span>صفحة {activeReadingPortalBook.sampleChapters[activeChapterIndex]?.page}</span>
+                    </div>
+
+                    <p className="text-lg leading-loose text-justify whitespace-pre-line selection:bg-amber-300 selection:text-black">
+                      {activeReadingPortalBook.sampleChapters[activeChapterIndex]?.previewText}
+                    </p>
+
+                    <div className="pt-4 border-t border-[#dfceb6] dark:border-slate-800 flex items-center justify-between text-xs font-sans text-[#6e5842] dark:text-slate-400">
+                      <span>مصدر التوثيق: {selectedPortal.name}</span>
+                      <span>جاهز للاستيراد الرقمي المباشر بنقرة واحدة</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Book List in this portal */
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm flex items-center gap-2">
+                      <BookMarked className="w-4 h-4 text-sky-500" />
+                      المصنفات والمخطوطات المتاحة في {selectedPortal.name} ({filteredPortalBooks.length})
+                    </h3>
+                    <span className="text-xs text-slate-500">
+                      يمكنك قراءة أي كتاب أو استيراده بضغطة زر واحدة إلى المكتبة
+                    </span>
+                  </div>
+
+                  {filteredPortalBooks.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
+                      لا توجد نتائج مطابقة لبحثك في هذا المصدر. استخدم زر "استيراد وتوثيق كتاب" لإدخال أي عنوان آخر.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filteredPortalBooks.map((book) => (
+                        <div
+                          key={book.id}
+                          className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3 flex flex-col justify-between hover:border-sky-500/50 hover:shadow-md transition-all"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                                  {book.categoryName}
+                                </span>
+                                <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm mt-1.5 line-clamp-1">
+                                  {book.title}
+                                </h4>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                  المؤلف: {book.author} {book.investigator ? `• ${book.investigator}` : ''}
+                                </p>
+                              </div>
+
+                              <span className="text-[11px] font-mono text-slate-400 shrink-0">
+                                {book.pagesCount} صفحة
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 line-clamp-2 leading-relaxed">
+                              {book.summary}
+                            </p>
+
+                            {/* Tags */}
+                            <div className="flex flex-wrap gap-1.5 mt-3">
+                              {book.tags.map((tag, tIdx) => (
+                                <span
+                                  key={tIdx}
+                                  className="text-[10px] bg-slate-200 dark:bg-slate-900 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-md"
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                            <button
+                              onClick={() => {
+                                setActiveReadingPortalBook(book);
+                                setActiveChapterIndex(0);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                            >
+                              <BookOpen className="w-3.5 h-3.5 text-sky-500" />
+                              <span>تصفح وقراءة المتن</span>
+                            </button>
+
+                            <button
+                              onClick={() =>
+                                setIngestionModalData({
+                                  portalName: selectedPortal.name,
+                                  url: selectedPortal.url,
+                                  prefill: {
+                                    title: book.title,
+                                    author: book.author,
+                                    categorySuggestion: book.categorySuggestion,
+                                    summary: book.summary,
+                                    pages: book.pagesCount,
+                                    tags: book.tags,
+                                  },
+                                })
+                              }
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>استيراد وتوثيق للمكتبة</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Mode 2: Live Embedded Browser with Sandbox and Smart Fallback */}
+          {viewMode === 'browser' && (
+            <div className={`flex-1 flex flex-col relative bg-slate-50 dark:bg-slate-950 ${isFullscreen ? 'h-[calc(100vh-4rem)]' : 'min-h-[580px]'}`}>
+              {/* Informative Notice Bar */}
+              <div className="bg-sky-500/10 border-b border-sky-500/20 px-4 py-2 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2 text-xs text-sky-700 dark:text-sky-300">
+                  <Sparkles className="w-4 h-4 text-sky-500 shrink-0" />
+                  <span>
+                    تتصفح حالياً: <strong>{selectedPortal.name}</strong> في بيئة آمنة تماماً داخل نظام المكتبة.
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setViewMode('explorer')}
+                    className="flex items-center gap-1 px-3 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <Compass className="w-3.5 h-3.5 text-sky-500" />
+                    <span>الانتقال للمستكشف السريع</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const defaultBook = portalBooks[0];
+                      setIngestionModalData({
+                        portalName: selectedPortal.name,
+                        url: selectedPortal.url,
+                        prefill: defaultBook
+                          ? {
+                              title: defaultBook.title,
+                              author: defaultBook.author,
+                              categorySuggestion: defaultBook.categorySuggestion,
+                              summary: defaultBook.summary,
+                              pages: defaultBook.pagesCount,
+                              tags: defaultBook.tags,
+                              sourceUrl: selectedPortal.url,
+                            }
+                          : undefined,
+                      });
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold transition-all shadow cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>استيراد كتاب</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Embedded Web View Frame */}
+              <div className="flex-1 w-full relative h-full flex flex-col">
+                {isSafeUrl(selectedPortal.url) ? (
+                  <iframe
+                    key={iframeKey}
+                    src={selectedPortal.url}
+                    title={selectedPortal.name}
+                    className="w-full flex-1 border-0 bg-white min-h-[460px]"
+                    sandbox="allow-same-origin allow-scripts allow-forms"
+                  />
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300">
+                    <Lock className="w-12 h-12 mb-3 text-rose-500" />
+                    <h3 className="font-bold text-base">تم حظر هذا الرابط لأسباب أمنية</h3>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 max-w-md">
+                      الرابط المدخل يحتوي على بروتوكول غير آمن أو غير مصرح به من سياسة جدار الحماية (يُسمح فقط بـ https:// و http:// المعتمدة).
+                    </p>
+                  </div>
+                )}
+
+                {/* Safe info bar */}
+                <div className="p-3 bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-2 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-3.5 h-3.5 text-sky-500" />
+                    <span>
+                      إذا منع الموقع الخارجي التضمين عبر أمان المتصفح (X-Frame-Options)، يمكنك التبديل إلى تبويب "المستكشف التفاعلي للمخطوطات" لتصفح كافة نصوص وكتب الموقع فورياً.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setViewMode('explorer')}
+                      className="flex items-center gap-1 text-sky-600 dark:text-sky-400 font-bold hover:underline cursor-pointer"
+                    >
+                      <Compass className="w-3.5 h-3.5" />
+                      <span>فتح المستكشف التفاعلي الكامل</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add New Portal Modal */}
+      {isAddPortalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
+                <Globe2 className="w-5 h-5 text-sky-500" />
+                إضافة موقع مكتبة معتمد جديد
+              </h3>
+              <button onClick={() => setIsAddPortalOpen(false)} className="text-slate-400 hover:text-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePortal} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم الموقع أو البوابة:</label>
+                <input
+                  type="text"
+                  required
+                  value={newPortalName}
+                  onChange={(e) => setNewPortalName(e.target.value)}
+                  placeholder="مثال: المكتبة الشاملة الإباضية"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">رابط الموقع المباشر (URL):</label>
+                <input
+                  type="url"
+                  required
+                  value={newPortalUrl}
+                  onChange={(e) => setNewPortalUrl(e.target.value)}
+                  placeholder="https://al-maktaba.org"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">النطاقات المسموحة للتصفح (مفصولة بفاصلة):</label>
+                <input
+                  type="text"
+                  value={newPortalDomains}
+                  onChange={(e) => setNewPortalDomains(e.target.value)}
+                  placeholder="al-maktaba.org, shamela.ws"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">نبذة تعريفية وتخصص البوابة:</label>
+                <textarea
+                  rows={2}
+                  value={newPortalDesc}
+                  onChange={(e) => setNewPortalDesc(e.target.value)}
+                  placeholder="بوابة رقمية متخصصة في الفقه وأصول الاستنباط والتراث الإسلامي..."
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500 resize-none"
+                />
+              </div>
+
+              {/* Classification Option: Primary/Featured vs Specialized */}
+              <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newPortalIsFeatured}
+                    onChange={(e) => setNewPortalIsFeatured(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <span className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                      تعيين هذا الموقع كوسم «رئيسي» (مصدر مرجعي أساسي)
+                    </span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      المواقع الموسومة بـ «رئيسي» تظهر في مقدمة البوابات المعتمدة كأولوية للمطالعة والبحث الأكاديمي الشامل، بينما المواقع غير المحددة تصنف كبوابات تخصصية وفرعية.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPortalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-200 dark:hover:bg-slate-700"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold shadow-md shadow-sky-600/30 cursor-pointer"
+                >
+                  اعتماد الموقع وإضافته
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Existing Whitelisted Portal Modal */}
+      {editingPortal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                    تعديل بيانات الموقع المعتمد
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    تحديث الاسم، الرابط، النطاقات المصرح بها، وتصنيف المصدر
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingPortal(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPortal} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم الموقع / البوابة:</label>
+                <input
+                  type="text"
+                  required
+                  value={editPortalName}
+                  onChange={(e) => setEditPortalName(e.target.value)}
+                  placeholder="مثال: المكتبة الشاملة الحديثة"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">رابط الموقع المباشر (URL):</label>
+                <input
+                  type="url"
+                  required
+                  value={editPortalUrl}
+                  onChange={(e) => setEditPortalUrl(e.target.value)}
+                  placeholder="https://al-maktaba.org"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">النطاقات المسموحة للتصفح (مفصولة بفاصلة):</label>
+                <input
+                  type="text"
+                  value={editPortalDomains}
+                  onChange={(e) => setEditPortalDomains(e.target.value)}
+                  placeholder="al-maktaba.org, shamela.ws"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">نبذة تعريفية وتخصص البوابة:</label>
+                <textarea
+                  rows={2}
+                  value={editPortalDesc}
+                  onChange={(e) => setEditPortalDesc(e.target.value)}
+                  placeholder="بوابة رقمية متخصصة في الفقه وأصول الاستنباط والتراث الإسلامي..."
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 resize-none"
+                />
+              </div>
+
+              {/* Classification Option: Primary/Featured vs Specialized */}
+              <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editPortalIsFeatured}
+                    onChange={(e) => setEditPortalIsFeatured(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <span className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                      تعيين هذا الموقع كوسم «رئيسي» (مصدر مرجعي أساسي)
+                    </span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      المواقع الموسومة بـ «رئيسي» تظهر في مقدمة البوابات المعتمدة كأولوية للمطالعة والبحث الأكاديمي الشامل، بينما المواقع غير المحددة تصنف كبوابات تخصصية وفرعية.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPortalToDelete(editingPortal);
+                  }}
+                  className="px-3.5 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>حذف الموقع</span>
+                </button>
+                <div className="flex items-center gap-2 mr-auto">
+                  <button
+                    type="button"
+                    onClick={() => setEditingPortal(null)}
+                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-200 dark:hover:bg-slate-700"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30 cursor-pointer"
+                  >
+                    حفظ التعديلات
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Portal Confirmation Modal (Safe In-App Dialog) */}
+      {portalToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
+              <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                  تأكيد حذف الموقع المعتمد
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  إزالة الموقع من قائمة البوابات المصرح بها
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">اسم الموقع:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">{portalToDelete.name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">الرابط:</span>
+                <span className="font-mono text-sky-600 dark:text-sky-400 truncate max-w-[200px]">{portalToDelete.url}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف هذا الموقع من قائمة المواقع المعتمدة؟ سيتم إزالته من البوابات الموثقة مباشرة.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPortalToDelete(null)}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const idToDelete = portalToDelete.id;
+                  onDeletePortal(idToDelete);
+                  if (selectedPortal?.id === idToDelete) {
+                    const remaining = portals.filter((p) => p.id !== idToDelete);
+                    setSelectedPortal(remaining[0] || ({} as WhitelistedPortal));
+                  }
+                  if (editingPortal?.id === idToDelete) {
+                    setEditingPortal(null);
+                  }
+                  setPortalToDelete(null);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-colors"
+              >
+                تأكيد الحذف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Book Ingestion Modal */}
+      {ingestionModalData && (
+        <BookIngestionModal
+          isOpen={!!ingestionModalData}
+          onClose={() => setIngestionModalData(null)}
+          portalName={ingestionModalData.portalName}
+          categories={categories}
+          initialUrl={ingestionModalData.url}
+          prefillData={ingestionModalData.prefill}
+          onSubmit={(data) => {
+            onSubmitIngestion(data);
+            setIngestionModalData(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
