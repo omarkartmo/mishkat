@@ -7,7 +7,6 @@ import {
   EyeOff,
   AlertCircle,
   Clock,
-  Sparkles,
   ChevronLeft,
   LogIn,
 } from 'lucide-react';
@@ -33,7 +32,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, users = [], onLogi
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lockoutSeconds, setLockoutSeconds] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showDemoHelp, setShowDemoHelp] = useState(false);
 
   // Lockout countdown timer
   useEffect(() => {
@@ -49,18 +47,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, users = [], onLogi
     }, 1000);
     return () => clearInterval(timer);
   }, [lockoutSeconds]);
-
-  // Set default initial user
-  useEffect(() => {
-    const student = (users || []).find((u) => u.role === 'student');
-    if (student) {
-      setIdentifier(student.registrationNumber);
-      setPassword(student.plainPassword || student.password || '');
-    } else {
-      setIdentifier('STU-2026-101');
-      setPassword('ahmed#2026!pass');
-    }
-  }, [users]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,17 +78,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, users = [], onLogi
       }
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleDemoFill = (isAdmin: boolean, user?: LibraryUser) => {
-    setErrorMsg(null);
-    if (isAdmin) {
-      setIdentifier('ADM-001');
-      setPassword('admin@central#2026');
-    } else if (user) {
-      setIdentifier(user.registrationNumber);
-      setPassword(user.plainPassword || user.password || '');
     }
   };
 
@@ -235,51 +210,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, users = [], onLogi
               )}
             </button>
           </form>
-
-          {/* Quick Demo Helper Section (1-Click Fill) */}
-          <div className="pt-3 border-t border-slate-800/80 space-y-3">
-            <button
-              type="button"
-              onClick={() => setShowDemoHelp(!showDemoHelp)}
-              className="w-full text-center text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{showDemoHelp ? 'إخفاء الحسابات التجريبية' : 'تعبئة سريعة للحسابات التجريبية والاختبار'}</span>
-            </button>
-
-            {showDemoHelp && (
-              <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-2 text-xs">
-                <div className="text-[11px] font-bold text-slate-400">انقر لتعبئة الحساب مباشرة:</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleDemoFill(true)}
-                    className="p-2.5 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-500/20 text-indigo-300 rounded-xl text-[11px] text-right cursor-pointer transition-colors flex flex-col gap-1"
-                  >
-                    <span className="font-bold">🛡️ أمين المكتبة</span>
-                    <span className="text-[10px] text-indigo-400/80 font-mono" dir="ltr">ADM-001 / admin@central#2026</span>
-                  </button>
-                  {users.filter(u => u.role === 'student').slice(0, 3).map((user, idx) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      onClick={() => handleDemoFill(false, user)}
-                      className={`p-2.5 rounded-xl text-[11px] text-right cursor-pointer transition-colors flex flex-col gap-1 ${
-                        idx === 0
-                          ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/20 text-emerald-300'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/50'
-                      }`}
-                    >
-                      <span className="font-bold">🎓 الطالب: {user.name.split(' ')[0]} {user.name.split(' ').pop()} {user.isBlocked ? '(محظور)' : ''}</span>
-                      <span className="text-[10px] opacity-80 font-mono" dir="ltr">
-                        {user.registrationNumber} / {user.plainPassword || user.password || '(بدون كلمة مرور)'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </main>
 

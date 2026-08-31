@@ -297,10 +297,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 )}
 
                 <button
-                  onClick={() => onNavigate('digital')}
+                  onClick={() => onNavigate('search_results')}
                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1 transition-colors cursor-pointer"
                 >
-                  <span>المستودع الرقمي</span>
+                  <span>البحث والمطالعة</span>
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -400,10 +400,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               دفتر الملاحظات: <strong>{myNotes.length}</strong> مسجلة
             </span>
             <button
-              onClick={() => onNavigate('digital')}
+              onClick={() => onNavigate('search_results')}
               className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline text-[11px] cursor-pointer"
             >
-              استعراض كل الكتب الرقمية ←
+              استعراض والبحث في كل الكتب الرقمية ←
             </button>
           </div>
         </div>

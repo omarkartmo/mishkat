@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Bookmark,
   Sparkles,
   BookOpen,
   Library,
@@ -17,39 +16,30 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
-  MapPin,
   Tag,
   Share2,
   Printer,
   Copy,
   Check,
   Calendar,
-  Compass,
 } from 'lucide-react';
 import {
-  PhysicalBookmark,
   BookSummary,
   StudentNote,
   User,
   PhysicalBook,
   DigitalBook,
-  LoanRecord,
 } from '../../types/library';
-import { PhysicalBookmarkModal } from './PhysicalBookmarkModal';
 import { BookSummaryModal } from './BookSummaryModal';
 import { NoteEditorModal } from './NoteEditorModal';
 import { matchesArabicQuery } from '../../utils/searchUtils';
 
 interface ReadingWorkspaceViewProps {
   currentUser: User;
-  physicalBookmarks: PhysicalBookmark[];
   summaries: BookSummary[];
   notes: StudentNote[];
   physicalBooks: PhysicalBook[];
   digitalBooks: DigitalBook[];
-  loans: LoanRecord[];
-  onSaveBookmark: (data: any) => void;
-  onDeleteBookmark: (id: string) => void;
   onSaveSummary: (summary: any) => void;
   onDeleteSummary: (id: string) => void;
   onSaveNote: (note: any) => void;
@@ -60,14 +50,10 @@ interface ReadingWorkspaceViewProps {
 
 export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
   currentUser,
-  physicalBookmarks = [],
   summaries = [],
   notes = [],
   physicalBooks = [],
   digitalBooks = [],
-  loans = [],
-  onSaveBookmark,
-  onDeleteBookmark,
   onSaveSummary,
   onDeleteSummary,
   onSaveNote,
@@ -75,16 +61,12 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
   onOpenDigitalBook,
   onNavigateTab,
 }) => {
-  const [activeSection, setActiveSection] = useState<'bookmarks' | 'summaries' | 'notes'>('bookmarks');
+  const [activeSection, setActiveSection] = useState<'summaries' | 'notes'>('summaries');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState<string>('all');
   const [selectedMediumFilter, setSelectedMediumFilter] = useState<'all' | 'physical' | 'digital'>('all');
 
   // Modals state
-  const [isBookmarkModalOpen, setIsBookmarkModalOpen] = useState(false);
-  const [selectedBookmarkToEdit, setSelectedBookmarkToEdit] = useState<PhysicalBookmark | null>(null);
-  const [selectedPhysicalBookForBookmark, setSelectedPhysicalBookForBookmark] = useState<PhysicalBook | null>(null);
-
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [selectedSummaryToEdit, setSelectedSummaryToEdit] = useState<BookSummary | null>(null);
 
@@ -93,24 +75,6 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
 
   const [selectedSummaryViewDetail, setSelectedSummaryViewDetail] = useState<BookSummary | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // Active loans for student
-  const myActiveLoans = loans.filter(
-    (l) => l.studentId === currentUser.id && l.status !== 'returned'
-  );
-
-  // Filtered bookmarks
-  const filteredBookmarks = physicalBookmarks.filter((b) => {
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim();
-      const matchTitle = matchesArabicQuery(b.bookTitle, q);
-      const matchAuthor = matchesArabicQuery(b.bookAuthor || '', q);
-      const matchTopic = matchesArabicQuery(b.chapterOrTopic || '', q);
-      const matchNote = matchesArabicQuery(b.quickNote || '', q);
-      if (!matchTitle && !matchAuthor && !matchTopic && !matchNote) return false;
-    }
-    return true;
-  });
 
   // Filtered summaries
   const filteredSummaries = summaries.filter((s) => {
@@ -162,20 +126,20 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div className="space-y-2 min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap">
-                <Bookmark className="w-3.5 h-3.5 shrink-0" />
-                <span>فواصل الكتب الورقية والتأطير المعرفي</span>
-              </span>
               <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap">
                 <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span>مختبر التلخيص الإبداعي</span>
+                <span>مختبر التلخيص المعرفي</span>
+              </span>
+              <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap">
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span>دفتر الفوائد والشواهد</span>
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight leading-snug break-words">
-              مفكرة القراءة والتلخيص وتدوين الملاحظات
+              مفكرة التلخيص وتدوين الفوائد المعرفية
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed break-words">
-              مكانك المخصص لتسجيل رقم الصفحة في كتبك الورقية المستعارة بدقة متناهية، وتلخيص الكتب الورقية والرقمية بهيكلية معرفية رائعة، وحفظ الفوائد والشواهد ومشاركتها في أبحاثك المدرسية.
+              بيئتك المخصصة لتلخيص الكتب الورقية والرقمية بهيكلية منهجية، وتدوين الشواهد والفوائد العلمية ومشاركتها في أبحاثك ودراستك.
             </p>
           </div>
 
@@ -183,25 +147,13 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
           <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-2 lg:pt-0">
             <button
               onClick={() => {
-                setSelectedBookmarkToEdit(null);
-                setSelectedPhysicalBookForBookmark(null);
-                setIsBookmarkModalOpen(true);
-              }}
-              className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-amber-600/30 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
-            >
-              <Bookmark className="w-4 h-4 shrink-0" />
-              <span>تثبيت فاصل كتاب ورقي</span>
-            </button>
-
-            <button
-              onClick={() => {
                 setSelectedSummaryToEdit(null);
                 setIsSummaryModalOpen(true);
               }}
-              className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
             >
               <Sparkles className="w-4 h-4 shrink-0" />
-              <span>إنشاء ملخص جديد</span>
+              <span>إنشاء ملخص كتاب جديد</span>
             </button>
 
             <button
@@ -209,7 +161,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
                 setSelectedNoteToEdit(null);
                 setIsNoteModalOpen(true);
               }}
-              className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-2xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-4 h-4 shrink-0" />
               <span>تدوين فائدة سريعة</span>
@@ -221,18 +173,6 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
       {/* Main Section Navigation Bar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
         <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto">
-          <button
-            onClick={() => setActiveSection('bookmarks')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeSection === 'bookmarks'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Bookmark className="w-4 h-4" />
-            <span>فواصل الكتب الورقية ({physicalBookmarks.length})</span>
-          </button>
-
           <button
             onClick={() => setActiveSection('summaries')}
             className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
@@ -271,228 +211,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
         </div>
       </div>
 
-      {/* SECTION 1: PHYSICAL BOOKMARKS */}
-      {activeSection === 'bookmarks' && (
-        <div className="space-y-6">
-          {/* Active Borrowed Books Jumper */}
-          {myActiveLoans.length > 0 && (
-            <div className="bg-amber-500/5 dark:bg-amber-950/20 border border-amber-500/20 rounded-3xl p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-sm">
-                  <BookOpen className="w-4 h-4" />
-                  <span>كتبك الورقية المستعارة حالياً (أنشئ أو حدّث فاصل القراءة بضغطة زر):</span>
-                </div>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {myActiveLoans.length} كتاب بحوزتك
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {myActiveLoans.map((loan) => {
-                  const existingBm = physicalBookmarks.find((b) => b.bookId === loan.bookId);
-                  const physBook = physicalBooks.find((p) => p.id === loan.bookId);
-
-                  return (
-                    <div
-                      key={loan.id}
-                      className="p-3.5 bg-white dark:bg-slate-900 border border-amber-500/30 rounded-2xl flex flex-col justify-between gap-2.5 shadow-sm"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500">
-                          <span className="font-semibold text-amber-700 dark:text-amber-400">استحقاق: {loan.dueDate}</span>
-                          {physBook?.pagesCount && (
-                            <span className="font-mono">{physBook.pagesCount} صفحة</span>
-                          )}
-                        </div>
-                        <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm mt-1 line-clamp-1">
-                          {loan.bookTitle}
-                        </h4>
-                        {physBook?.author && (
-                          <p className="text-xs text-slate-500 line-clamp-1">{physBook.author}</p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-                        {existingBm ? (
-                          <div className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
-                            الصفحة {existingBm.currentPage} من {existingBm.totalPages} (
-                            {Math.round((existingBm.currentPage / (existingBm.totalPages || 1)) * 100)}%)
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-slate-400">لم يحدد فاصل بعد</span>
-                        )}
-
-                        <button
-                          onClick={() => {
-                            setSelectedBookmarkToEdit(existingBm || null);
-                            setSelectedPhysicalBookForBookmark(physBook || null);
-                            setIsBookmarkModalOpen(true);
-                          }}
-                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
-                        >
-                          <Bookmark className="w-3.5 h-3.5" />
-                          <span>{existingBm ? 'تعديل الصفحة' : 'تثبيت الفاصل'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Bookmarks Grid */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
-                <Bookmark className="w-5 h-5 text-amber-500" />
-                <span>جميع فواصل الكتب الورقية المحفوظة ({filteredBookmarks.length})</span>
-              </h3>
-            </div>
-
-            {filteredBookmarks.length === 0 ? (
-              <div className="text-center py-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
-                  <Bookmark className="w-6 h-6" />
-                </div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-200 text-base">
-                  لا توجد فواصل قراءة مسجلة بعد
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                  عند قراءتك لأي كتاب ورقي من المكتبة، اضغط على "تثبيت فاصل كتاب ورقي" لتسجيل رقم الصفحة واسم الباب وملاحظتك لتتذكر بالضبط أين وصلت في جلستك القادمة.
-                </p>
-                <button
-                  onClick={() => {
-                    setSelectedBookmarkToEdit(null);
-                    setSelectedPhysicalBookForBookmark(null);
-                    setIsBookmarkModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1.5 mt-2 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>تثبيت فاصل جديد</span>
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredBookmarks.map((bookmark) => {
-                  const percentage = Math.min(
-                    100,
-                    Math.round((bookmark.currentPage / (bookmark.totalPages || 1)) * 100)
-                  );
-                  const isCompleted = bookmark.isCompleted || percentage >= 100;
-
-                  return (
-                    <div
-                      key={bookmark.id}
-                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 space-y-3 shadow-sm hover:border-amber-500/40 transition-all flex flex-col justify-between group"
-                    >
-                      <div className="space-y-2">
-                        {/* Status tag and shelf location */}
-                        <div className="flex items-center justify-between text-xs">
-                          {isCompleted ? (
-                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold text-[10px] flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>مكتمل القراءة</span>
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-bold text-[10px] flex items-center gap-1">
-                              <Bookmark className="w-3 h-3" />
-                              <span>قيد المطالعة</span>
-                            </span>
-                          )}
-
-                          {bookmark.location && (
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 font-mono">
-                              <MapPin className="w-3 h-3 text-amber-500" />
-                              {bookmark.location.cabinet} - {bookmark.location.shelf}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Book Title & Author */}
-                        <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm leading-snug line-clamp-2">
-                          {bookmark.bookTitle}
-                        </h4>
-                        {bookmark.bookAuthor && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            المؤلف: {bookmark.bookAuthor}
-                          </p>
-                        )}
-
-                        {/* Chapter / Topic if present */}
-                        {bookmark.chapterOrTopic && (
-                          <div className="p-2 bg-slate-50 dark:bg-slate-950 rounded-xl text-[11px] text-slate-700 dark:text-slate-300 font-medium line-clamp-1 border border-slate-100 dark:border-slate-800">
-                            📍 {bookmark.chapterOrTopic}
-                          </div>
-                        )}
-
-                        {/* Quick Note */}
-                        {bookmark.quickNote && (
-                          <p className="text-xs text-slate-600 dark:text-slate-400 italic line-clamp-2 bg-amber-500/5 p-2 rounded-xl border border-amber-500/10">
-                            "{bookmark.quickNote}"
-                          </p>
-                        )}
-
-                        {/* Progress Display */}
-                        <div className="space-y-1.5 pt-1">
-                          <div className="flex items-center justify-between text-xs font-mono">
-                            <span className="font-bold text-amber-600 dark:text-amber-400">
-                              الصفحة {bookmark.currentPage} من {bookmark.totalPages}
-                            </span>
-                            <span className="text-slate-400 font-semibold">{percentage}%</span>
-                          </div>
-
-                          <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                isCompleted ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-500 to-amber-400'
-                              }`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Footer Info & Actions */}
-                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                        <span className="text-slate-400 flex items-center gap-1 font-mono">
-                          <Clock className="w-3 h-3" />
-                          {bookmark.lastSessionDate}
-                        </span>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => {
-                              setSelectedBookmarkToEdit(bookmark);
-                              setSelectedPhysicalBookForBookmark(null);
-                              setIsBookmarkModalOpen(true);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                            title="تعديل الصفحة أو الملاحظة"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-
-                          <button
-                            onClick={() => onDeleteBookmark(bookmark.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
-                            title="إزالة الفاصل"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* SECTION 2: BOOK SUMMARIES (CREATIVE MULTI-STRUCTURE) */}
+      {/* SECTION 1: BOOK SUMMARIES (CREATIVE MULTI-STRUCTURE) */}
       {activeSection === 'summaries' && (
         <div className="space-y-6">
           {/* Summary Filter Bar */}
@@ -1085,16 +804,6 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
       )}
 
       {/* MODALS */}
-      <PhysicalBookmarkModal
-        isOpen={isBookmarkModalOpen}
-        onClose={() => setIsBookmarkModalOpen(false)}
-        book={selectedPhysicalBookForBookmark}
-        existingBookmark={selectedBookmarkToEdit}
-        physicalBooks={physicalBooks}
-        onSave={onSaveBookmark}
-        onDelete={onDeleteBookmark}
-      />
-
       <BookSummaryModal
         isOpen={isSummaryModalOpen}
         onClose={() => setIsSummaryModalOpen(false)}

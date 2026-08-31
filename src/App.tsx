@@ -677,14 +677,10 @@ export default function App() {
           {activeTab === 'reading_workspace' && (
             <ReadingWorkspaceView
               currentUser={currentUser}
-              physicalBookmarks={physicalBookmarks}
               summaries={bookSummaries}
               notes={studentNotes}
               physicalBooks={physicalBooks}
               digitalBooks={digitalBooks}
-              loans={loans}
-              onSaveBookmark={handleSavePhysicalBookmark}
-              onDeleteBookmark={handleDeletePhysicalBookmark}
               onSaveSummary={handleSaveBookSummary}
               onDeleteSummary={handleDeleteBookSummary}
               onSaveNote={(noteData) => {
@@ -730,7 +726,7 @@ export default function App() {
               currentUser={currentUser}
               favoriteBookIds={favorites}
               onToggleFavorite={handleToggleFavorite}
-              onOpenBookReader={(book) => {
+              onOpenReader={(book) => {
                 storage.incrementDigitalReadCount(book.id);
                 setActiveReadingBook(book);
               }}
@@ -743,7 +739,13 @@ export default function App() {
                 });
               }}
               onRequestLoanSubmit={handleRequestLoanSubmit}
-              onNavigate={handleNavigateToTab}
+              onQuickLoan={handleQuickLoanFromBook}
+              onNavigateTab={handleNavigateToTab}
+              onAddDigitalBook={(newBook) => {
+                storage.addDigitalBook(newBook);
+                refreshAllState();
+              }}
+              onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
             />
           )}
 

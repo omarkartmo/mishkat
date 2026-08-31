@@ -119,31 +119,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               />
               <NavItem
                 icon={<Search className="w-4 h-4 text-indigo-500" />}
-                label="البحث الموضوعي الشامل"
+                label="البحث الشامل"
                 active={activeTab === 'search_results'}
                 onClick={() => onSelectTab('search_results')}
                 isCollapsed={isCollapsed}
-                badge={
-                  !isCollapsed ? (
-                    <span className="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-bold px-1.5 py-0.5 rounded font-mono border border-indigo-500/20">
-                      مواضيع
-                    </span>
-                  ) : undefined
-                }
               />
               <NavItem
-                icon={<Bookmark className="w-4 h-4 text-amber-500" />}
-                label="مفكرة القراءة والتلخيص"
+                icon={<Sparkles className="w-4 h-4 text-indigo-500" />}
+                label="مفكرة التلخيص والفوائد"
                 active={activeTab === 'reading_workspace'}
                 onClick={() => onSelectTab('reading_workspace')}
                 isCollapsed={isCollapsed}
-                badge={
-                  !isCollapsed ? (
-                    <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-300 font-bold px-1.5 py-0.5 rounded font-mono border border-amber-500/20">
-                      فواصل وتلخيص
-                    </span>
-                  ) : undefined
-                }
               />
               <NavItem
                 icon={<Star className="w-4 h-4 text-amber-500" />}
@@ -160,32 +146,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }
               />
               <NavItem
-                icon={<BookOpen className="w-4 h-4 text-indigo-500" />}
-                label="فهرس المكتبة الورقية"
-                active={activeTab === 'physical'}
-                onClick={() => onSelectTab('physical')}
-                isCollapsed={isCollapsed}
-              />
-              <NavItem
-                icon={<Library className="w-4 h-4 text-emerald-500" />}
-                label="المستودع الرقمي والمطالعة"
-                active={activeTab === 'digital'}
-                onClick={() => onSelectTab('digital')}
-                isCollapsed={isCollapsed}
-              />
-              <NavItem
                 icon={<Globe2 className="w-4 h-4 text-sky-500" />}
                 label="بوابة المكتبات المعتمدة"
                 active={activeTab === 'portals'}
                 onClick={() => onSelectTab('portals')}
                 isCollapsed={isCollapsed}
-                badge={
-                  !isCollapsed ? (
-                    <span className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-300 px-1.5 py-0.5 rounded font-mono border border-sky-500/20">
-                      تصفح حي
-                    </span>
-                  ) : undefined
-                }
               />
             </div>
           </div>
@@ -211,7 +176,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 <NavItem
                   icon={<Search className="w-4 h-4 text-indigo-500" />}
-                  label="البحث الموضوعي الشامل"
+                  label="البحث الشامل"
                   active={activeTab === 'search_results'}
                   onClick={() => onSelectTab('search_results')}
                   isCollapsed={isCollapsed}
@@ -231,32 +196,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }
                 />
                 <NavItem
-                  icon={<BookOpen className="w-4 h-4" />}
-                  label="المكتبة الورقية (الفهرس)"
-                  active={activeTab === 'physical'}
-                  onClick={() => onSelectTab('physical')}
-                  isCollapsed={isCollapsed}
-                />
-                <NavItem
-                  icon={<Library className="w-4 h-4 text-emerald-500" />}
-                  label="المستودع الرقمي (PDF/ePub)"
-                  active={activeTab === 'digital'}
-                  onClick={() => onSelectTab('digital')}
-                  isCollapsed={isCollapsed}
-                />
-                <NavItem
                   icon={<Globe2 className="w-4 h-4 text-sky-500" />}
                   label="بوابة المكتبات المعتمدة"
                   active={activeTab === 'portals'}
                   onClick={() => onSelectTab('portals')}
                   isCollapsed={isCollapsed}
-                  badge={
-                    !isCollapsed ? (
-                      <span className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-300 px-1.5 py-0.5 rounded font-mono border border-sky-500/20">
-                        تصفح حي
-                      </span>
-                    ) : undefined
-                  }
                 />
               </div>
             </div>

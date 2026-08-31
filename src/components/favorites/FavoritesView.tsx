@@ -167,18 +167,11 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
 
           <div className="flex items-center justify-center gap-3 pt-2">
             <button
-              onClick={() => onNavigate('physical')}
+              onClick={() => onNavigate('search_results')}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
             >
-              <BookOpen className="w-4 h-4" />
-              <span>تصفح المكتبة الورقية</span>
-            </button>
-            <button
-              onClick={() => onNavigate('digital')}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-            >
-              <Library className="w-4 h-4" />
-              <span>تصفح المستودع الرقمي</span>
+              <Search className="w-4 h-4" />
+              <span>البحث الشامل والمطالعة</span>
             </button>
           </div>
         </div>

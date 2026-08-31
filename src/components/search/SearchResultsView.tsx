@@ -22,6 +22,11 @@ import {
   Tag,
   Building,
   GraduationCap,
+  FolderUp,
+  Plus,
+  LayoutGrid,
+  List,
+  Eye,
 } from 'lucide-react';
 import {
   PhysicalBook,
@@ -32,6 +37,8 @@ import {
   NavigationTab,
 } from '../../types/library';
 import { matchesArabicQuery } from '../../utils/searchUtils';
+import { BulkDigitalImportModal } from '../digital/BulkDigitalImportModal';
+import { AddDigitalBookModal } from './AddDigitalBookModal';
 
 interface SearchResultsViewProps {
   initialQuery?: string;
@@ -53,6 +60,8 @@ interface SearchResultsViewProps {
   }) => void;
   onQuickLoan?: (bookId: string) => void;
   onNavigateTab?: (tab: NavigationTab) => void;
+  onAddDigitalBook?: (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => void;
+  onBulkAddDigitalBooks?: (books: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => void;
 }
 
 const POPULAR_RESEARCH_TOPICS = [
@@ -81,13 +90,20 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   onRequestLoanSubmit,
   onQuickLoan,
   onNavigateTab,
+  onAddDigitalBook,
+  onBulkAddDigitalBooks,
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [selectedMedium, setSelectedMedium] = useState<'all' | 'physical' | 'digital'>('all');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [formatFilter, setFormatFilter] = useState<'all' | 'pdf' | 'epub'>('all');
   const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<'relevance' | 'title' | 'author' | 'pages'>('relevance');
-  const [viewMode, setViewMode] = useState<'horizontal' | 'grid'>('horizontal');
+  const [viewLayout, setViewLayout] = useState<'detailed' | 'grid'>('detailed');
+
+  // Modals for Digital Management
+  const [isAddDigitalModalOpen, setIsAddDigitalModalOpen] = useState(false);
+  const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
 
   // Search filter logic
   const trimmedQuery = searchQuery.trim();
@@ -123,6 +139,10 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
       if (selectedCategoryId !== 'all' && book.categoryId !== selectedCategoryId) {
         return false;
       }
+      // Format filter
+      if (formatFilter !== 'all' && book.format !== formatFilter) {
+        return false;
+      }
       // Query filter
       if (!trimmedQuery) return true;
       const catName = categories.find((c) => c.id === book.categoryId)?.name || '';
@@ -135,7 +155,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
         (book.tags && book.tags.some((t) => matchesArabicQuery(t, trimmedQuery)))
       );
     });
-  }, [digitalBooks, selectedCategoryId, trimmedQuery, categories]);
+  }, [digitalBooks, selectedCategoryId, formatFilter, trimmedQuery, categories]);
 
   // Combined Results
   type ResultItem =
@@ -172,6 +192,16 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
 
   const totalResultsCount = combinedResults.length;
 
+  const handleBulkImportSuccess = (
+    importedList: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]
+  ) => {
+    if (onBulkAddDigitalBooks) {
+      onBulkAddDigitalBooks(importedList);
+    } else if (onAddDigitalBook) {
+      importedList.forEach((b) => onAddDigitalBook(b));
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in-50 duration-200">
       {/* Header Banner */}
@@ -187,19 +217,42 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-                  محرك البحث الموضوعي والاستكشاف الشامل
+                  محرك البحث الشامل
                 </h1>
                 <p className="text-xs sm:text-sm text-indigo-200 mt-0.5 font-medium">
-                  ابحث عن موضوع معين أو كلمة مفتاحية للاطلاع على كافة المراجع الورقية والرقمية المتوفرة في المكتبة
+                  ابحث في جميع الكتب الورقية والرقمية، مع إمكانية الدخول الفوري والمطالعة عبر القارئ المدمج
                 </p>
               </div>
             </div>
 
-            {/* Quick stats pill */}
-            <div className="flex items-center gap-2 bg-black/20 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 text-xs font-mono">
-              <span className="text-amber-300 font-bold">{physicalBooks.length} ورقي</span>
-              <span className="text-white/40">•</span>
-              <span className="text-emerald-400 font-bold">{digitalBooks.length} رقمي</span>
+            {/* Quick Actions / Stats */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {currentUser.role === 'admin' && (
+                <>
+                  <button
+                    onClick={() => setIsBulkImportModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/20 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    <FolderUp className="w-3.5 h-3.5" />
+                    <span>استيراد مجلد كتب (Bulk)</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsAddDigitalModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white border border-white/20 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>إضافة كتاب إلكتروني</span>
+                  </button>
+                </>
+              )}
+
+              {/* Quick stats pill */}
+              <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/15 text-xs font-mono">
+                <span className="text-amber-300 font-bold">{physicalBooks.length} ورقي</span>
+                <span className="text-white/40">•</span>
+                <span className="text-emerald-400 font-bold">{digitalBooks.length} رقمي</span>
+              </div>
             </div>
           </div>
 
@@ -210,7 +263,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="اكتب اسم الموضوع، عنوان الكتاب، اسم المؤلف، أو وسماً معيناً (مثال: فقه المعاملات، تاريخ عمان، النحو)..."
+              placeholder="اكتب عنوان الكتاب، اسم المؤلف، أو تصنيفاً معيناً (مثال: فقه المعاملات، تاريخ عمان، النحو)..."
               className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-400 rounded-2xl pr-12 pl-12 py-3.5 text-sm sm:text-base font-semibold shadow-xl border-2 border-transparent focus:border-indigo-400 outline-none transition-all"
             />
             {searchQuery && (
@@ -229,7 +282,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-indigo-200 font-bold flex items-center gap-1 shrink-0">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>مواضيع بحثية شائعة:</span>
+                <span>تصنيفات بحثية شائعة:</span>
               </span>
               {POPULAR_RESEARCH_TOPICS.map((topic) => (
                 <button
@@ -252,7 +305,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
       {/* Control Bar: Filters, Medium Switcher & Sorting */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Medium Selector (All / Physical / Digital) */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl flex-wrap sm:flex-nowrap">
           <button
             onClick={() => setSelectedMedium('all')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -306,6 +359,22 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
             </select>
           </div>
 
+          {/* Format filter for digital */}
+          {selectedMedium !== 'physical' && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">الصيغة:</span>
+              <select
+                value={formatFilter}
+                onChange={(e) => setFormatFilter(e.target.value as any)}
+                className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 font-semibold outline-none cursor-pointer"
+              >
+                <option value="all">الكل</option>
+                <option value="pdf">PDF</option>
+                <option value="epub">ePub</option>
+              </select>
+            </div>
+          )}
+
           {/* Availability Toggle for Physical */}
           {selectedMedium !== 'digital' && (
             <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
@@ -332,6 +401,32 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
               <option value="author">المؤلف</option>
               <option value="pages">حسب الحجم والصفحات</option>
             </select>
+          </div>
+
+          {/* Layout View Toggle (Detailed / Grid) */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5 border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setViewLayout('detailed')}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewLayout === 'detailed'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+              title="عرض تفصيلي أفقي"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewLayout('grid')}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewLayout === 'grid'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+              title="عرض شبكي (بطاقات)"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -361,9 +456,9 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
         )}
       </div>
 
-      {/* Results List: Horizontal Cards Layout (العرض الأفقي التفصيلي) */}
+      {/* Results Rendering */}
       {totalResultsCount === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-4">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-4 shadow-sm">
           <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
             <BookOpen className="w-8 h-8" />
           </div>
@@ -376,12 +471,13 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
             </p>
           </div>
 
-          <div className="pt-2 flex items-center justify-center gap-3">
+          <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
             <button
               onClick={() => {
                 setSearchQuery('');
                 setSelectedCategoryId('all');
                 setSelectedMedium('all');
+                setFormatFilter('all');
                 setOnlyAvailable(false);
               }}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
@@ -398,7 +494,8 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
             )}
           </div>
         </div>
-      ) : (
+      ) : viewLayout === 'detailed' ? (
+        /* Detailed Horizontal Cards */
         <div className="space-y-4">
           {combinedResults.map((item) => {
             const isPhysical = item.type === 'physical';
@@ -504,7 +601,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
                         <Tag className="w-3 h-3" />
-                        الوسوم والمواضيع:
+                        الوسوم والتصنيفات:
                       </span>
                       {pBook.tags.map((t, idx) => (
                         <button
@@ -556,7 +653,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                               bookId: pBook.id,
                               studentId: currentUser.id,
                               purpose: 'academic_research',
-                              customReason: `طلب استعارة من خلال البحث الموضوعي: ${pBook.title}`,
+                              customReason: `طلب استعارة من خلال البحث الشامل: ${pBook.title}`,
                             })
                           }
                           disabled={!isAvailable}
@@ -677,7 +774,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
                         <Tag className="w-3 h-3" />
-                        الوسوم والمواضيع:
+                        الوسوم والتصنيفات:
                       </span>
                       {dBook.tags.map((t, idx) => (
                         <button
@@ -699,15 +796,15 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Direct Read in Reader */}
+                      {/* Direct Read in Reader (دخول فوري ومطالعة) */}
                       {onOpenReader && (
                         <button
                           type="button"
                           onClick={() => onOpenReader(dBook)}
-                          className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 flex items-center gap-1.5 transition-all cursor-pointer"
                         >
-                          <BookOpen className="w-3.5 h-3.5" />
-                          <span>فتح وقراءة الآن 📖</span>
+                          <BookOpen className="w-4 h-4" />
+                          <span>دخول فوري والمطالعة في القارئ المدمج 📖</span>
                         </button>
                       )}
 
@@ -716,7 +813,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => onNavigateTab('reading_workspace')}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                         >
                           تدوين ملخص وملاحظة
                         </button>
@@ -728,6 +825,204 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
             }
           })}
         </div>
+      ) : (
+        /* Grid Cards View */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {combinedResults.map((item) => {
+            const isPhysical = item.type === 'physical';
+            const book = item.data;
+            const isFav = favoriteBookIds.includes(book.id);
+            const category = categories.find((c) => c.id === book.categoryId)?.name || 'عام';
+
+            if (isPhysical) {
+              const pBook = book as PhysicalBook;
+              const isAvailable = pBook.availableCopies > 0;
+
+              return (
+                <div
+                  key={`grid-p-${pBook.id}`}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/40 rounded-3xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group space-y-4"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-[11px] font-bold flex items-center gap-1">
+                        <BookOpen className="w-3 h-3 text-amber-500" />
+                        <span>ورقي</span>
+                      </span>
+                      {onToggleFavorite && (
+                        <button
+                          onClick={() => onToggleFavorite(pBook.id)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            isFav ? 'text-amber-500 bg-amber-400/10' : 'text-slate-400 hover:text-amber-500'
+                          }`}
+                        >
+                          <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400' : ''}`} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm leading-snug group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors line-clamp-2">
+                        {pBook.title}
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{pBook.author}</p>
+                    </div>
+
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-xl space-y-1 text-[11px] text-slate-500">
+                      <div className="flex justify-between">
+                        <span>القسم:</span>
+                        <strong className="text-slate-700 dark:text-slate-300">{category}</strong>
+                      </div>
+                      {pBook.location && (
+                        <div className="flex justify-between text-amber-700 dark:text-amber-400">
+                          <span>الموقع:</span>
+                          <span>خزانة {pBook.location.cabinet} - رف {pBook.location.shelf}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>الحالة:</span>
+                        <span className={isAvailable ? 'text-emerald-600 font-bold' : 'text-rose-500'}>
+                          {isAvailable ? `متوفر (${pBook.availableCopies})` : 'معار بالكامل'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                    {onOpenPhysicalBookmark && (
+                      <button
+                        onClick={() => onOpenPhysicalBookmark(pBook)}
+                        className="flex-1 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold border border-amber-500/30 flex items-center justify-center gap-1 cursor-pointer transition-all"
+                      >
+                        <Bookmark className="w-3.5 h-3.5" />
+                        <span>فاصل قراءة</span>
+                      </button>
+                    )}
+                    {currentUser.role === 'admin' && onQuickLoan ? (
+                      <button
+                        onClick={() => onQuickLoan(pBook.id)}
+                        className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-all shadow-xs"
+                      >
+                        <span>إعارة</span>
+                      </button>
+                    ) : currentUser.role === 'student' && onRequestLoanSubmit ? (
+                      <button
+                        onClick={() =>
+                          onRequestLoanSubmit({
+                            bookId: pBook.id,
+                            studentId: currentUser.id,
+                            purpose: 'academic_research',
+                            customReason: `طلب استعارة: ${pBook.title}`,
+                          })
+                        }
+                        disabled={!isAvailable}
+                        className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                          isAvailable
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                            : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <span>طلب إعارة</span>
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            } else {
+              const dBook = book as DigitalBook;
+
+              return (
+                <div
+                  key={`grid-d-${dBook.id}`}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/40 rounded-3xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group space-y-4"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-bold flex items-center gap-1">
+                          <Library className="w-3 h-3 text-emerald-500" />
+                          <span>رقمي</span>
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-mono font-bold uppercase">
+                          {dBook.format || 'PDF'}
+                        </span>
+                      </div>
+                      {onToggleFavorite && (
+                        <button
+                          onClick={() => onToggleFavorite(dBook.id)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            isFav ? 'text-amber-500 bg-amber-400/10' : 'text-slate-400 hover:text-amber-500'
+                          }`}
+                        >
+                          <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400' : ''}`} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm leading-snug group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors line-clamp-2">
+                        {dBook.title}
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{dBook.author}</p>
+                    </div>
+
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-xl space-y-1 text-[11px] text-slate-500">
+                      <div className="flex justify-between">
+                        <span>القسم:</span>
+                        <strong className="text-slate-700 dark:text-slate-300">{category}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>الصفحات:</span>
+                        <span>{dBook.pagesCount || 100} صفحة</span>
+                      </div>
+                      {dBook.sourceOrigin && (
+                        <div className="flex justify-between truncate">
+                          <span>المصدر:</span>
+                          <span className="truncate max-w-[140px]">{dBook.sourceOrigin}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {onOpenReader && (
+                      <button
+                        onClick={() => onOpenReader(dBook)}
+                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        <span>فتح ومطالعة الآن 📖</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+          })}
+        </div>
+      )}
+
+      {/* Admin Modals */}
+      {isAddDigitalModalOpen && (
+        <AddDigitalBookModal
+          isOpen={isAddDigitalModalOpen}
+          onClose={() => setIsAddDigitalModalOpen(false)}
+          categories={categories}
+          onAddBook={(bookData) => {
+            if (onAddDigitalBook) {
+              onAddDigitalBook(bookData);
+            }
+          }}
+        />
+      )}
+
+      {isBulkImportModalOpen && (
+        <BulkDigitalImportModal
+          isOpen={isBulkImportModalOpen}
+          onClose={() => setIsBulkImportModalOpen(false)}
+          categories={categories}
+          onSuccess={handleBulkImportSuccess}
+        />
       )}
     </div>
   );

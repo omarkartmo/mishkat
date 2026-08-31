@@ -154,14 +154,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           value={physicalBooks.length}
           subtext={`${availableCopies} نسخة متوفرة`}
           icon={<BookOpen className="w-5 h-5 text-indigo-400" />}
-          onClick={() => onNavigate('physical')}
+          onClick={() => onNavigate('search_results')}
         />
         <MetricCard
           title="المستودع الرقمي"
           value={digitalBooks.length}
           subtext="كتب PDF & ePub"
           icon={<Library className="w-5 h-5 text-emerald-400" />}
-          onClick={() => onNavigate('digital')}
+          onClick={() => onNavigate('search_results')}
         />
         <MetricCard
           title="فواصل ورقية جارية"
@@ -175,7 +175,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           value={inProgressDigitalBooks.length}
           subtext="كتب قيد القراءة"
           icon={<Play className="w-5 h-5 text-emerald-400" />}
-          onClick={() => onNavigate('digital')}
+          onClick={() => onNavigate('search_results')}
         />
         <MetricCard
           title="الإعارات النشطة"
