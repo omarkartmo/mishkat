@@ -105,6 +105,13 @@ export default function App() {
     setFavorites(storage.getFavorites(curr.id));
   };
 
+  // Synchronize with Central Server on mount
+  useEffect(() => {
+    storage.syncWithServer().then(() => {
+      refreshAllState();
+    });
+  }, []);
+
   // Login handler for First Window Gateway
   const handleLogin = (regNumber: string, password?: string) => {
     const res = storage.loginUser(regNumber, password);

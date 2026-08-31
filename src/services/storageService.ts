@@ -39,6 +39,7 @@ import {
   recordFailedAttempt,
   resetRateLimit,
 } from '../utils/security';
+import { apiClient } from './apiClient';
 
 const STORAGE_KEYS = {
   CATEGORIES: 'almanara_categories_v1',
@@ -298,6 +299,106 @@ export class StorageService {
 
     if (hasChanges) {
       saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
+    }
+  }
+
+  /**
+   * Syncs entire state with the Central PostgreSQL / Relational Server
+   */
+  public async syncWithServer(): Promise<boolean> {
+    try {
+      // 1. Books
+      const booksRes = await apiClient.get('/books');
+      if (booksRes.success && Array.isArray(booksRes.data)) {
+        const pBooks: PhysicalBook[] = [];
+        const dBooks: DigitalBook[] = [];
+        booksRes.data.forEach((b: any) => {
+          if (b.format || b.fileSize || b.tableOfContents) {
+            dBooks.push(b);
+          } else {
+            pBooks.push(b);
+          }
+        });
+        if (pBooks.length > 0) {
+          this.physicalBooks = pBooks;
+          saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
+        }
+        if (dBooks.length > 0) {
+          this.digitalBooks = dBooks;
+          saveToStorage(STORAGE_KEYS.DIGITAL_BOOKS, this.digitalBooks);
+        }
+      }
+
+      // 2. Categories
+      const catRes = await apiClient.get('/categories');
+      if (catRes.success && Array.isArray(catRes.data) && catRes.data.length > 0) {
+        this.categories = catRes.data;
+        saveToStorage(STORAGE_KEYS.CATEGORIES, this.categories);
+      }
+
+      // 3. Loans
+      const loansRes = await apiClient.get('/loans');
+      if (loansRes.success && Array.isArray(loansRes.data)) {
+        this.loans = loansRes.data;
+        saveToStorage(STORAGE_KEYS.LOANS, this.loans);
+      }
+
+      // 4. Loan Requests
+      const reqsRes = await apiClient.get('/loan-requests');
+      if (reqsRes.success && Array.isArray(reqsRes.data)) {
+        this.loanRequests = reqsRes.data;
+        saveToStorage(STORAGE_KEYS.LOAN_REQUESTS, this.loanRequests);
+      }
+
+      // 5. Portals
+      const portalsRes = await apiClient.get('/portals');
+      if (portalsRes.success && Array.isArray(portalsRes.data) && portalsRes.data.length > 0) {
+        this.portals = portalsRes.data;
+        saveToStorage(STORAGE_KEYS.PORTALS, this.portals);
+      }
+
+      // 6. Settings
+      const setRes = await apiClient.get('/settings');
+      if (setRes.success && setRes.data) {
+        this.config = { ...INITIAL_SYSTEM_CONFIG, ...setRes.data };
+        saveToStorage(STORAGE_KEYS.CONFIG, this.config);
+      }
+
+      // 7. Users (if admin)
+      if (this.currentUser?.role === 'admin') {
+        const usersRes = await apiClient.get('/users');
+        if (usersRes.success && Array.isArray(usersRes.data) && usersRes.data.length > 0) {
+          this.students = usersRes.data;
+          saveToStorage(STORAGE_KEYS.STUDENTS, this.students);
+        }
+      }
+
+      // 8. Summaries
+      const sumRes = await apiClient.get('/summaries');
+      if (sumRes.success && Array.isArray(sumRes.data)) {
+        this.summaries = sumRes.data;
+        saveToStorage(STORAGE_KEYS.BOOK_SUMMARIES, this.summaries);
+      }
+
+      // 9. Notes
+      const notesRes = await apiClient.get('/notes');
+      if (notesRes.success && Array.isArray(notesRes.data)) {
+        this.notes = notesRes.data;
+        saveToStorage(STORAGE_KEYS.STUDENT_NOTES, this.notes);
+      }
+
+      // 10. Bookmarks
+      const bmRes = await apiClient.get('/bookmarks');
+      if (bmRes.success && Array.isArray(bmRes.data)) {
+        this.physicalBookmarks = bmRes.data;
+        saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKMARKS, this.physicalBookmarks);
+      }
+
+      this.syncBookAvailability();
+      return true;
+    } catch (err) {
+      console.warn('[StorageService] Error during server sync:', err);
+      return false;
     }
   }
 
