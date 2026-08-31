@@ -140,10 +140,8 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Re-sync all state helper
-  const refreshAllState = (targetUser?: User) => {
-    loadCategories();
-    loadBooks();
+  // Helper to refresh legacy client storage domains (Loans, Notes, Portals, etc.)
+  const refreshLegacyStorageState = (targetUser?: User) => {
     setLoans(storage.getLoans());
     setSubmissions(storage.getSubmissions());
     setUsers(storage.getUsers());
@@ -161,12 +159,19 @@ export default function App() {
     }
   };
 
+  // Re-sync all state helper (Server-Authoritative Book/Category Catalog + Legacy Storage Domains)
+  const refreshAllState = (targetUser?: User) => {
+    loadCategories();
+    loadBooks();
+    refreshLegacyStorageState(targetUser);
+  };
+
   // Synchronize with Central Server on mount
   useEffect(() => {
     loadCategories();
     loadBooks();
     storage.syncWithServer().then(() => {
-      refreshAllState();
+      refreshLegacyStorageState();
     });
   }, []);
 
@@ -174,7 +179,7 @@ export default function App() {
   useEffect(() => {
     if (authUser) {
       setActiveTab(authUser.role === 'student' ? 'student_portal' : 'overview');
-      refreshAllState(authUser);
+      refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
 

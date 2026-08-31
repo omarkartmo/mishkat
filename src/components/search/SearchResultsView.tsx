@@ -973,7 +973,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                       </div>
                       <div className="flex justify-between">
                         <span>الصفحات:</span>
-                        <span>{dBook.pagesCount || 100} صفحة</span>
+                        <span>{dBook.pagesCount ? `${dBook.pagesCount} صفحة` : 'غير متوفر'}</span>
                       </div>
                       {dBook.sourceOrigin && (
                         <div className="flex justify-between truncate">

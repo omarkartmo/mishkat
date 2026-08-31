@@ -23,7 +23,7 @@ declare global {
 
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+  const token = (authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null) || (typeof req.query.token === 'string' ? req.query.token : null);
 
   if (!token) {
     return res.status(401).json({

@@ -57,6 +57,7 @@ The `BookRepository` (`src/services/bookRepository.ts`) implements the full life
 | `uploadDigitalFile(file)` | `POST /api/v1/books/upload` | Uploads PDF/EPUB to central storage | Admin / Authenticated |
 | `incrementReadCount(bookId)` | `POST /api/v1/books/:id/increment-read` | Records reader engagement | Authenticated |
 | `getBookFileUrl(bookId)` | `GET /api/v1/books/:id/file` | URL for streaming/downloading digital file | Authenticated |
+| `fetchBookFileBlob(bookId)` | `GET /api/v1/books/:id/file` | Secure binary blob fetch with JWT header | Authenticated |
 
 ---
 

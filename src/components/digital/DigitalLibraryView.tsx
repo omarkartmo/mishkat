@@ -252,7 +252,9 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
                         <FileText className="w-3.5 h-3.5 text-emerald-500" />
                         عدد الصفحات:
                       </span>
-                      <span className="font-mono text-slate-800 dark:text-slate-200 font-semibold">{book.pages || book.pagesCount || 120} صفحة</span>
+                      <span className="font-mono text-slate-800 dark:text-slate-200 font-semibold">
+                        {book.pages || book.pagesCount ? `${book.pages || book.pagesCount} صفحة` : 'غير متوفر'}
+                      </span>
                     </div>
                     {book.sourceOrigin && (
                       <div className="flex items-center justify-between">
@@ -271,7 +273,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
                 {/* Card Actions Footer */}
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
                   <span className="text-[11px] text-slate-400 font-mono">
-                    {book.fileSize || `${book.fileSizeMb || 2.4} MB`}
+                    {book.fileSize ? book.fileSize : (book.fileSizeMb ? `${book.fileSizeMb} MB` : 'غير متوفر')}
                   </span>
 
                   <button

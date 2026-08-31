@@ -25,10 +25,12 @@ import {
   AlignJustify,
   Check,
   Volume2,
+  Download,
 } from 'lucide-react';
 import { DigitalBook, StudentNote } from '../../types/library';
 import { getRichBookPage, BookPageContent } from '../../data/richBookContent';
 import { apiClient } from '../../services/apiClient';
+import { bookRepository } from '../../services/bookRepository';
 
 interface BookReaderModalProps {
   book: DigitalBook;
@@ -530,6 +532,28 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           >
             <MessageSquarePlus className="w-4 h-4" />
             <span className="hidden sm:inline">ملاحظاتي ({bookNotes.length})</span>
+          </button>
+
+          {/* Download Original File Button */}
+          <button
+            onClick={async () => {
+              const res = await bookRepository.fetchBookFileBlob(book.id);
+              if (res.success && res.data) {
+                const url = window.URL.createObjectURL(res.data);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${book.title}.${book.format || 'pdf'}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+              }
+            }}
+            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-all flex items-center gap-1 text-xs"
+            title="تحميل المرجع الرقمي الأصلي من الخادم المركزي"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden xl:inline">تحميل المرجع</span>
           </button>
 
           {/* Fullscreen Button */}

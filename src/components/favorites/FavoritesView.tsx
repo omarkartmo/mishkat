@@ -257,7 +257,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                     <div className="p-2.5 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                       <span className="flex items-center gap-1">
                         <FileText className="w-3.5 h-3.5 text-emerald-500" />
-                        عدد الصفحات: {(item as DigitalBook).pagesCount || 150} صفحة
+                        عدد الصفحات: {(item as DigitalBook).pagesCount ? `${(item as DigitalBook).pagesCount} صفحة` : 'غير متوفر'}
                       </span>
                       <span className="font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400">
                         {(item as DigitalBook).format}
