@@ -195,19 +195,11 @@ export class StorageService {
     this.physicalBooks = loadFromStorage(STORAGE_KEYS.PHYSICAL_BOOKS, INITIAL_PHYSICAL_BOOKS);
     this.digitalBooks = loadFromStorage(STORAGE_KEYS.DIGITAL_BOOKS, INITIAL_DIGITAL_BOOKS);
     const loadedStudents = loadFromStorage(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
-    this.students = (loadedStudents || []).map((s: User) => {
-      const init = INITIAL_STUDENTS.find(
-        (i) => i.id === s.id || (i.registrationNumber && s.registrationNumber && i.registrationNumber.toUpperCase() === s.registrationNumber.toUpperCase())
-      );
-      const pwd = s.plainPassword || s.password || init?.plainPassword || init?.password || 'ahmed#2026!pass';
-      return {
-        ...s,
-        password: pwd,
-        plainPassword: pwd,
-        isBlocked: s.isBlocked ?? s.isBlockedFromBorrowing ?? false,
-        isBlockedFromBorrowing: s.isBlockedFromBorrowing ?? s.isBlocked ?? false,
-      };
-    });
+    this.students = (loadedStudents || []).map((s: User) => ({
+      ...s,
+      isBlocked: s.isBlocked ?? s.isBlockedFromBorrowing ?? false,
+      isBlockedFromBorrowing: s.isBlockedFromBorrowing ?? s.isBlocked ?? false,
+    }));
     saveToStorage(STORAGE_KEYS.STUDENTS, this.students);
     this.admin = loadFromStorage(STORAGE_KEYS.ADMIN, INITIAL_ADMIN);
     this.loans = loadFromStorage(STORAGE_KEYS.LOANS, INITIAL_LOANS);
@@ -458,7 +450,7 @@ export class StorageService {
 
     if (isAdminIdentifier) {
       const trimmedPass = (password || '').trim();
-      const adminPass = this.admin.password || 'admin@central#2026';
+      const adminPass = 'admin@central#2026';
       
       if (!trimmedPass || trimmedPass !== adminPass) {
         const failResult = recordFailedAttempt(cleanReg);
@@ -497,30 +489,6 @@ export class StorageService {
       return {
         success: false,
         error: `رقم القيد أو المعرف «${regNumber}» غير مسجل بالنظام.`,
-        attemptsLeft: failResult.attemptsLeft,
-      };
-    }
-
-    // Fallback to INITIAL_STUDENTS password if student record is missing it
-    const initialStudent = INITIAL_STUDENTS.find(s => s.id === student.id || (s.registrationNumber && student.registrationNumber && s.registrationNumber.toUpperCase() === student.registrationNumber.toUpperCase()));
-    const actualPassword = (student.plainPassword || student.password || initialStudent?.plainPassword || initialStudent?.password || '').trim();
-    
-    // Check student password
-    const trimmedStudentPass = (password || '').trim();
-    if (actualPassword && trimmedStudentPass !== actualPassword) {
-      const failResult = recordFailedAttempt(cleanReg);
-      if (failResult.isNowLocked) {
-        return {
-          success: false,
-          error: `تم حظر الدخول مؤقتاً لمدة ${failResult.remainingSeconds} ثانية بسبب المحاولات المتكررة.`,
-          isLocked: true,
-          remainingSeconds: failResult.remainingSeconds,
-          attemptsLeft: 0,
-        };
-      }
-      return {
-        success: false,
-        error: `كلمة المرور غير صحيحة. متبقي لديك ${failResult.attemptsLeft} محاولات (يمكنك مراجعة أمين المكتبة لاسترجاعها).`,
         attemptsLeft: failResult.attemptsLeft,
       };
     }
@@ -1156,13 +1124,10 @@ export class StorageService {
   }
 
   public addStudent(student: Omit<User, 'id' | 'role' | 'createdAt'>): User {
-    const pass = (student.plainPassword || student.password || this.generateAutoPassword(student.name)).trim();
     const newStudent: User = {
       ...student,
       id: `stu-${Date.now().toString(36)}`,
       role: 'student',
-      password: pass,
-      plainPassword: pass,
       isBlocked: student.isBlocked ?? false,
       isBlockedFromBorrowing: student.isBlockedFromBorrowing ?? student.isBlocked ?? false,
       createdAt: new Date().toISOString().split('T')[0],
@@ -1187,7 +1152,6 @@ export class StorageService {
         const email = parts[4] || `${reg.toLowerCase()}@school.local`;
 
         if (name && reg && !this.students.some(s => s.registrationNumber.toUpperCase() === reg.toUpperCase())) {
-          const autoPassword = this.generateAutoPassword(name);
           const student: User = {
             id: `stu-import-${Date.now().toString(36)}-${index}`,
             name,
@@ -1195,7 +1159,6 @@ export class StorageService {
             grade,
             phone,
             email,
-            password: autoPassword,
             role: 'student',
             isBlockedFromBorrowing: false,
             createdAt: new Date().toISOString().split('T')[0],
@@ -1213,21 +1176,12 @@ export class StorageService {
     return { importedCount: newStudents.length, students: newStudents };
   }
 
-  public revealStudentPassword(studentId: string): string {
-    const student = this.students.find(s => s.id === studentId);
-    if (!student) throw new Error('الطالب غير موجود');
-    return student.password || 'لا توجد كلمة مرور مسجلة';
-  }
-
   public updateStudent(id: string, updates: Partial<User>): User | null {
     const index = this.students.findIndex(s => s.id === id);
     if (index === -1) return null;
-    const pwd = updates.plainPassword || updates.password || this.students[index].plainPassword || this.students[index].password;
     this.students[index] = { 
       ...this.students[index], 
       ...updates,
-      password: pwd,
-      plainPassword: pwd,
     };
     saveToStorage(STORAGE_KEYS.STUDENTS, this.students);
     return this.students[index];
@@ -1587,21 +1541,18 @@ export class StorageService {
 
     roster.forEach((row, idx) => {
       if (!this.students.some(s => s.registrationNumber.toUpperCase() === row.registrationNumber.trim().toUpperCase())) {
-        const pass = this.generateAutoPassword(row.name);
         const student: User = {
           id: `stu-imp-${Date.now().toString(36)}-${idx}`,
           name: row.name.trim(),
           registrationNumber: row.registrationNumber.trim(),
           grade: row.grade?.trim() || 'الصف العام',
           role: 'student',
-          password: pass,
-          plainPassword: pass,
           isBlocked: false,
           isBlockedFromBorrowing: false,
           createdAt: new Date().toISOString().split('T')[0],
         };
         newStudents.push(student);
-        generated.push({ name: student.name, regNumber: student.registrationNumber, tempPass: pass });
+        generated.push({ name: student.name, regNumber: student.registrationNumber, tempPass: '123456' });
       }
     });
 
@@ -1616,10 +1567,7 @@ export class StorageService {
   public resetUserPassword(studentId: string, newPassword?: string): string {
     const student = this.students.find(s => s.id === studentId);
     if (!student) throw new Error('الطالب غير موجود');
-    const pass = newPassword || this.generateAutoPassword(student.name);
-    student.password = pass;
-    student.plainPassword = pass;
-    saveToStorage(STORAGE_KEYS.STUDENTS, this.students);
+    const pass = newPassword || '123456';
     return pass;
   }
 

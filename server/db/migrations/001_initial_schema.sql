@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(200),
     phone VARCHAR(50),
     password_hash VARCHAR(255) NOT NULL,
-    plain_password VARCHAR(255),
     role_id VARCHAR(50) REFERENCES roles(id) DEFAULT 'student',
     grade VARCHAR(100),
     avatar_url TEXT,

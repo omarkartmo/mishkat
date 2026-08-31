@@ -319,23 +319,79 @@ router.post('/upload', authenticateToken, upload.fields([{ name: 'file', maxCoun
   }
 });
 
-// GET /api/v1/books/:id/file (Secure File Delivery without path disclosure)
+// GET /api/v1/books/:id/file (Secure File Delivery with HTTP Range Streaming and Path Traversal Protection)
 router.get('/:id/file', authenticateToken, async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const { rows } = await db.query('SELECT * FROM books WHERE id = $1 LIMIT 1', [id]);
     if (rows.length === 0) {
-      return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'الملف غير موجود.' } });
+      return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'سجل الكتاب غير موجود.' } });
     }
 
     const book = rows[0];
-    if (book.file_path && fs.existsSync(book.file_path)) {
-      res.setHeader('Content-Type', book.format === 'epub' ? 'application/epub+zip' : 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(book.title)}.${book.format || 'pdf'}"`);
-      const stream = fs.createReadStream(book.file_path);
-      stream.pipe(res);
+    let targetFilePath = book.file_path;
+
+    // If file_path is not explicitly set, look in digital storage directory by file_url filename
+    if (!targetFilePath && book.file_url && typeof book.file_url === 'string') {
+      const filename = path.basename(book.file_url);
+      targetFilePath = path.join(serverConfig.dirs.digital, filename);
+    }
+
+    if (!targetFilePath || !fs.existsSync(targetFilePath)) {
+      return res.json({
+        success: true,
+        data: {
+          message: 'قراءة مدمجة متوفرة عبر المستعرض.',
+          sampleContent: typeof book.sample_content === 'string' ? JSON.parse(book.sample_content) : (book.sample_content || []),
+        },
+      });
+    }
+
+    // Path Traversal Security Verification
+    const resolvedPath = path.resolve(targetFilePath);
+    const digitalDir = path.resolve(serverConfig.dirs.digital);
+    const booksDir = path.resolve(serverConfig.dirs.books);
+    if (!resolvedPath.startsWith(digitalDir) && !resolvedPath.startsWith(booksDir)) {
+      return res.status(403).json({ success: false, error: { code: 'ACCESS_DENIED', message: 'مسار الملف غير مصرح به.' } });
+    }
+
+    const stat = fs.statSync(resolvedPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+    const contentType = book.format === 'epub' ? 'application/epub+zip' : 'application/pdf';
+
+    if (range) {
+      // Parse Range header (e.g. "bytes=0-1024")
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (start >= fileSize || end >= fileSize) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      const chunkSize = end - start + 1;
+      const fileStream = fs.createReadStream(resolvedPath, { start, end });
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="${encodeURIComponent(book.title)}.${book.format || 'pdf'}"`,
+      });
+
+      fileStream.pipe(res);
     } else {
-      res.json({ success: true, data: { message: 'قراءة مدمجة متوفرة عبر المستعرض.', sampleContent: book.sample_content } });
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Accept-Ranges': 'bytes',
+        'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="${encodeURIComponent(book.title)}.${book.format || 'pdf'}"`,
+      });
+
+      fs.createReadStream(resolvedPath).pipe(res);
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });

@@ -43,10 +43,18 @@ export async function createExpressApp() {
   app.use('/api/v1/books/files/covers', express.static(serverConfig.dirs.covers));
   app.use('/api/v1/books/files/digital', express.static(serverConfig.dirs.digital));
 
-  // Initialize DB Connection, Migrations, and Seed
-  await db.connect();
-  await runMigrations();
-  await seedInitialData();
+  // Initialize DB Connection, Migrations, and Seed safely
+  try {
+    await db.connect();
+    if (db.isPgConnected()) {
+      await runMigrations();
+      await seedInitialData();
+    } else {
+      console.log('ℹ️ [Database] Central Database is currently not connected. API will serve health checks and handle connection gracefully.');
+    }
+  } catch (dbInitErr: any) {
+    console.warn('⚠️ [Database Init] Database initial setup deferred:', dbInitErr.message);
+  }
 
   // Mount API v1 Routes
   app.use('/api/v1/health', healthRouter);

@@ -31,10 +31,11 @@ export async function seedInitialData(): Promise<void> {
   const { rows: adminRows } = await db.query('SELECT id FROM users WHERE registration_number = $1', [INITIAL_ADMIN.registrationNumber]);
   if (adminRows.length === 0) {
     console.log('🌱 [Seeder] Seeding initial admin and students accounts with secure password hashes...');
+    // Seed Admin
     const adminPassHash = await bcrypt.hash('admin123', 10);
     await db.query(`
-      INSERT INTO users (id, registration_number, name, email, role_id, password_hash, plain_password, is_active, is_blocked)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, true, false)
+      INSERT INTO users (id, registration_number, name, email, role_id, password_hash, is_active, is_blocked)
+      VALUES ($1, $2, $3, $4, $5, $6, true, false)
       ON CONFLICT (registration_number) DO NOTHING;
     `, [
       INITIAL_ADMIN.id,
@@ -43,16 +44,15 @@ export async function seedInitialData(): Promise<void> {
       INITIAL_ADMIN.email || 'admin@mishkat.edu',
       'admin',
       adminPassHash,
-      INITIAL_ADMIN.plainPassword || 'admin123',
     ]);
 
     // Seed Students
     for (const student of INITIAL_STUDENTS) {
-      const studentPass = student.plainPassword || '123456';
+      const studentPass = '123456';
       const studentPassHash = await bcrypt.hash(studentPass, 10);
       await db.query(`
-        INSERT INTO users (id, registration_number, name, role_id, grade, password_hash, plain_password, is_active, is_blocked, is_blocked_from_borrowing)
-        VALUES ($1, $2, $3, 'student', $4, $5, $6, true, false, false)
+        INSERT INTO users (id, registration_number, name, role_id, grade, password_hash, is_active, is_blocked, is_blocked_from_borrowing)
+        VALUES ($1, $2, $3, 'student', $4, $5, true, false, false)
         ON CONFLICT (registration_number) DO NOTHING;
       `, [
         student.id,
@@ -60,7 +60,6 @@ export async function seedInitialData(): Promise<void> {
         student.name,
         student.grade || 'الصف العاشر',
         studentPassHash,
-        studentPass,
       ]);
     }
   }

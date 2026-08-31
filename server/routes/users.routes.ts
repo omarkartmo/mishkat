@@ -11,7 +11,7 @@ const router = Router();
 router.get('/', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
   try {
     const { role, search } = req.query;
-    let sql = 'SELECT id, registration_number, name, email, phone, role_id, grade, avatar_url, plain_password, is_active, is_blocked, is_blocked_from_borrowing, block_reason, created_at, last_login_at FROM users WHERE is_active = true';
+    let sql = 'SELECT id, registration_number, name, email, phone, role_id, grade, avatar_url, is_active, is_blocked, is_blocked_from_borrowing, block_reason, created_at, last_login_at FROM users WHERE is_active = true';
     const params: any[] = [];
 
     if (role) {
@@ -37,7 +37,6 @@ router.get('/', authenticateToken, requireRole('admin', 'librarian'), async (req
       email: u.email,
       phone: u.phone,
       avatarUrl: u.avatar_url,
-      plainPassword: u.plain_password,
       isBlocked: u.is_blocked || false,
       isBlockedFromBorrowing: u.is_blocked_from_borrowing || false,
       blockReason: u.block_reason,
@@ -53,7 +52,7 @@ router.get('/', authenticateToken, requireRole('admin', 'librarian'), async (req
 
 // POST /api/v1/users (Create student/user)
 router.post('/', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
-  const { registrationNumber, name, grade, email, phone, role = 'student', plainPassword = '123' } = req.body;
+  const { registrationNumber, name, grade, email, phone, role = 'student', password = '123' } = req.body;
 
   if (!registrationNumber || !name) {
     return res.status(400).json({
@@ -64,13 +63,13 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
 
   try {
     const id = `stu-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const passHash = await bcrypt.hash(plainPassword, 10);
+    const passHash = await bcrypt.hash(password, 10);
 
     await db.query(`
       INSERT INTO users (
         id, registration_number, name, role_id, grade, email, phone,
-        password_hash, plain_password, is_active, is_blocked, is_blocked_from_borrowing
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, false, false)
+        password_hash, is_active, is_blocked, is_blocked_from_borrowing
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, false, false)
     `, [
       id,
       registrationNumber.trim(),
@@ -80,7 +79,6 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
       email || null,
       phone || null,
       passHash,
-      plainPassword,
     ]);
 
     await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'CREATE_USER', 'user', id, { registrationNumber, name, grade }, req);
@@ -95,7 +93,6 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
         grade,
         email,
         phone,
-        plainPassword,
         isBlocked: false,
         isBlockedFromBorrowing: false,
         createdAt: new Date().toISOString(),
@@ -109,16 +106,16 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
 // PUT /api/v1/users/:id
 router.put('/:id', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, grade, email, phone, isBlocked, isBlockedFromBorrowing, blockReason, plainPassword } = req.body;
+  const { name, grade, email, phone, isBlocked, isBlockedFromBorrowing, blockReason, password } = req.body;
 
   try {
     let passUpdateSql = '';
     const params: any[] = [name, grade, email, phone, isBlocked ?? false, isBlockedFromBorrowing ?? false, blockReason ?? null, id];
 
-    if (plainPassword) {
-      const passHash = await bcrypt.hash(plainPassword, 10);
-      params.splice(7, 0, passHash, plainPassword);
-      passUpdateSql = `, password_hash = $8, plain_password = $9`;
+    if (password) {
+      const passHash = await bcrypt.hash(password, 10);
+      params.splice(7, 0, passHash);
+      passUpdateSql = `, password_hash = $8`;
     }
 
     const sql = `
@@ -130,7 +127,7 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req: Request,
     `;
 
     await db.query(sql, params);
-    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'UPDATE_USER', 'user', id, req.body, req);
+    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'UPDATE_USER', 'user', id, { name, grade, isBlocked }, req);
 
     res.json({ success: true, data: { message: 'تم تحديث بيانات المستخدم في الخادم المركزي بنجاح.' } });
   } catch (err: any) {
@@ -171,8 +168,8 @@ router.post('/roster-import', authenticateToken, requireRole('admin'), async (re
         await client.query(`
           INSERT INTO users (
             id, registration_number, name, role_id, grade,
-            password_hash, plain_password, is_active, is_blocked, is_blocked_from_borrowing
-          ) VALUES ($1, $2, $3, 'student', $4, $5, '123456', true, false, false)
+            password_hash, is_active, is_blocked, is_blocked_from_borrowing
+          ) VALUES ($1, $2, $3, 'student', $4, $5, true, false, false)
           ON CONFLICT (registration_number) DO UPDATE SET
             name = EXCLUDED.name,
             grade = EXCLUDED.grade;

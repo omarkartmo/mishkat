@@ -4,7 +4,7 @@ import fs from 'fs';
 // Root data directory outside source code
 const ROOT_DATA_DIR = process.env.DATA_DIRECTORY || path.join(process.cwd(), 'LibraryData');
 
-// Ensure directories exist
+// Ensure storage directories exist (Central Server File Storage only)
 const DIRS = {
   root: ROOT_DATA_DIR,
   books: path.join(ROOT_DATA_DIR, 'books'),
@@ -14,21 +14,28 @@ const DIRS = {
   backups: path.join(ROOT_DATA_DIR, 'backups'),
   logs: path.join(ROOT_DATA_DIR, 'logs'),
   temp: path.join(ROOT_DATA_DIR, 'temp'),
-  db: path.join(ROOT_DATA_DIR, 'database'),
 };
 
-// Create directories if they do not exist
+// Create storage directories if they do not exist
 Object.values(DIRS).forEach((dirPath) => {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
   }
 });
 
+const isProduction = process.env.NODE_ENV === 'production';
+const envJwtSecret = process.env.JWT_SECRET;
+
+if (isProduction && (!envJwtSecret || envJwtSecret.trim() === '')) {
+  console.error('FATAL: JWT_SECRET environment variable is missing in production environment. Server startup aborted.');
+  process.exit(1);
+}
+
 export const serverConfig = {
   port: 3000,
   host: '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
-  jwtSecret: process.env.JWT_SECRET || 'mishkat-central-library-jwt-secret-key-2026',
+  jwtSecret: envJwtSecret || (isProduction ? '' : 'mishkat-dev-jwt-secret-key-lan-only-2026'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   databaseUrl: process.env.DATABASE_URL || '',
   dirs: DIRS,

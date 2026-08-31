@@ -3,19 +3,15 @@ import {
   Users,
   Search,
   Plus,
-  UploadCloud,
-  Key,
-  Eye,
-  EyeOff,
-  Copy,
+  KeyRound,
   Check,
   ShieldAlert,
   ShieldCheck,
   FileSpreadsheet,
-  Download,
   AlertCircle,
   X,
   Lock,
+  RotateCcw,
 } from 'lucide-react';
 import { User, StudentRosterRow } from '../../types/library';
 
@@ -38,8 +34,9 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
   const [search, setSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [resetModalStudent, setResetModalStudent] = useState<User | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -48,19 +45,6 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
     importedCount: number;
     credentials: { name: string; regNumber: string; tempPass: string }[];
   } | null>(null);
-
-  const togglePasswordReveal = (studentId: string) => {
-    setRevealedPasswords((prev) => ({
-      ...prev,
-      [studentId]: !prev[studentId],
-    }));
-  };
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
 
   const filteredStudents = (students || []).filter((s) => {
     const matchesSearch =
@@ -80,6 +64,19 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
   const blockedCount = (students || []).filter((s) => s.isBlocked).length;
   const grades = Array.from(new Set((students || []).map((s) => s.grade).filter(Boolean)));
 
+  const handleExecutePasswordReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetModalStudent) return;
+    const pass = newPasswordInput.trim() || '123456';
+    onResetStudentPassword(resetModalStudent.id, pass);
+    setResetSuccessMessage(`تم تحديث وتعيين كلمة المرور للطالب ${resetModalStudent.name} بنجاح.`);
+    setTimeout(() => {
+      setResetSuccessMessage(null);
+      setResetModalStudent(null);
+      setNewPasswordInput('');
+    }, 2000);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -87,10 +84,10 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
         <div>
           <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-400" />
-            إدارة حسابات الطلبة وبيانات الدخول
+            إدارة حسابات الطلبة وبيانات الدخول المركزية
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            استيراد قوائم الفصول آلياً، توليد كلمات المرور، واسترجاع بيانات الدخول بضغطة زر عند نسيان الطالب لكلمة سره
+            إدارة سجلات الطلاب، استيراد القوائم المدرسية، وإعادة تعيين كلمات المرور المشفرة على الخادم المركزي
           </p>
         </div>
 
@@ -180,13 +177,12 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                 <th className="py-3.5 px-4">رقم التسجيل المدرسي</th>
                 <th className="py-3.5 px-4">القسم / المستوى</th>
                 <th className="py-3.5 px-4">حالة الحساب</th>
-                <th className="py-3.5 px-4">كلمة المرور (مشرف المكتبة)</th>
+                <th className="py-3.5 px-4">حالة كلمة المرور</th>
                 <th className="py-3.5 px-4 text-center">الإجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-200">
               {filteredStudents.map((student) => {
-                const isRevealed = revealedPasswords[student.id] || false;
                 const isBlocked = student.isBlocked;
 
                 return (
@@ -205,7 +201,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                         <div>
                           <div>{student.name}</div>
                           <div className="text-[10px] text-slate-500 font-mono">
-                            {student.email || 'حساب محلي'}
+                            {student.email || 'حساب مدرسي'}
                           </div>
                         </div>
                       </div>
@@ -234,48 +230,26 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                       )}
                     </td>
 
-                    {/* Password View & Reveal Feature */}
+                    {/* Password Security Status */}
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 w-fit">
-                        <span className="font-mono text-xs text-amber-300">
-                          {isRevealed ? (student.plainPassword || student.password) : '••••••••'}
-                        </span>
-
-                        <button
-                          onClick={() => togglePasswordReveal(student.id)}
-                          className="text-slate-400 hover:text-slate-200 p-0.5"
-                          title={isRevealed ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور للطالب'}
-                        >
-                          {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-
-                        <button
-                          onClick={() => copyToClipboard(student.plainPassword || student.password || '', student.id)}
-                          className="text-slate-400 hover:text-indigo-400 p-0.5"
-                          title="نسخ كلمة المرور"
-                        >
-                          {copiedId === student.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300 font-mono">
+                        <Lock className="w-3 h-3 text-emerald-400" />
+                        <span>مشفرة (Bcrypt Hash)</span>
+                      </span>
                     </td>
 
-                    {/* Reset Password Action */}
+                    {/* Actions */}
                     <td className="py-3.5 px-4 text-center">
                       <button
                         onClick={() => {
-                          const newPass = onResetStudentPassword(student.id);
-                          alert(
-                            `تم إعادة تعيين وتوليد كلمة مرور جديدة للطالب ${student.name} بنجاح!\nكلمة المرور الجديدة: ${newPass}`
-                          );
+                          setResetModalStudent(student);
+                          setNewPasswordInput('');
                         }}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
-                        title="توليد كلمة سر عشوائية جديدة"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                        title="إعادة تعيين كلمة المرور"
                       >
-                        توليد كلمة جديدة
+                        <KeyRound className="w-3 h-3" />
+                        <span>إعادة تعيين كلمة السر</span>
                       </button>
                     </td>
                   </tr>
@@ -285,6 +259,63 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Password Reset Modal */}
+      {resetModalStudent && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-100 text-sm flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-amber-400" />
+                <span>إعادة تعيين كلمة المرور: {resetModalStudent.name}</span>
+              </h3>
+              <button onClick={() => setResetModalStudent(null)} className="text-slate-400 hover:text-slate-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {resetSuccessMessage ? (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center gap-2 text-xs">
+                <Check className="w-4 h-4" />
+                <span>{resetSuccessMessage}</span>
+              </div>
+            ) : (
+              <form onSubmit={handleExecutePasswordReset} className="space-y-3 text-xs">
+                <p className="text-slate-400 leading-relaxed">
+                  أدخل كلمة مرور جديدة للطالب أو اترك الحقل فارغاً لتعيين الكلمة الافتراضية (123456).
+                </p>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">كلمة المرور الجديدة</label>
+                  <input
+                    type="password"
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="اترك فارغاً للافتراضي 123456"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setResetModalStudent(null)}
+                    className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl"
+                  >
+                    تأكيد التحديث
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Add Single Student Modal */}
       {isAddModalOpen && (
@@ -327,8 +358,8 @@ interface AddStudentModalProps {
 const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) => {
   const [name, setName] = useState('');
   const [regNumber, setRegNumber] = useState(`STU-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [grade, setGrade] = useState('الثالثة ثانوي - علوم تجريبية');
-  const [plainPassword, setPlainPassword] = useState(`pass${Math.floor(1000 + Math.random() * 9000)}`);
+  const [grade, setGrade] = useState('الصف العاشر - عام');
+  const [password, setPassword] = useState('123456');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -339,8 +370,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
       registrationNumber: regNumber,
       grade,
       role: 'student',
-      password: plainPassword,
-      plainPassword,
+      password,
       isBlocked: false,
     });
   };
@@ -383,7 +413,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
               type="text"
               value={grade}
               onChange={(e) => setGrade(e.target.value)}
-              placeholder="مثال: الثانية ثانوي - رياضيات"
+              placeholder="مثال: الصف الحادي عشر - علمي"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100"
             />
           </div>
@@ -391,10 +421,10 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
           <div>
             <label className="block text-slate-300 font-medium mb-1">كلمة المرور المبدئية</label>
             <input
-              type="text"
-              value={plainPassword}
-              onChange={(e) => setPlainPassword(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-amber-300 font-mono"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono"
             />
           </div>
 
@@ -410,7 +440,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
               type="submit"
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl"
             >
-              حفظ الحساب
+              حفظ الحساب في الخادم المركزي
             </button>
           </div>
         </form>
@@ -465,7 +495,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-            استيراد قائمة الطلبة وتوليد كلمات المرور آلياً
+            استيراد قائمة الطلبة وتوليد الحسابات بالخادم المركزي
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
             <X className="w-5 h-5" />
@@ -477,38 +507,6 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center gap-2">
               <Check className="w-4 h-4" />
               <span>تم استيراد وإنشاء <strong>{result.importedCount}</strong> حساب طالب بنجاح!</span>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-slate-300 font-semibold">
-                <span>بيانات الدخول التي تم إنشاؤها للطلبة (قابلة للطباعة والتوزيع):</span>
-                <button
-                  onClick={() => {
-                    const text = result.credentials
-                      .map((c) => `${c.regNumber}\t${c.name}\t${c.tempPass}`)
-                      .join('\n');
-                    navigator.clipboard.writeText(text);
-                    alert('تم نسخ قائمة الحسابات للحافظة');
-                  }}
-                  className="text-xs text-indigo-400 hover:underline"
-                >
-                  نسخ الكل كجدول
-                </button>
-              </div>
-
-              <div className="max-h-60 overflow-y-auto bg-slate-950 border border-slate-800 rounded-xl divide-y divide-slate-800/60 font-mono text-[11px]">
-                {result.credentials.map((c, i) => (
-                  <div key={i} className="p-2.5 flex items-center justify-between">
-                    <div>
-                      <strong className="text-slate-100 font-sans">{c.name}</strong>
-                      <div className="text-sky-400">{c.regNumber}</div>
-                    </div>
-                    <div className="bg-slate-900 px-2 py-1 rounded text-amber-300 border border-slate-700">
-                      كلمة المرور: {c.tempPass}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
 
             <div className="flex justify-end pt-2">
@@ -524,7 +522,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
           <div className="space-y-3 text-xs">
             <p className="text-slate-300 leading-relaxed">
               قم بلصق بيانات ملف Excel أو CSV بالصيغة: <code>رقم التسجيل, اسم الطالب, القسم</code>. سيقوم النظام
-              بإنشاء الحسابات وتوليد كلمات مرور قوية لكل طالب تلقائياً.
+              بإنشاء الحسابات وتشفير كلمات المرور في قاعدة البيانات المركزية.
             </p>
 
             <textarea
@@ -545,7 +543,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
                 onClick={handleProcessImport}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-1.5"
               >
-                <UploadCloud className="w-4 h-4" />
+                <FileSpreadsheet className="w-4 h-4" />
                 <span>معالجة واستيراد الحسابات</span>
               </button>
             </div>

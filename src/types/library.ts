@@ -24,8 +24,6 @@ export interface User {
   email?: string;
   phone?: string;
   avatarUrl?: string;
-  password?: string; // Stored for admin lookup when student forgets
-  plainPassword?: string; // For instant 1-click admin lookup
   isBlocked?: boolean;
   isBlockedFromBorrowing?: boolean;
   blockReason?: string;

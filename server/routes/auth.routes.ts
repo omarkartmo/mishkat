@@ -25,7 +25,7 @@ router.post('/login', authRateLimiter(15), async (req: Request, res: Response) =
   try {
     const { rows } = await db.query(
       `SELECT id, registration_number, name, email, phone, role_id, grade, avatar_url,
-              password_hash, plain_password, is_active, is_blocked, is_blocked_from_borrowing, block_reason
+              password_hash, is_active, is_blocked, is_blocked_from_borrowing, block_reason
        FROM users WHERE registration_number = $1 OR username = $1 LIMIT 1`,
       [cleanReg]
     );
@@ -51,14 +51,10 @@ router.post('/login', authRateLimiter(15), async (req: Request, res: Response) =
       });
     }
 
-    // Verify Password if provided (or if user has password set)
-    let isPasswordValid = true;
+    // Verify Password securely using bcrypt
+    let isPasswordValid = false;
     if (password && user.password_hash) {
       isPasswordValid = await bcrypt.compare(password, user.password_hash);
-      // Also allow plainPassword match for school kiosk convenience
-      if (!isPasswordValid && user.plain_password && user.plain_password === password) {
-        isPasswordValid = true;
-      }
     } else if (user.role_id === 'admin' && !password) {
       return res.status(401).json({
         success: false,
@@ -97,7 +93,6 @@ router.post('/login', authRateLimiter(15), async (req: Request, res: Response) =
       email: user.email,
       phone: user.phone,
       avatarUrl: user.avatar_url,
-      plainPassword: user.plain_password,
       isBlocked: user.is_blocked || false,
       isBlockedFromBorrowing: user.is_blocked_from_borrowing || false,
       blockReason: user.block_reason,
@@ -127,7 +122,7 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { rows } = await db.query(
       `SELECT id, registration_number, name, email, phone, role_id, grade, avatar_url,
-              plain_password, is_active, is_blocked, is_blocked_from_borrowing, block_reason, created_at
+              is_active, is_blocked, is_blocked_from_borrowing, block_reason, created_at
        FROM users WHERE id = $1 LIMIT 1`,
       [req.user!.id]
     );
@@ -152,7 +147,6 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
           email: u.email,
           phone: u.phone,
           avatarUrl: u.avatar_url,
-          plainPassword: u.plain_password,
           isBlocked: u.is_blocked,
           isBlockedFromBorrowing: u.is_blocked_from_borrowing,
           blockReason: u.block_reason,
