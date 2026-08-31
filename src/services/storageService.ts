@@ -420,25 +420,30 @@ export class StorageService {
     }
   }
 
-  // --- Auth & Current User Session Defense ---
+  // --- Legacy Auth Methods (Deprecated in Phase 1.7.2 - Use AuthRepository / AuthContext) ---
+  /** @deprecated Use AuthContext.isAuthenticated or AuthRepository instead. */
   public isAuthenticated(): boolean {
     return this.authenticated && !!this.currentUser;
   }
 
+  /** @deprecated Use AuthContext.user or AuthRepository.getCurrentUser() instead. */
   public getCurrentUser(): User {
     return this.currentUser;
   }
 
+  /** @deprecated Use AuthContext.setUser instead. */
   public setCurrentUser(user: User): void {
     this.currentUser = user;
     saveToStorage(STORAGE_KEYS.CURRENT_USER, user);
   }
 
+  /** @deprecated Use AuthContext.logout() / AuthRepository.logout() instead. */
   public logout(): void {
     this.authenticated = false;
     saveToStorage(STORAGE_KEYS.SESSION_ACTIVE, false);
   }
 
+  /** @deprecated Use AuthContext.login() / AuthRepository.login() instead. */
   public loginUser(
     regNumber: string,
     password?: string

@@ -15,7 +15,14 @@ import { User as LibraryUser, SystemConfig } from '../../types/library';
 interface LoginViewProps {
   config: SystemConfig;
   users?: LibraryUser[];
-  onLogin: (regNumber: string, password?: string) => {
+  onLogin: (regNumber: string, password?: string) => Promise<{
+    success: boolean;
+    user?: LibraryUser;
+    error?: string;
+    isLocked?: boolean;
+    remainingSeconds?: number;
+    attemptsLeft?: number;
+  }> | {
     success: boolean;
     user?: LibraryUser;
     error?: string;
@@ -25,7 +32,7 @@ interface LoginViewProps {
   };
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ config, users = [], onLogin }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -48,7 +55,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, users = [], onLogi
     return () => clearInterval(timer);
   }, [lockoutSeconds]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -69,13 +76,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, users = [], onLogi
 
     setIsSubmitting(true);
     try {
-      const result = onLogin(identifier, password);
+      const result = await onLogin(identifier, password);
       if (!result.success) {
         setErrorMsg(result.error || 'فشل تسجيل الدخول. يرجى التحقق من البيانات.');
         if (result.isLocked && result.remainingSeconds) {
           setLockoutSeconds(result.remainingSeconds);
         }
       }
+    } catch (err: any) {
+      setErrorMsg('تعذر الاتصال بالخادم المركزي. يرجى التحقق من اتصال الشبكة والمحاولة مرة أخرى.');
     } finally {
       setIsSubmitting(false);
     }

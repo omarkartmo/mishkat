@@ -34,17 +34,16 @@ import { ReadingWorkspaceView } from './components/reading/ReadingWorkspaceView'
 import { PhysicalBookmarkModal } from './components/reading/PhysicalBookmarkModal';
 import { SearchResultsView } from './components/search/SearchResultsView';
 import { LoginView } from './components/auth/LoginView';
+import { useAuth } from './context/AuthContext';
 
 export default function App() {
+  const { user: authUser, isAuthenticated, isLoading, login, logout, setUser: setAuthUser } = useAuth();
   const [storage] = useState(() => StorageService.getInstance());
 
-  // Authentication State (First Window Gateway)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => storage.isAuthenticated());
-
-  // Application State
-  const [currentUser, setCurrentUser] = useState<User>(() => storage.getCurrentUser());
+  // Application State derived from Server Authenticated User
+  const currentUser: User = authUser || storage.getCurrentUser();
   const [activeTab, setActiveTab] = useState<NavigationTab>(() =>
-    currentUser.role === 'student' ? 'student_portal' : 'overview'
+    currentUser?.role === 'student' ? 'student_portal' : 'overview'
   );
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -58,15 +57,15 @@ export default function App() {
   const [config, setConfig] = useState<SystemConfig>(() => storage.getConfig());
   const [loanRequests, setLoanRequests] = useState(() => storage.getLoanRequests());
   const [notifications, setNotifications] = useState(() =>
-    storage.getNotifications(currentUser.id, currentUser.role)
+    currentUser ? storage.getNotifications(currentUser.id, currentUser.role) : []
   );
   const [readingProgress, setReadingProgress] = useState<Record<string, { currentPage: number; totalPages: number; lastReadAt?: string; percentage?: number; isCompleted?: boolean }>>(() =>
-    storage.getReadingProgressMap(currentUser.id)
+    currentUser ? storage.getReadingProgressMap(currentUser.id) : {}
   );
-  const [studentNotes, setStudentNotes] = useState<StudentNote[]>(() => storage.getStudentNotes(currentUser.id));
-  const [physicalBookmarks, setPhysicalBookmarks] = useState<any[]>(() => storage.getPhysicalBookmarks(currentUser.id));
-  const [bookSummaries, setBookSummaries] = useState<any[]>(() => storage.getBookSummaries(currentUser.id));
-  const [favorites, setFavorites] = useState<string[]>(() => storage.getFavorites(currentUser.id));
+  const [studentNotes, setStudentNotes] = useState<StudentNote[]>(() => currentUser ? storage.getStudentNotes(currentUser.id) : []);
+  const [physicalBookmarks, setPhysicalBookmarks] = useState<any[]>(() => currentUser ? storage.getPhysicalBookmarks(currentUser.id) : []);
+  const [bookSummaries, setBookSummaries] = useState<any[]>(() => currentUser ? storage.getBookSummaries(currentUser.id) : []);
+  const [favorites, setFavorites] = useState<string[]>(() => currentUser ? storage.getFavorites(currentUser.id) : []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -85,7 +84,7 @@ export default function App() {
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
   // Re-sync all state helper
-  const refreshAllState = () => {
+  const refreshAllState = (targetUser?: User) => {
     setCategories(storage.getCategories());
     setPhysicalBooks(storage.getPhysicalBooks());
     setDigitalBooks(storage.getDigitalBooks());
@@ -95,14 +94,15 @@ export default function App() {
     setPortals(storage.getPortals());
     setConfig(storage.getConfig());
     setLoanRequests(storage.getLoanRequests());
-    const curr = storage.getCurrentUser();
-    setCurrentUser(curr);
-    setNotifications(storage.getNotifications(curr.id, curr.role));
-    setReadingProgress(storage.getReadingProgressMap(curr.id));
-    setStudentNotes(storage.getStudentNotes(curr.id));
-    setPhysicalBookmarks(storage.getPhysicalBookmarks(curr.id));
-    setBookSummaries(storage.getBookSummaries(curr.id));
-    setFavorites(storage.getFavorites(curr.id));
+    const curr = targetUser || authUser || storage.getCurrentUser();
+    if (curr) {
+      setNotifications(storage.getNotifications(curr.id, curr.role));
+      setReadingProgress(storage.getReadingProgressMap(curr.id));
+      setStudentNotes(storage.getStudentNotes(curr.id));
+      setPhysicalBookmarks(storage.getPhysicalBookmarks(curr.id));
+      setBookSummaries(storage.getBookSummaries(curr.id));
+      setFavorites(storage.getFavorites(curr.id));
+    }
   };
 
   // Synchronize with Central Server on mount
@@ -112,28 +112,32 @@ export default function App() {
     });
   }, []);
 
-  // Login handler for First Window Gateway
-  const handleLogin = (regNumber: string, password?: string) => {
-    const res = storage.loginUser(regNumber, password);
+  // Update tab if authenticated user role changes
+  useEffect(() => {
+    if (authUser) {
+      setActiveTab(authUser.role === 'student' ? 'student_portal' : 'overview');
+      refreshAllState(authUser);
+    }
+  }, [authUser?.id, authUser?.role]);
+
+  // Login handler for First Window Gateway (Central Server API)
+  const handleLogin = async (regNumber: string, password?: string) => {
+    const res = await login(regNumber, password);
     if (res.success && res.user) {
-      setIsAuthenticated(true);
-      setCurrentUser(res.user);
       setActiveTab(res.user.role === 'student' ? 'student_portal' : 'overview');
-      refreshAllState();
+      refreshAllState(res.user);
     }
     return res;
   };
 
-  // Secure Logout handler
-  const handleLogout = () => {
-    storage.logout();
-    setIsAuthenticated(false);
+  // Secure Logout handler (Central Server API)
+  const handleLogout = async () => {
+    await logout();
   };
 
   // Switch Active User / Role with strict RBAC enforcement
   const handleUserChange = (user: User) => {
-    storage.setCurrentUser(user);
-    setCurrentUser(user);
+    setAuthUser(user);
     const adminOnlyTabs: NavigationTab[] = ['overview', 'loans', 'reviews', 'students', 'categories', 'settings'];
     if (user.role === 'student' && adminOnlyTabs.includes(activeTab)) {
       setActiveTab('student_portal');
@@ -385,8 +389,20 @@ export default function App() {
   const pendingSubmissionsCount = (submissions || []).filter((s) => s.status === 'pending').length;
   const studentsList = (users || []).filter((u) => u.role === 'student');
 
+  // If verifying session with Central Server, show clean loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex items-center justify-center font-sans selection:bg-indigo-500 selection:text-white" dir="rtl">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-400">جاري التحقق من الجلسة مع الخادم المركزي...</p>
+        </div>
+      </div>
+    );
+  }
+
   // If not authenticated, render First Window Login Screen
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !currentUser) {
     return <LoginView config={config} onLogin={handleLogin} users={users} />;
   }
 
