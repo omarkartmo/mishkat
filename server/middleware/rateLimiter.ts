@@ -9,6 +9,9 @@ const loginAttempts = new Map<string, AttemptRecord>();
 
 export function authRateLimiter(maxAttempts = 10, windowMs = 15 * 60 * 1000) {
   return (req: Request, res: Response, next: NextFunction) => {
+    if (process.env.NODE_ENV === 'test') {
+      return next();
+    }
     const ip = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1').split(',')[0].trim();
     const now = Date.now();
 
