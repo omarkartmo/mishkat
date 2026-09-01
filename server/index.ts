@@ -23,7 +23,7 @@ import portalsRoutes from './routes/portals.routes';
 import notificationsRoutes from './routes/notifications.routes';
 import submissionsRoutes from './routes/submissions.routes';
 import settingsRoutes from './routes/settings.routes';
-import { auditRouter, backupRouter, healthRouter } from './routes/system.routes';
+import { auditRouter, backupRouter, healthRouter, systemRouter } from './routes/system.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 export async function createExpressApp() {
@@ -77,6 +77,7 @@ export async function createExpressApp() {
   app.use('/api/v1/settings', settingsRoutes);
   app.use('/api/v1/audit-logs', auditRouter);
   app.use('/api/v1/backups', backupRouter);
+  app.use('/api/v1/system', systemRouter);
 
   // Global Error Handler
   app.use(errorHandler);

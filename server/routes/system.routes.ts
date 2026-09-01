@@ -6,6 +6,7 @@ import { serverConfig } from '../config';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
+import { seedInitialData } from '../db/seed';
 
 export const auditRouter = Router();
 
@@ -68,6 +69,10 @@ backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req
       backupDump.data[table] = rows;
     }
 
+    if (!fs.existsSync(serverConfig.dirs.backups)) {
+      fs.mkdirSync(serverConfig.dirs.backups, { recursive: true });
+    }
+
     fs.writeFileSync(backupFilePath, JSON.stringify(backupDump, null, 2), 'utf8');
 
     await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'CREATE_BACKUP', 'system', backupFileName, null, req);
@@ -79,6 +84,7 @@ backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req
         fileName: backupFileName,
         createdAt: new Date().toISOString(),
         tablesCount: tables.length,
+        backup: backupDump,
       },
     });
   } catch (err: any) {
@@ -109,6 +115,63 @@ backupRouter.get('/', authenticateToken, requireRole('admin'), async (req: Reque
     res.json({ success: true, data: files });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+export const systemRouter = Router();
+
+// POST /api/v1/system/reset-demo (Admin only with explicit confirmation)
+systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const { confirm } = req.body || {};
+  if (!confirm) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'CONFIRMATION_REQUIRED', message: 'يرجى تأكيد طلب إعادة تعيين قاعدة البيانات.' },
+    });
+  }
+
+  try {
+    await db.transaction(async (client) => {
+      await client.query(`
+        TRUNCATE TABLE
+          student_notes,
+          book_summaries,
+          physical_bookmarks,
+          reading_progress,
+          student_favorites,
+          notifications,
+          loans,
+          loan_requests,
+          pending_submissions,
+          whitelisted_portals,
+          physical_copies,
+          books,
+          categories,
+          users,
+          system_settings
+        CASCADE;
+      `);
+    });
+
+    await seedInitialData();
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'RESET_SYSTEM_DATABASE',
+      'system',
+      null,
+      { confirmedBy: req.user!.name },
+      req
+    );
+
+    res.json({
+      success: true,
+      data: { message: 'تمت إعادة تعيين قاعدة البيانات المركزية واسترجاع البيانات النموذجية بنجاح.' },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'RESET_FAILED', message: err.message } });
   }
 });
 
@@ -146,3 +209,4 @@ healthRouter.get('/', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: { code: 'HEALTH_CHECK_FAILED', message: err.message } });
   }
 });
+

@@ -53,6 +53,8 @@ import { readingProgressRepository } from './services/readingProgressRepository'
 import { submissionRepository } from './services/submissionRepository';
 import { portalRepository } from './services/portalRepository';
 import { userRepository } from './services/userRepository';
+import { settingsRepository } from './services/settingsRepository';
+import { INITIAL_SYSTEM_CONFIG } from './data/initialData';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -132,7 +134,11 @@ export default function App() {
   const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
 
-  const [config, setConfig] = useState<SystemConfig>(() => storage.getConfig());
+  // Server-authoritative System Settings State (Phase 6.3 - Settings Migration)
+  const [config, setConfig] = useState<SystemConfig>(INITIAL_SYSTEM_CONFIG);
+  const [isConfigLoading, setIsConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -381,6 +387,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative settings (Phase 6.3 - Settings Migration)
+  const loadSettings = async () => {
+    setIsConfigLoading(true);
+    try {
+      const res = await settingsRepository.getSettings();
+      if (res.success && res.data) {
+        setConfig(res.data);
+        setConfigError(null);
+      } else {
+        setConfigError(res.error?.message || 'تعذر استرجاع إعدادات النظام من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setConfigError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع إعدادات النظام.');
+    } finally {
+      setIsConfigLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -395,12 +419,12 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Config)
+  // Helper to refresh legacy client storage domains (Empty: all domains migrated)
   const refreshLegacyStorageState = (targetUser?: User) => {
-    setConfig(storage.getConfig());
+    // All domains are server-authoritative
   };
 
-  // Re-sync all state helper (Server-Authoritative Catalog + Legacy Storage Domains)
+  // Re-sync all state helper (Server-Authoritative Catalog + Repositories)
   const refreshAllState = (targetUser?: User) => {
     loadCategories();
     loadBooks();
@@ -415,6 +439,7 @@ export default function App() {
     loadSubmissions();
     loadPortals();
     loadUsers();
+    loadSettings();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -433,6 +458,7 @@ export default function App() {
     loadSubmissions();
     loadPortals();
     loadUsers();
+    loadSettings();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
@@ -453,6 +479,7 @@ export default function App() {
       loadSubmissions();
       loadPortals();
       loadUsers();
+      loadSettings();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -490,6 +517,7 @@ export default function App() {
     loadSubmissions();
     loadPortals();
     loadUsers();
+    loadSettings();
   };
 
   const handleNavigateToTab = (tab: NavigationTab) => {
@@ -1095,32 +1123,49 @@ export default function App() {
     }
   };
 
-  // Export JSON Database
-  const handleExportData = () => {
-    const dataStr = storage.exportDatabaseJSON();
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `almanara_library_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+  // Export Server Database Backup (Phase 6.3 - Backup Migration)
+  const handleExportData = async () => {
+    try {
+      const res = await settingsRepository.createBackup();
+      if (res.success && res.data) {
+        const backupData = res.data.backup || res.data;
+        const dataStr = JSON.stringify(backupData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = res.data.fileName || `mishkat_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        alert(res.error?.message || 'تعذر إنشاء وتصدير النسخة الاحتياطية من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'حدث خطأ أثناء تصدير النسخة الاحتياطية.');
+    }
   };
 
-  // Reset to seed data
-  const handleResetData = () => {
-    storage.resetToDefaults();
-    refreshAllState();
+  // Reset Server Database to Defaults (Phase 6.3 - Reset Migration)
+  const handleResetData = async () => {
+    try {
+      const res = await settingsRepository.resetDatabase();
+      if (res.success) {
+        await refreshAllState();
+        alert(res.data?.message || 'تمت استعادة البيانات النموذجية الأولية بنجاح في الخادم المركزي.');
+      } else {
+        alert(res.error?.message || 'تعذر إعادة تعيين قاعدة البيانات في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'حدث خطأ أثناء إعادة تعيين قاعدة البيانات.');
+    }
   };
 
-  // Central Server Settings Mutation (Phase 1.7 - Subtask 1)
+  // Central Server Settings Mutation (Phase 6.3 - Settings Migration)
   const handleSaveConfig = async (updated: SystemConfig) => {
     try {
-      const res = await apiClient.put('/settings', updated);
+      const res = await settingsRepository.updateSettings(updated);
       if (res.success) {
-        const savedConfig = res.data?.config || updated;
-        setConfig(savedConfig);
-        storage.saveConfig(savedConfig);
+        await loadSettings();
       } else {
         alert(res.error?.message || 'فشل حفظ إعدادات النظام في الخادم المركزي.');
       }
