@@ -13,6 +13,7 @@ import {
   StudentNote,
   ReadingProgress,
   LoanPurpose,
+  PhysicalLoanRequest,
 } from './types/library';
 
 // Components
@@ -38,6 +39,7 @@ import { useAuth } from './context/AuthContext';
 import { categoryRepository } from './services/categoryRepository';
 import { bookRepository } from './services/bookRepository';
 import { loanRepository } from './services/loanRepository';
+import { loanRequestRepository } from './services/loanRequestRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -67,11 +69,15 @@ export default function App() {
   const [isLoansLoading, setIsLoansLoading] = useState(false);
   const [loansError, setLoansError] = useState<string | null>(null);
 
+  // Server-authoritative Loan Requests State (Phase 1.7 - Loan Requests Migration)
+  const [loanRequests, setLoanRequests] = useState<PhysicalLoanRequest[]>([]);
+  const [isLoanRequestsLoading, setIsLoanRequestsLoading] = useState(false);
+  const [loanRequestsError, setLoanRequestsError] = useState<string | null>(null);
+
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
   const [config, setConfig] = useState<SystemConfig>(() => storage.getConfig());
-  const [loanRequests, setLoanRequests] = useState(() => storage.getLoanRequests());
   const [notifications, setNotifications] = useState(() =>
     currentUser ? storage.getNotifications(currentUser.id, currentUser.role) : []
   );
@@ -150,6 +156,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative loan requests (Phase 1.7 - Loan Requests Migration)
+  const loadLoanRequests = async () => {
+    setIsLoanRequestsLoading(true);
+    try {
+      const res = await loanRequestRepository.getLoanRequests();
+      if (res.success && Array.isArray(res.data)) {
+        setLoanRequests(res.data);
+        setLoanRequestsError(null);
+      } else {
+        setLoanRequestsError(res.error?.message || 'تعذر استرجاع طلبات الإعارة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setLoanRequestsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات طلبات الإعارة.');
+    } finally {
+      setIsLoanRequestsLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -170,7 +194,6 @@ export default function App() {
     setUsers(storage.getUsers());
     setPortals(storage.getPortals());
     setConfig(storage.getConfig());
-    setLoanRequests(storage.getLoanRequests());
     const curr = targetUser || authUser || storage.getCurrentUser();
     if (curr) {
       setNotifications(storage.getNotifications(curr.id, curr.role));
@@ -182,11 +205,12 @@ export default function App() {
     }
   };
 
-  // Re-sync all state helper (Server-Authoritative Book/Category/Loan Catalog + Legacy Storage Domains)
+  // Re-sync all state helper (Server-Authoritative Book/Category/Loan/Request Catalog + Legacy Storage Domains)
   const refreshAllState = (targetUser?: User) => {
     loadCategories();
     loadBooks();
     loadLoans();
+    loadLoanRequests();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -195,16 +219,18 @@ export default function App() {
     loadCategories();
     loadBooks();
     loadLoans();
+    loadLoanRequests();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
   }, []);
 
-  // Update tab and reload loans if authenticated user changes
+  // Update tab and reload loans/requests if authenticated user changes
   useEffect(() => {
     if (authUser) {
       setActiveTab(authUser.role === 'student' ? 'student_portal' : 'overview');
       loadLoans();
+      loadLoanRequests();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -265,8 +291,8 @@ export default function App() {
     setActiveTab('loans');
   };
 
-  // Student loan request
-  const handleRequestLoanSubmit = (params: {
+  // Student loan request (Phase 1.7 - Loan Requests Migration)
+  const handleRequestLoanSubmit = async (params: {
     bookId: string;
     studentId: string;
     purpose: string;
@@ -274,38 +300,63 @@ export default function App() {
     requestedDurationDays?: number;
   }) => {
     try {
-      storage.requestPhysicalLoan(params);
-      refreshAllState();
+      const res = await loanRequestRepository.createLoanRequest({
+        bookId: params.bookId,
+        purpose: params.purpose,
+        customReason: params.customReason,
+        requestedDurationDays: params.requestedDurationDays,
+      });
+      if (res.success) {
+        await loadLoanRequests();
+      } else {
+        alert(res.error?.message || 'تعذر إرسال طلب الاستعارة إلى الخادم المركزي.');
+      }
     } catch (err: any) {
-      alert(err.message || 'تعذر إرسال طلب الاستعارة');
+      alert(err.message || 'حدث خطأ أثناء إرسال طلب الاستعارة.');
     }
   };
 
-  // Admin loan request processing
-  const handleApproveLoanRequest = (requestId: string, durationDays: number) => {
+  // Admin loan request processing (Phase 1.7 - Loan Requests Migration)
+  const handleApproveLoanRequest = async (requestId: string, durationDays: number) => {
     try {
-      storage.approveLoanRequest({ requestId, durationDays });
-      refreshAllState();
+      const res = await loanRequestRepository.approveLoanRequest(requestId, {
+        approvedDurationDays: durationDays,
+      });
+      if (res.success) {
+        await loadLoanRequests();
+      } else {
+        alert(res.error?.message || 'تعذر اعتماد طلب الاستعارة في الخادم المركزي.');
+      }
     } catch (err: any) {
-      alert(err.message || 'تعذر الموافقة على الطلب');
+      alert(err.message || 'حدث خطأ أثناء الموافقة على الطلب.');
     }
   };
 
-  const handleRejectLoanRequest = (requestId: string, reason: string) => {
+  const handleRejectLoanRequest = async (requestId: string, reason: string) => {
     try {
-      storage.rejectLoanRequest(requestId, reason);
-      refreshAllState();
+      const res = await loanRequestRepository.rejectLoanRequest(requestId, {
+        rejectionReason: reason,
+      });
+      if (res.success) {
+        await loadLoanRequests();
+      } else {
+        alert(res.error?.message || 'تعذر رفض طلب الاستعارة في الخادم المركزي.');
+      }
     } catch (err: any) {
-      alert(err.message || 'تعذر رفض الطلب');
+      alert(err.message || 'حدث خطأ أثناء رفض الطلب.');
     }
   };
 
-  const handleConfirmHandoverLoanRequest = (requestId: string) => {
+  const handleConfirmHandoverLoanRequest = async (requestId: string) => {
     try {
-      storage.confirmHandoverLoanRequest(requestId);
-      refreshAllState();
+      const res = await loanRequestRepository.confirmHandover(requestId);
+      if (res.success) {
+        await Promise.all([loadLoanRequests(), loadLoans(), loadBooks()]);
+      } else {
+        alert(res.error?.message || 'تعذر تأكيد تسليم الكتاب وتحديث السجلات في الخادم المركزي.');
+      }
     } catch (err: any) {
-      alert(err.message || 'تعذر تأكيد تسليم الكتاب وتحديث المخزون');
+      alert(err.message || 'حدث خطأ أثناء تأكيد تسليم الكتاب.');
     }
   };
 
