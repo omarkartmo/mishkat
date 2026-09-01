@@ -266,6 +266,10 @@ router.post('/:id/handover', authenticateToken, requireRole('admin', 'librarian'
         return d.toISOString().split('T')[0];
       })();
 
+      const validPurpose = (r.purpose === 'academic_research' || r.purpose === 'general_reading')
+        ? r.purpose
+        : (r.purpose?.includes('بحث') || r.purpose?.includes('تخرج') ? 'academic_research' : 'general_reading');
+
       // Create active loan record
       await client.query(`
         INSERT INTO loans (
@@ -280,7 +284,7 @@ router.post('/:id/handover', authenticateToken, requireRole('admin', 'librarian'
         r.student_id,
         r.student_name,
         r.student_reg_number,
-        r.purpose || 'general_reading',
+        validPurpose,
         issueDate,
         dueDate,
         r.admin_notes || null,

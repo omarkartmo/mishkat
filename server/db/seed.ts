@@ -169,28 +169,31 @@ export async function seedInitialData(): Promise<void> {
   if (loanRows.length === 0) {
     console.log('🌱 [Seeder] Seeding initial circulation loan records...');
     for (const loan of INITIAL_LOANS) {
-      await db.query(`
-        INSERT INTO loans (
-          id, book_id, book_title, student_id, student_name, student_reg_number,
-          purpose, issue_date, due_date, return_date, status, extension_count, max_extensions_allowed, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        ON CONFLICT (id) DO NOTHING;
-      `, [
-        loan.id,
-        loan.bookId,
-        loan.bookTitle,
-        loan.studentId,
-        loan.studentName,
-        loan.studentRegNumber,
-        loan.purpose,
-        loan.issueDate,
-        loan.dueDate,
-        loan.returnDate || null,
-        loan.status,
-        loan.extensionCount,
-        loan.maxExtensionsAllowed,
-        loan.notes || null,
-      ]);
+      const { rows: bookExists } = await db.query('SELECT id FROM books WHERE id = $1', [loan.bookId]);
+      if (bookExists.length > 0) {
+        await db.query(`
+          INSERT INTO loans (
+            id, book_id, book_title, student_id, student_name, student_reg_number,
+            purpose, issue_date, due_date, return_date, status, extension_count, max_extensions_allowed, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT (id) DO NOTHING;
+        `, [
+          loan.id,
+          loan.bookId,
+          loan.bookTitle,
+          loan.studentId,
+          loan.studentName,
+          loan.studentRegNumber,
+          loan.purpose,
+          loan.issueDate,
+          loan.dueDate,
+          loan.returnDate || null,
+          loan.status,
+          loan.extensionCount,
+          loan.maxExtensionsAllowed,
+          loan.notes || null,
+        ]);
+      }
     }
   }
 
@@ -199,31 +202,34 @@ export async function seedInitialData(): Promise<void> {
   if (summaryRows.length === 0) {
     console.log('🌱 [Seeder] Seeding initial book summaries...');
     for (const summary of INITIAL_BOOK_SUMMARIES) {
-      await db.query(`
-        INSERT INTO book_summaries (
-          id, student_id, book_id, book_title, book_author, book_medium, title,
-          structure_type, main_idea, key_takeaways, chapters_summaries,
-          favorite_quotes, actionable_insights, tags, rating, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        ON CONFLICT (id) DO NOTHING;
-      `, [
-        summary.id,
-        summary.studentId,
-        summary.bookId,
-        summary.bookTitle,
-        summary.bookAuthor,
-        summary.bookMedium,
-        summary.title,
-        summary.structureType,
-        summary.mainIdea,
-        summary.keyTakeaways,
-        JSON.stringify(summary.chaptersSummaries || []),
-        JSON.stringify(summary.favoriteQuotes || []),
-        summary.actionableInsights || [],
-        summary.tags || [],
-        summary.rating || 5,
-        summary.createdAt,
-      ]);
+      const { rows: bookExists } = await db.query('SELECT id FROM books WHERE id = $1', [summary.bookId]);
+      if (bookExists.length > 0) {
+        await db.query(`
+          INSERT INTO book_summaries (
+            id, student_id, book_id, book_title, book_author, book_medium, title,
+            structure_type, main_idea, key_takeaways, chapters_summaries,
+            favorite_quotes, actionable_insights, tags, rating, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          ON CONFLICT (id) DO NOTHING;
+        `, [
+          summary.id,
+          summary.studentId,
+          summary.bookId,
+          summary.bookTitle,
+          summary.bookAuthor,
+          summary.bookMedium,
+          summary.title,
+          summary.structureType,
+          summary.mainIdea,
+          summary.keyTakeaways,
+          JSON.stringify(summary.chaptersSummaries || []),
+          JSON.stringify(summary.favoriteQuotes || []),
+          summary.actionableInsights || [],
+          summary.tags || [],
+          summary.rating || 5,
+          summary.createdAt,
+        ]);
+      }
     }
   }
 
@@ -232,27 +238,30 @@ export async function seedInitialData(): Promise<void> {
   if (noteRows.length === 0) {
     console.log('🌱 [Seeder] Seeding initial student notes...');
     for (const note of INITIAL_STUDENT_NOTES) {
-      await db.query(`
-        INSERT INTO student_notes (
-          id, student_id, book_id, book_title, book_medium, page_number,
-          chapter, quote, content, color_tag, category, tags, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        ON CONFLICT (id) DO NOTHING;
-      `, [
-        note.id,
-        note.studentId || 'stu-001',
-        note.bookId,
-        note.bookTitle,
-        note.bookMedium || 'digital',
-        note.pageNumber,
-        note.chapter || null,
-        note.quote || null,
-        note.content,
-        note.colorTag || 'amber',
-        note.category || 'فائدة فقهية',
-        note.tags || [],
-        note.createdAt,
-      ]);
+      const { rows: bookExists } = await db.query('SELECT id FROM books WHERE id = $1', [note.bookId]);
+      if (bookExists.length > 0) {
+        await db.query(`
+          INSERT INTO student_notes (
+            id, student_id, book_id, book_title, book_medium, page_number,
+            chapter, quote, content, color_tag, category, tags, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT (id) DO NOTHING;
+        `, [
+          note.id,
+          note.studentId || 'stu-001',
+          note.bookId,
+          note.bookTitle,
+          note.bookMedium || 'digital',
+          note.pageNumber,
+          note.chapter || null,
+          note.quote || null,
+          note.content,
+          note.colorTag || 'amber',
+          note.category || 'فائدة فقهية',
+          note.tags || [],
+          note.createdAt,
+        ]);
+      }
     }
   }
 
