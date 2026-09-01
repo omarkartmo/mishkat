@@ -156,8 +156,8 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
   }
 });
 
-// POST /api/v1/loans/:id/return (Return book transaction)
-router.post('/:id/return', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+// POST & PUT /api/v1/loans/:id/return (Return book transaction)
+const handleReturnLoan = async (req: Request, res: Response) => {
   const { id } = req.params;
   const returnDate = new Date().toISOString().split('T')[0];
 
@@ -187,10 +187,13 @@ router.post('/:id/return', authenticateToken, requireRole('admin', 'librarian'),
   } catch (err: any) {
     res.status(400).json({ success: false, error: { code: 'RETURN_FAILED', message: err.message } });
   }
-});
+};
 
-// POST /api/v1/loans/:id/extend (Extend loan duration)
-router.post('/:id/extend', authenticateToken, async (req: Request, res: Response) => {
+router.post('/:id/return', authenticateToken, requireRole('admin', 'librarian'), handleReturnLoan);
+router.put('/:id/return', authenticateToken, requireRole('admin', 'librarian'), handleReturnLoan);
+
+// POST & PUT /api/v1/loans/:id/extend (Extend loan duration)
+const handleExtendLoan = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { additionalDays = 7 } = req.body;
 
@@ -228,6 +231,9 @@ router.post('/:id/extend', authenticateToken, async (req: Request, res: Response
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }
-});
+};
+
+router.post('/:id/extend', authenticateToken, handleExtendLoan);
+router.put('/:id/extend', authenticateToken, handleExtendLoan);
 
 export default router;

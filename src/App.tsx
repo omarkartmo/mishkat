@@ -300,8 +300,8 @@ export default function App() {
     setNotifications(storage.getNotifications(currentUser.id, currentUser.role));
   };
 
-  // Circulation Actions
-  const handleCreateLoan = (params: {
+  // Circulation Actions (Phase 1.7 - Loans Migration)
+  const handleCreateLoan = async (params: {
     bookId: string;
     studentId: string;
     purpose: LoanPurpose;
@@ -311,28 +311,43 @@ export default function App() {
     overrideReason?: string;
   }) => {
     try {
-      storage.createLoan(params);
-      refreshAllState();
+      const res = await apiClient.post<LoanRecord>('/loans', params);
+      if (res.success) {
+        await storage.syncWithServer();
+        refreshAllState();
+      } else {
+        alert(res.error?.message || 'تعذر تسجيل الإعارة في الخادم المركزي.');
+      }
     } catch (err: any) {
-      alert(err.message || 'تعذر تسجيل الإعارة');
+      alert(err.message || 'حدث خطأ أثناء تسجيل الإعارة.');
     }
   };
 
-  const handleExtendLoan = (loanId: string, additionalDays: number, notes?: string) => {
+  const handleExtendLoan = async (loanId: string, additionalDays: number, notes?: string) => {
     try {
-      storage.extendLoan(loanId, additionalDays, notes);
-      refreshAllState();
+      const res = await apiClient.put(`/loans/${loanId}/extend`, { additionalDays, notes });
+      if (res.success) {
+        await storage.syncWithServer();
+        refreshAllState();
+      } else {
+        alert(res.error?.message || 'تعذر تمديد الإعارة في الخادم المركزي.');
+      }
     } catch (err: any) {
-      alert(err.message || 'تعذر تمديد الإعارة');
+      alert(err.message || 'حدث خطأ أثناء تمديد الإعارة.');
     }
   };
 
-  const handleReturnBook = (loanId: string, notes?: string) => {
+  const handleReturnBook = async (loanId: string, notes?: string) => {
     try {
-      storage.returnLoan(loanId, notes);
-      refreshAllState();
+      const res = await apiClient.put(`/loans/${loanId}/return`, { notes });
+      if (res.success) {
+        await storage.syncWithServer();
+        refreshAllState();
+      } else {
+        alert(res.error?.message || 'تعذر تسجيل الإرجاع في الخادم المركزي.');
+      }
     } catch (err: any) {
-      alert(err.message || 'تعذر تسجيل الإرجاع');
+      alert(err.message || 'حدث خطأ أثناء تسجيل الإرجاع.');
     }
   };
 
