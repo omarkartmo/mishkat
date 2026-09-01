@@ -1,5 +1,4 @@
 import {
-  Category,
   User,
   LoanRecord,
   PendingBookSubmission,
@@ -16,7 +15,6 @@ import {
   ShelfLocation,
 } from '../types/library';
 import {
-  INITIAL_CATEGORIES,
   INITIAL_STUDENTS,
   INITIAL_ADMIN,
   INITIAL_LOANS,
@@ -38,7 +36,6 @@ import {
 import { apiClient } from './apiClient';
 
 const STORAGE_KEYS = {
-  CATEGORIES: 'almanara_categories_v1',
   STUDENTS: 'almanara_students_v1',
   ADMIN: 'almanara_admin_v1',
   LOANS: 'almanara_loans_v1',
@@ -189,7 +186,6 @@ function saveToStorage<T>(_key: string, _data: T): void {
 export class StorageService {
   private static instance: StorageService;
 
-  private categories: Category[];
   private students: User[];
   private admin: User;
   private loans: LoanRecord[];
@@ -209,7 +205,6 @@ export class StorageService {
   private authenticated: boolean;
 
   private constructor() {
-    this.categories = loadFromStorage(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
     const loadedStudents = loadFromStorage(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
     this.students = (loadedStudents || []).map((s: User) => ({
       ...s,
@@ -473,50 +468,6 @@ export class StorageService {
 
   // --- Legacy Physical Books (Deprecated in Phase 1.7.3-B - Use BookRepository) ---
   
-  // --- Legacy Categories (Deprecated in Phase 1.7.3-A - Use CategoryRepository) ---
-  /** @deprecated Use CategoryRepository.getCategories() instead. */
-  public getCategories(): Category[] {
-    return this.categories.map(cat => ({
-      ...cat,
-      booksCount:
-        0,
-    }));
-  }
-
-  /** @deprecated Use CategoryRepository.createCategory() instead. */
-  public addCategory(cat: Omit<Category, 'id'>): Category {
-    const newCat: Category = {
-      ...cat,
-      id: `cat-${Date.now().toString(36)}`,
-    };
-    this.categories.push(newCat);
-    saveToStorage(STORAGE_KEYS.CATEGORIES, this.categories);
-    return newCat;
-  }
-
-  /** @deprecated Use CategoryRepository.updateCategory() instead. */
-  public updateCategory(id: string, updates: Partial<Category>): Category | null {
-    const index = this.categories.findIndex(c => c.id === id);
-    if (index === -1) return null;
-    this.categories[index] = { ...this.categories[index], ...updates };
-    saveToStorage(STORAGE_KEYS.CATEGORIES, this.categories);
-    return this.categories[index];
-  }
-
-  // Safe deletion with bulk reassign
-  /** @deprecated Use CategoryRepository.reassignAndDeleteCategory() instead. */
-  public deleteCategoryWithReassign(categoryIdToDelete: string, targetCategoryId: string): { reclassifiedPhysical: number; reclassifiedDigital: number } {
-    return { reclassifiedPhysical: 0, reclassifiedDigital: 0 };
-  }
-
-  public bulkReclassifyBooks(
-    physicalBookIds: string[],
-    digitalBookIds: string[],
-    newCategoryId: string
-  ): void {
-    // Handled centrally
-  }
-
   // --- Circulation & Loans ---
 
   public recalculateLoanStatuses(): void {
@@ -1424,7 +1375,6 @@ export class StorageService {
     const fullBackup = {
       exportedAt: new Date().toISOString(),
       config: this.config,
-      categories: this.categories,
       students: this.students,
       loans: this.loans,
       portals: this.portals,
@@ -1438,7 +1388,6 @@ export class StorageService {
 
   public resetToDefaults(): void {
     localStorage.clear();
-    this.categories = INITIAL_CATEGORIES;
     this.students = INITIAL_STUDENTS;
     this.admin = INITIAL_ADMIN;
     this.loans = INITIAL_LOANS;
