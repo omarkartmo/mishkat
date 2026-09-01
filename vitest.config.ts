@@ -7,6 +7,7 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     globals: true,
+    include: ['tests/**/*.test.ts'],
     env: {
       JWT_SECRET: 'mishkat_jwt_secret_test_key_at_least_32_characters_123456',
       NODE_ENV: 'test',

@@ -13,3 +13,7 @@ pgdata/
 *.db
 *.sqlite
 *.sqlite3
+
+# Playwright artifacts
+playwright-report/
+test-results/
