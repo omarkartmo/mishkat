@@ -17,12 +17,15 @@ import { User, StudentRosterRow } from '../../types/library';
 
 interface StudentManagerViewProps {
   students: User[];
-  onAddStudent: (student: Omit<User, 'id'>) => void;
-  onBulkImportStudents: (roster: StudentRosterRow[]) => {
+  onAddStudent: (student: Omit<User, 'id'>) => Promise<void> | void;
+  onBulkImportStudents: (roster: StudentRosterRow[]) => Promise<{
+    importedCount: number;
+    generatedCredentials: { name: string; regNumber: string; tempPass: string }[];
+  } | undefined> | {
     importedCount: number;
     generatedCredentials: { name: string; regNumber: string; tempPass: string }[];
   };
-  onResetStudentPassword: (studentId: string, newPassword?: string) => string;
+  onResetStudentPassword: (studentId: string, newPassword?: string) => Promise<string | void> | string | void;
 }
 
 export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
@@ -64,11 +67,11 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
   const blockedCount = (students || []).filter((s) => s.isBlocked).length;
   const grades = Array.from(new Set((students || []).map((s) => s.grade).filter(Boolean)));
 
-  const handleExecutePasswordReset = (e: React.FormEvent) => {
+  const handleExecutePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetModalStudent) return;
     const pass = newPasswordInput.trim() || '123456';
-    onResetStudentPassword(resetModalStudent.id, pass);
+    await onResetStudentPassword(resetModalStudent.id, pass);
     setResetSuccessMessage(`تم تحديث وتعيين كلمة المرور للطالب ${resetModalStudent.name} بنجاح.`);
     setTimeout(() => {
       setResetSuccessMessage(null);
@@ -335,12 +338,14 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
             setIsImportModalOpen(false);
             setImportResult(null);
           }}
-          onImport={(roster) => {
-            const res = onBulkImportStudents(roster);
-            setImportResult({
-              importedCount: res.importedCount,
-              credentials: res.generatedCredentials,
-            });
+          onImport={async (roster) => {
+            const res = await onBulkImportStudents(roster);
+            if (res) {
+              setImportResult({
+                importedCount: res.importedCount,
+                credentials: res.generatedCredentials,
+              });
+            }
           }}
           result={importResult}
         />

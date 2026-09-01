@@ -17,6 +17,7 @@ import {
   AppNotification,
   PhysicalBookmark,
   BookSummary,
+  StudentRosterRow,
 } from './types/library';
 
 // Components
@@ -51,6 +52,7 @@ import { favoriteRepository } from './services/favoriteRepository';
 import { readingProgressRepository } from './services/readingProgressRepository';
 import { submissionRepository } from './services/submissionRepository';
 import { portalRepository } from './services/portalRepository';
+import { userRepository } from './services/userRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -125,7 +127,11 @@ export default function App() {
   const [isPortalsLoading, setIsPortalsLoading] = useState(false);
   const [portalsError, setPortalsError] = useState<string | null>(null);
 
-  const [users, setUsers] = useState<User[]>(() => storage.getUsers());
+  // Server-authoritative Users/Students State (Phase 6.2 - Users Migration)
+  const [users, setUsers] = useState<User[]>([]);
+  const [isUsersLoading, setIsUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
+
   const [config, setConfig] = useState<SystemConfig>(() => storage.getConfig());
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -357,6 +363,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative users (Phase 6.2 - Users Migration)
+  const loadUsers = async () => {
+    setIsUsersLoading(true);
+    try {
+      const res = await userRepository.getUsers();
+      if (res.success && Array.isArray(res.data)) {
+        setUsers(res.data);
+        setUsersError(null);
+      } else {
+        setUsersError(res.error?.message || 'تعذر استرجاع قائمة المستخدمين من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setUsersError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع المستخدمين.');
+    } finally {
+      setIsUsersLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -371,9 +395,8 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Config, Users)
+  // Helper to refresh legacy client storage domains (Config)
   const refreshLegacyStorageState = (targetUser?: User) => {
-    setUsers(storage.getUsers());
     setConfig(storage.getConfig());
   };
 
@@ -391,6 +414,7 @@ export default function App() {
     loadReadingProgress();
     loadSubmissions();
     loadPortals();
+    loadUsers();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -408,6 +432,7 @@ export default function App() {
     loadReadingProgress();
     loadSubmissions();
     loadPortals();
+    loadUsers();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
@@ -427,6 +452,7 @@ export default function App() {
       loadReadingProgress();
       loadSubmissions();
       loadPortals();
+      loadUsers();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -463,6 +489,7 @@ export default function App() {
     loadReadingProgress();
     loadSubmissions();
     loadPortals();
+    loadUsers();
   };
 
   const handleNavigateToTab = (tab: NavigationTab) => {
@@ -1026,6 +1053,48 @@ export default function App() {
     }
   };
 
+  // User & Student Handlers (Phase 6.2 - Users Migration)
+  const handleAddStudent = async (newStudent: Omit<User, 'id'>) => {
+    try {
+      const res = await userRepository.createUser(newStudent);
+      if (res.success) {
+        await loadUsers();
+      } else {
+        alert(res.error?.message || 'تعذر إضافة الطالب في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إضافة الطالب.');
+    }
+  };
+
+  const handleBulkImportStudents = async (roster: StudentRosterRow[]) => {
+    try {
+      const res = await userRepository.bulkImportStudents(roster);
+      if (res.success && res.data) {
+        await loadUsers();
+        return res.data;
+      } else {
+        alert(res.error?.message || 'تعذر استيراد قائمة الطلبة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء استيراد الطلبة.');
+    }
+  };
+
+  const handleResetStudentPassword = async (studentId: string, newPassword?: string) => {
+    try {
+      const res = await userRepository.resetPassword(studentId, newPassword);
+      if (res.success && res.data) {
+        await loadUsers();
+        return res.data.newPassword;
+      } else {
+        alert(res.error?.message || 'تعذر إعادة تعيين كلمة المرور في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إعادة تعيين كلمة المرور.');
+    }
+  };
+
   // Export JSON Database
   const handleExportData = () => {
     const dataStr = storage.exportDatabaseJSON();
@@ -1298,20 +1367,9 @@ export default function App() {
           {activeTab === 'students' && currentUser.role === 'admin' && (
             <StudentManagerView
               students={studentsList}
-              onAddStudent={(newStudent) => {
-                storage.addUser(newStudent);
-                refreshAllState();
-              }}
-              onBulkImportStudents={(roster) => {
-                const res = storage.bulkImportStudents(roster);
-                refreshAllState();
-                return res;
-              }}
-              onResetStudentPassword={(studentId, newPass) => {
-                const pass = storage.resetUserPassword(studentId, newPass);
-                refreshAllState();
-                return pass;
-              }}
+              onAddStudent={handleAddStudent}
+              onBulkImportStudents={handleBulkImportStudents}
+              onResetStudentPassword={handleResetStudentPassword}
             />
           )}
 
