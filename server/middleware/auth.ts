@@ -23,7 +23,7 @@ declare global {
 
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
-  const token = (authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null) || (typeof req.query.token === 'string' ? req.query.token : null);
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
 
   if (!token) {
     return res.status(401).json({
@@ -55,6 +55,15 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     }
 
     const u = rows[0];
+    if (u.is_blocked) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'USER_BLOCKED',
+          message: 'الحساب موقوف حالياً من الوصول إلى الموارد الرقمية.',
+        },
+      });
+    }
     req.user = {
       id: u.id,
       name: u.name,

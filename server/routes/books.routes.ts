@@ -397,11 +397,11 @@ router.get('/:id/file', authenticateToken, async (req: Request, res: Response) =
     }
 
     if (!targetFilePath || !fs.existsSync(targetFilePath)) {
-      return res.json({
-        success: true,
-        data: {
-          message: 'قراءة مدمجة متوفرة عبر المستعرض.',
-          sampleContent: typeof book.sample_content === 'string' ? JSON.parse(book.sample_content) : (book.sample_content || []),
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'FILE_NOT_FOUND',
+          message: 'تعذر العثور على ملف الكتاب الرقمي على الخادم المركزي.',
         },
       });
     }

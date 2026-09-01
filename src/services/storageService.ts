@@ -1,7 +1,5 @@
 import {
   Category,
-  PhysicalBook,
-  DigitalBook,
   User,
   LoanRecord,
   PendingBookSubmission,
@@ -19,8 +17,6 @@ import {
 } from '../types/library';
 import {
   INITIAL_CATEGORIES,
-  INITIAL_PHYSICAL_BOOKS,
-  INITIAL_DIGITAL_BOOKS,
   INITIAL_STUDENTS,
   INITIAL_ADMIN,
   INITIAL_LOANS,
@@ -43,8 +39,6 @@ import { apiClient } from './apiClient';
 
 const STORAGE_KEYS = {
   CATEGORIES: 'almanara_categories_v1',
-  PHYSICAL_BOOKS: 'almanara_physical_books_v1',
-  DIGITAL_BOOKS: 'almanara_digital_books_v1',
   STUDENTS: 'almanara_students_v1',
   ADMIN: 'almanara_admin_v1',
   LOANS: 'almanara_loans_v1',
@@ -196,8 +190,6 @@ export class StorageService {
   private static instance: StorageService;
 
   private categories: Category[];
-  private physicalBooks: PhysicalBook[];
-  private digitalBooks: DigitalBook[];
   private students: User[];
   private admin: User;
   private loans: LoanRecord[];
@@ -218,8 +210,6 @@ export class StorageService {
 
   private constructor() {
     this.categories = loadFromStorage(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
-    this.physicalBooks = loadFromStorage(STORAGE_KEYS.PHYSICAL_BOOKS, INITIAL_PHYSICAL_BOOKS);
-    this.digitalBooks = loadFromStorage(STORAGE_KEYS.DIGITAL_BOOKS, INITIAL_DIGITAL_BOOKS);
     const loadedStudents = loadFromStorage(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
     this.students = (loadedStudents || []).map((s: User) => ({
       ...s,
@@ -291,33 +281,7 @@ export class StorageService {
    * based on totalCopies minus non-returned active/overdue/extended loans.
    */
   public syncBookAvailability(): void {
-    const activeBorrowedCounts: Record<string, number> = {};
-    this.loans.forEach((loan) => {
-      if (loan.status !== 'returned') {
-        activeBorrowedCounts[loan.bookId] = (activeBorrowedCounts[loan.bookId] || 0) + 1;
-      }
-    });
-
-    let hasChanges = false;
-    this.physicalBooks = this.physicalBooks.map((book) => {
-      const borrowedCount = activeBorrowedCounts[book.id] || 0;
-      const total = typeof book.totalCopies === 'number' && book.totalCopies > 0 ? book.totalCopies : 1;
-      const computedAvailable = Math.max(0, total - borrowedCount);
-
-      if (book.availableCopies !== computedAvailable || book.totalCopies !== total) {
-        hasChanges = true;
-        return {
-          ...book,
-          totalCopies: total,
-          availableCopies: computedAvailable,
-        };
-      }
-      return book;
-    });
-
-    if (hasChanges) {
-      saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
-    }
+    // Deprecated. Handled centrally.
   }
 
   /**
@@ -508,93 +472,14 @@ export class StorageService {
   }
 
   // --- Legacy Physical Books (Deprecated in Phase 1.7.3-B - Use BookRepository) ---
-  /** @deprecated Use BookRepository.getPhysicalBooks() instead. */
-  public getPhysicalBooks(): PhysicalBook[] {
-    this.syncBookAvailability();
-    return this.physicalBooks;
-  }
-
-  /** @deprecated Use BookRepository.createPhysicalBook() instead. */
-  public addPhysicalBook(book: Omit<PhysicalBook, 'id' | 'addedAt'>): PhysicalBook {
-    const total = typeof book.totalCopies === 'number' && book.totalCopies > 0 ? book.totalCopies : 1;
-    const newBook: PhysicalBook = {
-      ...book,
-      id: `phys-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 5)}`,
-      addedAt: new Date().toISOString().split('T')[0],
-      totalCopies: total,
-      availableCopies: total,
-    };
-    this.physicalBooks.unshift(newBook);
-    this.syncBookAvailability();
-    saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
-    return newBook;
-  }
-
-  /** @deprecated Use BookRepository.updatePhysicalBook() instead. */
-  public updatePhysicalBook(id: string, updates: Partial<PhysicalBook>): PhysicalBook | null {
-    const index = this.physicalBooks.findIndex(b => b.id === id);
-    if (index === -1) return null;
-
-    this.physicalBooks[index] = { ...this.physicalBooks[index], ...updates };
-    this.syncBookAvailability();
-    saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
-    return this.physicalBooks[index];
-  }
-
-  /** @deprecated Use BookRepository.deleteBook() instead. */
-  public deletePhysicalBook(id: string): boolean {
-    const activeLoans = this.loans.filter(l => l.bookId === id && l.status !== 'returned');
-    if (activeLoans.length > 0) {
-      throw new Error(`لا يمكن حذف هذا الكتاب لوجود ${activeLoans.length} عملية إعارة نشطة مرتبطة به حالياً.`);
-    }
-    this.physicalBooks = this.physicalBooks.filter(b => b.id !== id);
-    this.syncBookAvailability();
-    saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
-    return true;
-  }
-
-  // --- Legacy Digital Books (Deprecated in Phase 1.7.3-B - Use BookRepository) ---
-  /** @deprecated Use BookRepository.getDigitalBooks() instead. */
-  public getDigitalBooks(): DigitalBook[] {
-    return this.digitalBooks;
-  }
-
-  /** @deprecated Use BookRepository.createDigitalBook() or BookRepository.bulkImportDigitalBooks() instead. */
-  public addDigitalBook(book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>): DigitalBook {
-    const newBook: DigitalBook = {
-      ...book,
-      id: `dig-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 5)}`,
-      addedAt: new Date().toISOString().split('T')[0],
-      downloadCount: 0,
-      readCount: 0,
-      sampleContent: book.sampleContent || [
-        `بسم الله الرحمن الرحيم\nكتاب: ${book.title}\nالمؤلف: ${book.author}\n\nهذا الملف مخزن في المستودع المركزي للمكتبة المدرسية...\n\nنبذة: ${book.summary}`,
-        `الفصل الأول: المبادئ العامة والمفاهيم الأساسية.\n\nتم استيراد هذا الكتاب من مصادر موثوقة وفهرسته بواسطة نظام المكتبة المدرسية...`,
-        `الفصل الثاني: التطبيقات والنتائج البحثية.\n\nيمكن للطلبة إضافة ملاحظات بحثية واقتباسات مرتبطة بهذه الصفحة للرجوع إليها في أي وقت.`,
-      ],
-    };
-    this.digitalBooks.unshift(newBook);
-    saveToStorage(STORAGE_KEYS.DIGITAL_BOOKS, this.digitalBooks);
-    return newBook;
-  }
-
-  /** @deprecated Use BookRepository.incrementReadCount() instead. */
-  public incrementReadCount(bookId: string): void {
-    const book = this.digitalBooks.find(b => b.id === bookId);
-    if (book) {
-      book.readCount += 1;
-      saveToStorage(STORAGE_KEYS.DIGITAL_BOOKS, this.digitalBooks);
-    }
-  }
-
+  
   // --- Legacy Categories (Deprecated in Phase 1.7.3-A - Use CategoryRepository) ---
   /** @deprecated Use CategoryRepository.getCategories() instead. */
   public getCategories(): Category[] {
     return this.categories.map(cat => ({
       ...cat,
       booksCount:
-        this.physicalBooks.filter(b => b.categoryId === cat.id).length +
-        this.digitalBooks.filter(b => b.categoryId === cat.id).length,
+        0,
     }));
   }
 
@@ -621,39 +506,7 @@ export class StorageService {
   // Safe deletion with bulk reassign
   /** @deprecated Use CategoryRepository.reassignAndDeleteCategory() instead. */
   public deleteCategoryWithReassign(categoryIdToDelete: string, targetCategoryId: string): { reclassifiedPhysical: number; reclassifiedDigital: number } {
-    if (categoryIdToDelete === targetCategoryId) {
-      throw new Error('لا يمكن إعادة تصنيف الكتب إلى نفس التصنيف المراد حذفه');
-    }
-
-    let pCount = 0;
-    let dCount = 0;
-
-    // Reassign physical books
-    this.physicalBooks = this.physicalBooks.map(book => {
-      if (book.categoryId === categoryIdToDelete) {
-        pCount++;
-        return { ...book, categoryId: targetCategoryId };
-      }
-      return book;
-    });
-
-    // Reassign digital books
-    this.digitalBooks = this.digitalBooks.map(book => {
-      if (book.categoryId === categoryIdToDelete) {
-        dCount++;
-        return { ...book, categoryId: targetCategoryId };
-      }
-      return book;
-    });
-
-    // Delete category
-    this.categories = this.categories.filter(c => c.id !== categoryIdToDelete);
-
-    saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
-    saveToStorage(STORAGE_KEYS.DIGITAL_BOOKS, this.digitalBooks);
-    saveToStorage(STORAGE_KEYS.CATEGORIES, this.categories);
-
-    return { reclassifiedPhysical: pCount, reclassifiedDigital: dCount };
+    return { reclassifiedPhysical: 0, reclassifiedDigital: 0 };
   }
 
   public bulkReclassifyBooks(
@@ -661,22 +514,26 @@ export class StorageService {
     digitalBookIds: string[],
     newCategoryId: string
   ): void {
-    if (physicalBookIds.length > 0) {
-      this.physicalBooks = this.physicalBooks.map(b =>
-        physicalBookIds.includes(b.id) ? { ...b, categoryId: newCategoryId } : b
-      );
-      saveToStorage(STORAGE_KEYS.PHYSICAL_BOOKS, this.physicalBooks);
-    }
-
-    if (digitalBookIds.length > 0) {
-      this.digitalBooks = this.digitalBooks.map(b =>
-        digitalBookIds.includes(b.id) ? { ...b, categoryId: newCategoryId } : b
-      );
-      saveToStorage(STORAGE_KEYS.DIGITAL_BOOKS, this.digitalBooks);
-    }
+    // Handled centrally
   }
 
   // --- Circulation & Loans ---
+
+  public recalculateLoanStatuses(): void {
+    const now = new Date();
+    let hasChanges = false;
+    this.loans = this.loans.map(loan => {
+      if (loan.status === 'active' && new Date(loan.dueDate) < now) {
+        hasChanges = true;
+        return { ...loan, status: 'overdue' };
+      }
+      return loan;
+    });
+    if (hasChanges) {
+      saveToStorage(STORAGE_KEYS.LOANS, this.loans);
+    }
+  }
+
   public getLoans(): LoanRecord[] {
     this.recalculateLoanStatuses();
     return this.loans;
@@ -723,34 +580,25 @@ export class StorageService {
     notes?: string;
     isOverrideExemption?: boolean;
     overrideReason?: string;
+    bookTitle?: string;
   }): LoanRecord {
-    const book = this.physicalBooks.find(b => b.id === params.bookId);
-    if (!book) throw new Error('الكتاب غير موجود');
-    if (book.availableCopies <= 0) throw new Error('لا توجد نسخ متوفرة حالياً من هذا الكتاب للإعارة');
-
     const student = this.students.find(s => s.id === params.studentId);
     if (!student) throw new Error('الطالب غير موجود');
 
-    // Check eligibility
     const eligibility = this.checkStudentBorrowEligibility(student.id);
     if (!eligibility.canBorrow && !params.isOverrideExemption) {
       throw new Error(`تعذر إتمام الإعارة: ${eligibility.reason}`);
     }
 
-    const durationDays =
-      params.customDurationDays ||
-      (params.purpose === 'academic_research'
-        ? this.config.academicResearchDurationDays
-        : this.config.generalReadingDurationDays);
-
+    const durationDays = params.customDurationDays || (params.purpose === 'academic_research' ? this.config.academicResearchDurationDays : this.config.generalReadingDurationDays);
     const now = new Date();
     const dueDate = new Date();
     dueDate.setDate(now.getDate() + durationDays);
 
     const newLoan: LoanRecord = {
       id: `loan-${Date.now().toString(36)}`,
-      bookId: book.id,
-      bookTitle: book.title,
+      bookId: params.bookId,
+      bookTitle: params.bookTitle || 'عنوان غير متوفر',
       studentId: student.id,
       studentName: student.name,
       studentRegNumber: student.registrationNumber,
@@ -764,85 +612,57 @@ export class StorageService {
       isOverrideExemption: params.isOverrideExemption,
       overrideReason: params.overrideReason,
     };
-
     this.loans.unshift(newLoan);
-    this.syncBookAvailability();
-
     saveToStorage(STORAGE_KEYS.LOANS, this.loans);
-
     return newLoan;
   }
 
-  public extendLoan(loanId: string, additionalDays: number = 7, notes?: string): LoanRecord {
-    const loan = this.loans.find(l => l.id === loanId);
-    if (!loan) throw new Error('سجل الإعارة غير موجود');
-    if (loan.status === 'returned') throw new Error('تم إرجاع الكتاب مسبقاً');
-    if (loan.extensionCount >= loan.maxExtensionsAllowed) {
-      throw new Error(`وصل الكتاب للحد الأقصى المسموح به للتمديد (${loan.maxExtensionsAllowed} مرات)`);
-    }
-
-    const currentDue = new Date(loan.dueDate);
-    const newDue = new Date(currentDue);
-    newDue.setDate(newDue.getDate() + additionalDays);
-
-    loan.dueDate = newDue.toISOString().split('T')[0];
-    loan.extensionCount += 1;
-    loan.status = 'extended';
-    if (notes) loan.notes = (loan.notes ? loan.notes + ' | ' : '') + notes;
-
-    saveToStorage(STORAGE_KEYS.LOANS, this.loans);
-    this.recalculateLoanStatuses();
-    return loan;
-  }
-
-  public returnBook(loanId: string, notes?: string): LoanRecord {
-    const loan = this.loans.find(l => l.id === loanId);
-    if (!loan) throw new Error('سجل الإعارة غير موجود');
+  public extendLoan(params: {
+    loanId: string;
+    extensionDays: number;
+    notes?: string;
+  }): LoanRecord {
+    const index = this.loans.findIndex(l => l.id === params.loanId);
+    if (index === -1) throw new Error('الإعارة غير موجودة');
+    const loan = this.loans[index];
     if (loan.status === 'returned') throw new Error('تم إرجاع هذا الكتاب مسبقاً');
-
-    loan.status = 'returned';
-    loan.returnDate = new Date().toISOString().split('T')[0];
-    if (notes) loan.notes = (loan.notes ? loan.notes + ' | ' : '') + `تم الإرجاع: ${notes}`;
-
+    
+    const dueDate = new Date(loan.dueDate);
+    dueDate.setDate(dueDate.getDate() + params.extensionDays);
+    
+    this.loans[index] = {
+      ...loan,
+      dueDate: dueDate.toISOString().split('T')[0],
+      extensionCount: (loan.extensionCount || 0) + 1,
+      notes: loan.notes ? `${loan.notes}\n---\n${params.notes}` : (params.notes || ''),
+      status: loan.status === 'overdue' ? 'active' : loan.status
+    };
     saveToStorage(STORAGE_KEYS.LOANS, this.loans);
-    this.recalculateLoanStatuses();
-    this.syncBookAvailability();
-    return loan;
+    return this.loans[index];
   }
 
-  public returnLoan(loanId: string, notes?: string): LoanRecord {
-    return this.returnBook(loanId, notes);
+  public returnBook(params: {
+    loanId: string;
+    condition: string;
+    notes?: string;
+  }): LoanRecord {
+    const index = this.loans.findIndex(l => l.id === params.loanId);
+    if (index === -1) throw new Error('الإعارة غير موجودة');
+    const loan = this.loans[index];
+    if (loan.status === 'returned') throw new Error('تم إرجاع الكتاب مسبقاً');
+    
+    this.loans[index] = {
+      ...loan,
+      status: 'returned',
+      returnDate: new Date().toISOString().split('T')[0],
+      notes: loan.notes ? `${loan.notes}\n---\nحالة الإرجاع: ${params.condition}\n${params.notes || ''}` : `حالة الإرجاع: ${params.condition}\n${params.notes || ''}`
+    };
+    saveToStorage(STORAGE_KEYS.LOANS, this.loans);
+    return this.loans[index];
   }
 
-  public getLoanRequests(studentId?: string): PhysicalLoanRequest[] {
-    return this.getPhysicalLoanRequests(studentId);
-  }
-
-  private recalculateLoanStatuses(): void {
-    const today = new Date().toISOString().split('T')[0];
-    let changed = false;
-
-    this.loans.forEach(loan => {
-      if (loan.status !== 'returned') {
-        if (loan.dueDate < today) {
-          if (loan.status !== 'overdue') {
-            loan.status = 'overdue';
-            changed = true;
-          }
-        }
-      }
-    });
-
-    if (changed) {
-      saveToStorage(STORAGE_KEYS.LOANS, this.loans);
-    }
-  }
-
-  // --- Physical Book Loan Requests & Automated Handover Workflow ---
-  public getPhysicalLoanRequests(studentId?: string): PhysicalLoanRequest[] {
-    if (studentId) {
-      return this.loanRequests.filter((r) => r.studentId === studentId);
-    }
+  
+  public getLoanRequests(): PhysicalLoanRequest[] {
     return this.loanRequests;
   }
 
@@ -852,37 +672,23 @@ export class StorageService {
     purpose: string;
     customReason?: string;
     requestedDurationDays?: number;
+    bookTitle?: string;
+    bookAuthor?: string;
+    bookLocation?: any;
   }): PhysicalLoanRequest {
-    const book = this.physicalBooks.find((b) => b.id === params.bookId);
-    if (!book) throw new Error('الكتاب المطلوب غير موجود في المكتبة الورقية');
-    if (book.availableCopies <= 0) {
-      throw new Error('عذراً، جميع نسخ هذا الكتاب مستعارة حالياً ولا توجد نسخ على الرفوف');
-    }
-
-    const student = this.students.find((s) => s.id === params.studentId);
-    if (!student) throw new Error('بيانات الطالب غير مسجلة');
-
-    // Check if student has an existing active or pending request for the same book
-    const existingReq = this.loanRequests.find(
-      (r) =>
-        r.studentId === student.id &&
-        r.bookId === book.id &&
-        (r.status === 'pending' || r.status === 'approved')
-    );
-    if (existingReq) {
-      throw new Error('لديك طلب سابق سارٍ أو قيد المراجعة لهذا الكتاب بالفعل');
-    }
+    const student = this.students.find(s => s.id === params.studentId);
+    if (!student) throw new Error('الطالب غير موجود');
 
     const newRequest: PhysicalLoanRequest = {
       id: `req-${Date.now().toString(36)}`,
-      bookId: book.id,
-      bookTitle: book.title,
-      bookAuthor: book.author,
-      bookLocation: book.location,
+      bookId: params.bookId,
+      bookTitle: params.bookTitle || "عنوان غير متوفر",
+      bookAuthor: params.bookAuthor || "مؤلف غير متوفر",
+      bookLocation: params.bookLocation || { cabinet: "غير متوفر", shelf: "غير متوفر", level: 1 },
       studentId: student.id,
       studentName: student.name,
       studentRegNumber: student.registrationNumber,
-      studentGrade: student.grade,
+      studentGrade: student.grade || 'الصف العام',
       purpose: params.purpose,
       customReason: params.customReason,
       requestedDurationDays: params.requestedDurationDays,
@@ -892,24 +698,9 @@ export class StorageService {
 
     this.loanRequests.unshift(newRequest);
     saveToStorage(STORAGE_KEYS.LOAN_REQUESTS, this.loanRequests);
-
-    const durationNotice = params.requestedDurationDays
-      ? ` (المدة المقترحة من الطالب: ${params.requestedDurationDays} يوماً)`
-      : '';
-
-    // Send notification to Admin
-    this.addNotification({
-      recipientId: 'admin',
-      recipientRole: 'admin',
-      title: 'طلب استعارة كتاب جديد',
-      message: `قام الطالب ${student.name} (${student.grade || 'طالب'}) بتقديم طلب استعارة لكتاب "${book.title}"${durationNotice}.`,
-      type: 'loan_request_submitted',
-      targetTab: 'loans',
-      targetEntityId: newRequest.id,
-    });
-
     return newRequest;
   }
+
 
   public approveLoanRequest(params: {
     requestId: string;
@@ -920,10 +711,7 @@ export class StorageService {
     if (!req) throw new Error('طلب الاستعارة غير موجود');
     if (req.status !== 'pending') throw new Error('تمت معالجة هذا الطلب مسبقاً');
 
-    const book = this.physicalBooks.find((b) => b.id === req.bookId);
-    if (!book || book.availableCopies <= 0) {
-      throw new Error('لا توجد نسخ متوفرة على الرفوف حالياً للموافقة');
-    }
+    
 
     const now = new Date();
     const dueDate = new Date();
@@ -981,9 +769,7 @@ export class StorageService {
     if (!req) throw new Error('طلب الاستعارة غير موجود');
     if (req.status !== 'approved') throw new Error('يجب أن يكون الطلب موافقاً عليه أولاً لتأكيد الخروج');
 
-    const book = this.physicalBooks.find((b) => b.id === req.bookId);
-    if (!book) throw new Error('الكتاب غير موجود');
-    if (book.availableCopies <= 0) throw new Error('لا توجد نسخ متوفرة من هذا الكتاب على الرفوف');
+    
 
     const durationDays =
       req.approvedDurationDays ||
@@ -997,8 +783,8 @@ export class StorageService {
 
     const newLoanRecord: LoanRecord = {
       id: `loan-${Date.now().toString(36)}`,
-      bookId: book.id,
-      bookTitle: book.title,
+      bookId: req.bookId,
+      bookTitle: req.bookTitle,
       studentId: req.studentId,
       studentName: req.studentName,
       studentRegNumber: req.studentRegNumber,
@@ -1026,7 +812,7 @@ export class StorageService {
       recipientId: req.studentId,
       recipientRole: 'student',
       title: 'تم تأكيد استلام الكتاب وخروجه من المكتبة 📖',
-      message: `تم تسجيل خروج كتاب "${book.title}" بنجاح. موعد الإرجاع المحدد: ${dueDate.toISOString().split('T')[0]}. حافظ على سلامة الكتاب ونظافته.`,
+      message: `تم تسجيل خروج كتاب "${req.bookTitle}" بنجاح. موعد الإرجاع المحدد: ${dueDate.toISOString().split('T')[0]}. حافظ على سلامة الكتاب ونظافته.`,
       type: 'loan_handed_over',
       targetTab: 'student_portal',
       targetEntityId: newLoanRecord.id,
@@ -1273,33 +1059,17 @@ export class StorageService {
     return newSubmission;
   }
 
-  public approveSubmission(submissionId: string, approvedCategoryId?: string): DigitalBook {
+  public approveSubmission(submissionId: string, _approvedCategoryId?: string): PendingBookSubmission {
     const sub = this.submissions.find(s => s.id === submissionId);
     if (!sub) throw new Error('طلب الرفع غير موجود');
     if (sub.status !== 'pending') throw new Error('تم البت في هذا الطلب مسبقاً');
-
-    const catId = approvedCategoryId || sub.suggestedCategoryId;
-
-    // Create central digital book
-    const digitalBook = this.addDigitalBook({
-      title: sub.title,
-      author: sub.author,
-      categoryId: catId,
-      format: sub.format,
-      fileSize: '8.5 MB',
-      pagesCount: sub.pagesEstimated || 250,
-      sourceOrigin: sub.sourcePortalName,
-      summary: sub.summary,
-      tags: ['مرفوع من الطالب', sub.sourcePortalName],
-      uploadedBy: sub.studentId,
-    });
 
     sub.status = 'approved';
     sub.reviewedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
     sub.reviewedBy = this.admin.name;
 
     saveToStorage(STORAGE_KEYS.SUBMISSIONS, this.submissions);
-    return digitalBook;
+    return sub;
   }
 
   public rejectSubmission(submissionId: string, reason: string): PendingBookSubmission {
@@ -1596,11 +1366,7 @@ export class StorageService {
     return this.submitBookForReview(data);
   }
 
-  /** @deprecated Use BookRepository.incrementReadCount() instead. */
-  public incrementDigitalReadCount(bookId: string) {
-    this.incrementReadCount(bookId);
-  }
-
+  
   public addWhitelistedPortal(portal: any) {
     return this.addPortal(portal);
   }
@@ -1659,8 +1425,6 @@ export class StorageService {
       exportedAt: new Date().toISOString(),
       config: this.config,
       categories: this.categories,
-      physicalBooks: this.physicalBooks,
-      digitalBooks: this.digitalBooks,
       students: this.students,
       loans: this.loans,
       portals: this.portals,
@@ -1675,8 +1439,6 @@ export class StorageService {
   public resetToDefaults(): void {
     localStorage.clear();
     this.categories = INITIAL_CATEGORIES;
-    this.physicalBooks = INITIAL_PHYSICAL_BOOKS;
-    this.digitalBooks = INITIAL_DIGITAL_BOOKS;
     this.students = INITIAL_STUDENTS;
     this.admin = INITIAL_ADMIN;
     this.loans = INITIAL_LOANS;
