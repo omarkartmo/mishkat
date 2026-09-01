@@ -16,6 +16,7 @@ import {
   PhysicalLoanRequest,
   AppNotification,
   PhysicalBookmark,
+  BookSummary,
 } from './types/library';
 
 // Components
@@ -45,6 +46,7 @@ import { loanRequestRepository } from './services/loanRequestRepository';
 import { notificationRepository } from './services/notificationRepository';
 import { noteRepository } from './services/noteRepository';
 import { bookmarkRepository } from './services/bookmarkRepository';
+import { summaryRepository } from './services/summaryRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -94,6 +96,11 @@ export default function App() {
   const [isBookmarksLoading, setIsBookmarksLoading] = useState(false);
   const [bookmarksError, setBookmarksError] = useState<string | null>(null);
 
+  // Server-authoritative Book Summaries State (Phase 1.7 - Summaries Migration)
+  const [bookSummaries, setBookSummaries] = useState<BookSummary[]>([]);
+  const [isSummariesLoading, setIsSummariesLoading] = useState(false);
+  const [summariesError, setSummariesError] = useState<string | null>(null);
+
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
@@ -101,7 +108,6 @@ export default function App() {
   const [readingProgress, setReadingProgress] = useState<Record<string, { currentPage: number; totalPages: number; lastReadAt?: string; percentage?: number; isCompleted?: boolean }>>(() =>
     currentUser ? storage.getReadingProgressMap(currentUser.id) : {}
   );
-  const [bookSummaries, setBookSummaries] = useState<any[]>(() => currentUser ? storage.getBookSummaries(currentUser.id) : []);
   const [favorites, setFavorites] = useState<string[]>(() => currentUser ? storage.getFavorites(currentUser.id) : []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -243,6 +249,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative summaries (Phase 1.7 - Summaries Migration)
+  const loadSummaries = async () => {
+    setIsSummariesLoading(true);
+    try {
+      const res = await summaryRepository.getSummaries();
+      if (res.success && Array.isArray(res.data)) {
+        setBookSummaries(res.data);
+        setSummariesError(null);
+      } else {
+        setSummariesError(res.error?.message || 'تعذر استرجاع ملخصات الكتب من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setSummariesError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الملخصات.');
+    } finally {
+      setIsSummariesLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -257,7 +281,7 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Portals, Submissions, Summaries, etc.)
+  // Helper to refresh legacy client storage domains (Portals, Submissions, etc.)
   const refreshLegacyStorageState = (targetUser?: User) => {
     setSubmissions(storage.getSubmissions());
     setUsers(storage.getUsers());
@@ -266,7 +290,6 @@ export default function App() {
     const curr = targetUser || authUser || storage.getCurrentUser();
     if (curr) {
       setReadingProgress(storage.getReadingProgressMap(curr.id));
-      setBookSummaries(storage.getBookSummaries(curr.id));
       setFavorites(storage.getFavorites(curr.id));
     }
   };
@@ -280,6 +303,7 @@ export default function App() {
     loadNotifications();
     loadNotes();
     loadBookmarks();
+    loadSummaries();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -292,6 +316,7 @@ export default function App() {
     loadNotifications();
     loadNotes();
     loadBookmarks();
+    loadSummaries();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
@@ -306,6 +331,7 @@ export default function App() {
       loadNotifications();
       loadNotes();
       loadBookmarks();
+      loadSummaries();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -337,8 +363,8 @@ export default function App() {
     loadNotifications();
     loadNotes();
     loadBookmarks();
+    loadSummaries();
     setReadingProgress(storage.getReadingProgressMap(user.id));
-    setBookSummaries(storage.getBookSummaries(user.id));
     setFavorites(storage.getFavorites(user.id));
   };
 
@@ -763,15 +789,31 @@ export default function App() {
     }
   };
 
-  // Book Summaries Handlers
-  const handleSaveBookSummary = (summaryData: any) => {
-    storage.saveBookSummary({ ...summaryData, studentId: currentUser.id });
-    setBookSummaries(storage.getBookSummaries(currentUser.id));
+  // Book Summaries Handlers (Phase 1.7 - Summaries Migration)
+  const handleSaveBookSummary = async (summaryData: any) => {
+    try {
+      const res = await summaryRepository.saveSummary({ ...summaryData, studentId: currentUser.id });
+      if (res.success) {
+        await loadSummaries();
+      } else {
+        alert(res.error?.message || 'تعذر حفظ ملخص الكتاب في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حفظ ملخص الكتاب.');
+    }
   };
 
-  const handleDeleteBookSummary = (summaryId: string) => {
-    storage.deleteBookSummary(summaryId);
-    setBookSummaries(storage.getBookSummaries(currentUser.id));
+  const handleDeleteBookSummary = async (summaryId: string) => {
+    try {
+      const res = await summaryRepository.deleteSummary(summaryId);
+      if (res.success) {
+        await loadSummaries();
+      } else {
+        alert(res.error?.message || 'تعذر حذف ملخص الكتاب من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حذف ملخص الكتاب.');
+    }
   };
 
   // Favorite toggle
