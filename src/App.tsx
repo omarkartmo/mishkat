@@ -47,6 +47,7 @@ import { notificationRepository } from './services/notificationRepository';
 import { noteRepository } from './services/noteRepository';
 import { bookmarkRepository } from './services/bookmarkRepository';
 import { summaryRepository } from './services/summaryRepository';
+import { favoriteRepository } from './services/favoriteRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -101,6 +102,11 @@ export default function App() {
   const [isSummariesLoading, setIsSummariesLoading] = useState(false);
   const [summariesError, setSummariesError] = useState<string | null>(null);
 
+  // Server-authoritative Favorites State (Phase 1.7 - Favorites Migration)
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(false);
+  const [favoritesError, setFavoritesError] = useState<string | null>(null);
+
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
@@ -108,7 +114,6 @@ export default function App() {
   const [readingProgress, setReadingProgress] = useState<Record<string, { currentPage: number; totalPages: number; lastReadAt?: string; percentage?: number; isCompleted?: boolean }>>(() =>
     currentUser ? storage.getReadingProgressMap(currentUser.id) : {}
   );
-  const [favorites, setFavorites] = useState<string[]>(() => currentUser ? storage.getFavorites(currentUser.id) : []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -267,6 +272,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative favorites (Phase 1.7 - Favorites Migration)
+  const loadFavorites = async () => {
+    setIsFavoritesLoading(true);
+    try {
+      const res = await favoriteRepository.getFavorites();
+      if (res.success && Array.isArray(res.data)) {
+        setFavorites(res.data);
+        setFavoritesError(null);
+      } else {
+        setFavoritesError(res.error?.message || 'تعذر استرجاع المفضلة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setFavoritesError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات المفضلة.');
+    } finally {
+      setIsFavoritesLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -290,7 +313,6 @@ export default function App() {
     const curr = targetUser || authUser || storage.getCurrentUser();
     if (curr) {
       setReadingProgress(storage.getReadingProgressMap(curr.id));
-      setFavorites(storage.getFavorites(curr.id));
     }
   };
 
@@ -304,6 +326,7 @@ export default function App() {
     loadNotes();
     loadBookmarks();
     loadSummaries();
+    loadFavorites();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -317,6 +340,7 @@ export default function App() {
     loadNotes();
     loadBookmarks();
     loadSummaries();
+    loadFavorites();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
@@ -332,6 +356,7 @@ export default function App() {
       loadNotes();
       loadBookmarks();
       loadSummaries();
+      loadFavorites();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -364,8 +389,8 @@ export default function App() {
     loadNotes();
     loadBookmarks();
     loadSummaries();
+    loadFavorites();
     setReadingProgress(storage.getReadingProgressMap(user.id));
-    setFavorites(storage.getFavorites(user.id));
   };
 
   const handleNavigateToTab = (tab: NavigationTab) => {
@@ -816,10 +841,18 @@ export default function App() {
     }
   };
 
-  // Favorite toggle
-  const handleToggleFavorite = (bookId: string) => {
-    storage.toggleFavorite(bookId, currentUser.id);
-    setFavorites(storage.getFavorites(currentUser.id));
+  // Favorite toggle (Phase 1.7 - Favorites Migration)
+  const handleToggleFavorite = async (bookId: string) => {
+    try {
+      const res = await favoriteRepository.toggleFavorite(bookId);
+      if (res.success) {
+        await loadFavorites();
+      } else {
+        alert(res.error?.message || 'تعذر تحديث المفضلة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تحديث المفضلة.');
+    }
   };
 
   // Reading progress dismiss & clear completed

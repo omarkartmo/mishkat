@@ -53,4 +53,16 @@ router.post('/toggle', authenticateToken, async (req: Request, res: Response) =>
   }
 });
 
+// DELETE /api/v1/favorites/:bookId
+router.delete('/:bookId', authenticateToken, async (req: Request, res: Response) => {
+  const { bookId } = req.params;
+  const studentId = req.user!.id;
+  try {
+    await db.query('DELETE FROM student_favorites WHERE student_id = $1 AND book_id = $2', [studentId, bookId]);
+    res.json({ success: true, data: { removed: true, bookId } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 export default router;
