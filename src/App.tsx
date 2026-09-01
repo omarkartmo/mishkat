@@ -15,6 +15,7 @@ import {
   LoanPurpose,
   PhysicalLoanRequest,
   AppNotification,
+  PhysicalBookmark,
 } from './types/library';
 
 // Components
@@ -43,6 +44,7 @@ import { loanRepository } from './services/loanRepository';
 import { loanRequestRepository } from './services/loanRequestRepository';
 import { notificationRepository } from './services/notificationRepository';
 import { noteRepository } from './services/noteRepository';
+import { bookmarkRepository } from './services/bookmarkRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -87,6 +89,11 @@ export default function App() {
   const [isNotesLoading, setIsNotesLoading] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
 
+  // Server-authoritative Physical Bookmarks State (Phase 1.7 - Bookmarks Migration)
+  const [physicalBookmarks, setPhysicalBookmarks] = useState<PhysicalBookmark[]>([]);
+  const [isBookmarksLoading, setIsBookmarksLoading] = useState(false);
+  const [bookmarksError, setBookmarksError] = useState<string | null>(null);
+
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
@@ -94,7 +101,6 @@ export default function App() {
   const [readingProgress, setReadingProgress] = useState<Record<string, { currentPage: number; totalPages: number; lastReadAt?: string; percentage?: number; isCompleted?: boolean }>>(() =>
     currentUser ? storage.getReadingProgressMap(currentUser.id) : {}
   );
-  const [physicalBookmarks, setPhysicalBookmarks] = useState<any[]>(() => currentUser ? storage.getPhysicalBookmarks(currentUser.id) : []);
   const [bookSummaries, setBookSummaries] = useState<any[]>(() => currentUser ? storage.getBookSummaries(currentUser.id) : []);
   const [favorites, setFavorites] = useState<string[]>(() => currentUser ? storage.getFavorites(currentUser.id) : []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -219,6 +225,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative bookmarks (Phase 1.7 - Bookmarks Migration)
+  const loadBookmarks = async () => {
+    setIsBookmarksLoading(true);
+    try {
+      const res = await bookmarkRepository.getBookmarks();
+      if (res.success && Array.isArray(res.data)) {
+        setPhysicalBookmarks(res.data);
+        setBookmarksError(null);
+      } else {
+        setBookmarksError(res.error?.message || 'تعذر استرجاع فواصل القراءة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setBookmarksError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الفواصل.');
+    } finally {
+      setIsBookmarksLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -233,7 +257,7 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Portals, Submissions, Bookmarks, etc.)
+  // Helper to refresh legacy client storage domains (Portals, Submissions, Summaries, etc.)
   const refreshLegacyStorageState = (targetUser?: User) => {
     setSubmissions(storage.getSubmissions());
     setUsers(storage.getUsers());
@@ -242,7 +266,6 @@ export default function App() {
     const curr = targetUser || authUser || storage.getCurrentUser();
     if (curr) {
       setReadingProgress(storage.getReadingProgressMap(curr.id));
-      setPhysicalBookmarks(storage.getPhysicalBookmarks(curr.id));
       setBookSummaries(storage.getBookSummaries(curr.id));
       setFavorites(storage.getFavorites(curr.id));
     }
@@ -256,6 +279,7 @@ export default function App() {
     loadLoanRequests();
     loadNotifications();
     loadNotes();
+    loadBookmarks();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -267,6 +291,7 @@ export default function App() {
     loadLoanRequests();
     loadNotifications();
     loadNotes();
+    loadBookmarks();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
@@ -280,6 +305,7 @@ export default function App() {
       loadLoanRequests();
       loadNotifications();
       loadNotes();
+      loadBookmarks();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -310,8 +336,8 @@ export default function App() {
     }
     loadNotifications();
     loadNotes();
+    loadBookmarks();
     setReadingProgress(storage.getReadingProgressMap(user.id));
-    setPhysicalBookmarks(storage.getPhysicalBookmarks(user.id));
     setBookSummaries(storage.getBookSummaries(user.id));
     setFavorites(storage.getFavorites(user.id));
   };
@@ -710,15 +736,31 @@ export default function App() {
     }
   };
 
-  // Physical Bookmarks Handlers
-  const handleSavePhysicalBookmark = (data: any) => {
-    storage.savePhysicalBookmark({ ...data, studentId: currentUser.id });
-    setPhysicalBookmarks(storage.getPhysicalBookmarks(currentUser.id));
+  // Physical Bookmarks Handlers (Phase 1.7 - Bookmarks Migration)
+  const handleSavePhysicalBookmark = async (data: any) => {
+    try {
+      const res = await bookmarkRepository.saveBookmark({ ...data, studentId: currentUser.id });
+      if (res.success) {
+        await loadBookmarks();
+      } else {
+        alert(res.error?.message || 'تعذر حفظ فاصل القراءة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حفظ فاصل القراءة.');
+    }
   };
 
-  const handleDeletePhysicalBookmark = (bookmarkId: string) => {
-    storage.deletePhysicalBookmark(bookmarkId);
-    setPhysicalBookmarks(storage.getPhysicalBookmarks(currentUser.id));
+  const handleDeletePhysicalBookmark = async (bookmarkId: string) => {
+    try {
+      const res = await bookmarkRepository.deleteBookmark(bookmarkId);
+      if (res.success) {
+        await loadBookmarks();
+      } else {
+        alert(res.error?.message || 'تعذر حذف فاصل القراءة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حذف فاصل القراءة.');
+    }
   };
 
   // Book Summaries Handlers
