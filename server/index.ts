@@ -26,12 +26,46 @@ import settingsRoutes from './routes/settings.routes';
 import { auditRouter, backupRouter, healthRouter, systemRouter } from './routes/system.routes';
 import { errorHandler } from './middleware/errorHandler';
 
+// Helper to determine whether an origin is from a private LAN subnet
+const isLanOrigin = (origin: string): boolean => {
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+    // Localhost / Loopback
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
+    // Private IPv4 LAN Ranges (RFC 1918): 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+    if (/^(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})$/.test(host)) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 export async function createExpressApp() {
   const app = express();
 
-  // Basic Middlewares
+  // Standard Security Headers
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
+    next();
+  });
+
+  // Secure LAN-Aware CORS Middleware
   app.use(cors({
-    origin: serverConfig.allowedCorsOrigins,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. same-origin SPA requests, mobile apps, local tools)
+      if (!origin) return callback(null, true);
+      if (serverConfig.allowedCorsOrigins.includes(origin) || isLanOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -42,8 +76,7 @@ export async function createExpressApp() {
 
   // NOTE: Private digital files and covers are NOT served via express.static.
   // All digital file access goes through the authenticated GET /api/v1/books/:id/file
-  // route which enforces JWT authentication and path traversal protection.
-
+  // and /api/v1/books/files/* routes which enforce JWT authentication and path traversal protection.
 
   // Initialize DB Connection, Migrations, and Seed safely
   try {
@@ -122,4 +155,22 @@ export async function startServer() {
       console.error('[Server Error]', err);
     }
   });
+
+  // Graceful Process Termination Handler
+  const shutdown = async (signal: string) => {
+    console.log(`\n[Server] Received ${signal}. Starting graceful shutdown...`);
+    server.close(async () => {
+      console.log('[Server] HTTP listener closed.');
+      try {
+        await db.close();
+        console.log('[Database] Database pool and engine closed cleanly.');
+      } catch (err: any) {
+        console.error('[Database Shutdown Error]', err.message);
+      }
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }

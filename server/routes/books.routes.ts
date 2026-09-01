@@ -378,6 +378,34 @@ router.post('/upload', authenticateToken, upload.fields([{ name: 'file', maxCoun
   }
 });
 
+// GET /api/v1/books/files/covers/:filename (Secure Cover Delivery with Traversal Guard)
+router.get('/files/covers/:filename', optionalAuth, (req: Request, res: Response) => {
+  const safeFilename = path.basename(req.params.filename);
+  const targetPath = path.join(serverConfig.dirs.covers, safeFilename);
+  const resolvedPath = path.resolve(targetPath);
+  const coversDir = path.resolve(serverConfig.dirs.covers);
+
+  if (!resolvedPath.startsWith(coversDir) || !fs.existsSync(resolvedPath)) {
+    return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'صورة الغلاف غير موجودة.' } });
+  }
+
+  res.sendFile(resolvedPath);
+});
+
+// GET /api/v1/books/files/digital/:filename (Secure Digital File Direct Stream with Traversal Guard)
+router.get('/files/digital/:filename', authenticateToken, (req: Request, res: Response) => {
+  const safeFilename = path.basename(req.params.filename);
+  const targetPath = path.join(serverConfig.dirs.digital, safeFilename);
+  const resolvedPath = path.resolve(targetPath);
+  const digitalDir = path.resolve(serverConfig.dirs.digital);
+
+  if (!resolvedPath.startsWith(digitalDir) || !fs.existsSync(resolvedPath)) {
+    return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'الملف الرقمي غير موجود.' } });
+  }
+
+  res.sendFile(resolvedPath);
+});
+
 // GET /api/v1/books/:id/file (Secure File Delivery with HTTP Range Streaming and Path Traversal Protection)
 router.get('/:id/file', authenticateToken, async (req: Request, res: Response) => {
   const { id } = req.params;

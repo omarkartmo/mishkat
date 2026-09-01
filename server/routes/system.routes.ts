@@ -118,6 +118,20 @@ backupRouter.get('/', authenticateToken, requireRole('admin'), async (req: Reque
   }
 });
 
+// GET /api/v1/backups/:fileName/download (Admin only download with Traversal Guard)
+backupRouter.get('/:fileName/download', authenticateToken, requireRole('admin'), (req: Request, res: Response) => {
+  const safeFileName = path.basename(req.params.fileName);
+  const targetPath = path.join(serverConfig.dirs.backups, safeFileName);
+  const resolvedPath = path.resolve(targetPath);
+  const backupsDir = path.resolve(serverConfig.dirs.backups);
+
+  if (!resolvedPath.startsWith(backupsDir) || !fs.existsSync(resolvedPath)) {
+    return res.status(404).json({ success: false, error: { code: 'BACKUP_NOT_FOUND', message: 'ملف النسخة الاحتياطية غير موجود.' } });
+  }
+
+  res.download(resolvedPath, safeFileName);
+});
+
 export const systemRouter = Router();
 
 // POST /api/v1/system/reset-demo (Admin only with explicit confirmation)
