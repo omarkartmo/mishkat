@@ -37,6 +37,7 @@ import { LoginView } from './components/auth/LoginView';
 import { useAuth } from './context/AuthContext';
 import { categoryRepository } from './services/categoryRepository';
 import { bookRepository } from './services/bookRepository';
+import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function App() {
@@ -574,6 +575,22 @@ export default function App() {
     refreshAllState();
   };
 
+  // Central Server Settings Mutation (Phase 1.7 - Subtask 1)
+  const handleSaveConfig = async (updated: SystemConfig) => {
+    try {
+      const res = await apiClient.put('/settings', updated);
+      if (res.success) {
+        const savedConfig = res.data?.config || updated;
+        setConfig(savedConfig);
+        storage.saveConfig(savedConfig);
+      } else {
+        alert(res.error?.message || 'فشل حفظ إعدادات النظام في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'حدث خطأ أثناء الاتصال بالخادم المركزي لحفظ الإعدادات.');
+    }
+  };
+
   // Counts for sidebar badges
   const overdueLoansCount = (loans || []).filter((l) => l.status === 'overdue').length;
   const pendingSubmissionsCount = (submissions || []).filter((s) => s.status === 'pending').length;
@@ -943,10 +960,7 @@ export default function App() {
           {activeTab === 'settings' && currentUser.role === 'admin' && (
             <SystemSettingsView
               config={config}
-              onSaveConfig={(updated) => {
-                storage.saveConfig(updated);
-                refreshAllState();
-              }}
+              onSaveConfig={handleSaveConfig}
               onExportData={handleExportData}
               onResetData={handleResetData}
             />
