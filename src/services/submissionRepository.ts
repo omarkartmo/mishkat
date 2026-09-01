@@ -56,51 +56,63 @@ export class SubmissionRepository {
   }
 
   /**
-   * Approve a book submission (POST /api/v1/submissions/:id/approve)
+   * Review a book submission via canonical review endpoint (POST /api/v1/submissions/:id/review)
+   */
+  public async reviewSubmission(
+    id: string,
+    review: {
+      status: 'approved' | 'rejected';
+      adminFeedback?: string;
+      categoryId?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post(`/submissions/${id}/review`, review);
+    if (res.success) {
+      return {
+        success: true,
+        data: res.data,
+      };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'SUBMISSION_REVIEW_FAILED',
+        message: 'تعذر مراجعة الاقتراح في الخادم المركزي.',
+      },
+    };
+  }
+
+  /**
+   * Approve a book submission (POST /api/v1/submissions/:id/review)
    */
   public async approveSubmission(id: string, options?: { categoryId?: string; adminFeedback?: string }): Promise<{
     success: boolean;
     data?: any;
     error?: ApiError;
   }> {
-    const res = await apiClient.post(`/submissions/${id}/approve`, options || {});
-    if (res.success) {
-      return {
-        success: true,
-        data: res.data,
-      };
-    }
-    return {
-      success: false,
-      error: res.error || {
-        code: 'SUBMISSION_APPROVE_FAILED',
-        message: 'تعذر اعتماد الاقتراح في الخادم المركزي.',
-      },
-    };
+    return this.reviewSubmission(id, {
+      status: 'approved',
+      categoryId: options?.categoryId,
+      adminFeedback: options?.adminFeedback,
+    });
   }
 
   /**
-   * Reject a book submission (POST /api/v1/submissions/:id/reject)
+   * Reject a book submission (POST /api/v1/submissions/:id/review)
    */
   public async rejectSubmission(id: string, reason: string): Promise<{
     success: boolean;
     data?: any;
     error?: ApiError;
   }> {
-    const res = await apiClient.post(`/submissions/${id}/reject`, { reason });
-    if (res.success) {
-      return {
-        success: true,
-        data: res.data,
-      };
-    }
-    return {
-      success: false,
-      error: res.error || {
-        code: 'SUBMISSION_REJECT_FAILED',
-        message: 'تعذر رفض الاقتراح في الخادم المركزي.',
-      },
-    };
+    return this.reviewSubmission(id, {
+      status: 'rejected',
+      adminFeedback: reason,
+    });
   }
 }
 
