@@ -50,6 +50,7 @@ import { summaryRepository } from './services/summaryRepository';
 import { favoriteRepository } from './services/favoriteRepository';
 import { readingProgressRepository } from './services/readingProgressRepository';
 import { submissionRepository } from './services/submissionRepository';
+import { portalRepository } from './services/portalRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -119,8 +120,12 @@ export default function App() {
   const [isSubmissionsLoading, setIsSubmissionsLoading] = useState(false);
   const [submissionsError, setSubmissionsError] = useState<string | null>(null);
 
+  // Server-authoritative Academic Portals State (Phase 6.1 - Portals Migration)
+  const [portals, setPortals] = useState<WhitelistedPortal[]>([]);
+  const [isPortalsLoading, setIsPortalsLoading] = useState(false);
+  const [portalsError, setPortalsError] = useState<string | null>(null);
+
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
-  const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
   const [config, setConfig] = useState<SystemConfig>(() => storage.getConfig());
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -334,6 +339,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative portals (Phase 6.1 - Portals Migration)
+  const loadPortals = async () => {
+    setIsPortalsLoading(true);
+    try {
+      const res = await portalRepository.getPortals();
+      if (res.success && Array.isArray(res.data)) {
+        setPortals(res.data);
+        setPortalsError(null);
+      } else {
+        setPortalsError(res.error?.message || 'تعذر استرجاع بوابات المعرفة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setPortalsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بوابات المعرفة.');
+    } finally {
+      setIsPortalsLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -348,10 +371,9 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Portals, Config, Users)
+  // Helper to refresh legacy client storage domains (Config, Users)
   const refreshLegacyStorageState = (targetUser?: User) => {
     setUsers(storage.getUsers());
-    setPortals(storage.getPortals());
     setConfig(storage.getConfig());
   };
 
@@ -368,6 +390,7 @@ export default function App() {
     loadFavorites();
     loadReadingProgress();
     loadSubmissions();
+    loadPortals();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -384,6 +407,7 @@ export default function App() {
     loadFavorites();
     loadReadingProgress();
     loadSubmissions();
+    loadPortals();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
@@ -402,6 +426,7 @@ export default function App() {
       loadFavorites();
       loadReadingProgress();
       loadSubmissions();
+      loadPortals();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -437,6 +462,7 @@ export default function App() {
     loadFavorites();
     loadReadingProgress();
     loadSubmissions();
+    loadPortals();
   };
 
   const handleNavigateToTab = (tab: NavigationTab) => {
@@ -945,6 +971,61 @@ export default function App() {
     }
   };
 
+  // Portal Handlers (Phase 6.1 - Portals Migration)
+  const handleAddPortal = async (portal: Omit<WhitelistedPortal, 'id'>) => {
+    try {
+      const res = await portalRepository.createPortal(portal);
+      if (res.success) {
+        await loadPortals();
+      } else {
+        alert(res.error?.message || 'تعذر إضافة بوابة المعرفة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إضافة البوابة.');
+    }
+  };
+
+  const handleUpdatePortal = async (id: string, updates: Partial<WhitelistedPortal>) => {
+    try {
+      const res = await portalRepository.updatePortal(id, updates);
+      if (res.success) {
+        await loadPortals();
+      } else {
+        alert(res.error?.message || 'تعذر تحديث بوابة المعرفة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تحديث البوابة.');
+    }
+  };
+
+  const handleDeletePortal = async (id: string) => {
+    try {
+      const res = await portalRepository.deletePortal(id);
+      if (res.success) {
+        await loadPortals();
+      } else {
+        alert(res.error?.message || 'تعذر حذف بوابة المعرفة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حذف البوابة.');
+    }
+  };
+
+  const handleTogglePortalFeatured = async (id: string) => {
+    const portal = portals.find((p) => p.id === id);
+    if (!portal) return;
+    try {
+      const res = await portalRepository.togglePortalFeatured(portal);
+      if (res.success) {
+        await loadPortals();
+      } else {
+        alert(res.error?.message || 'تعذر تحديث حالة التمييز للبوابة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تحديث حالة التمييز للبوابة.');
+    }
+  };
+
   // Export JSON Database
   const handleExportData = () => {
     const dataStr = storage.exportDatabaseJSON();
@@ -1198,22 +1279,10 @@ export default function App() {
               currentUser={currentUser}
               categories={categories}
               onSubmitIngestion={handleSubmitIngestion}
-              onAddPortal={(portal) => {
-                storage.addWhitelistedPortal(portal);
-                refreshAllState();
-              }}
-              onDeletePortal={(id) => {
-                storage.deleteWhitelistedPortal(id);
-                refreshAllState();
-              }}
-              onUpdatePortal={(id, updates) => {
-                storage.updateWhitelistedPortal(id, updates);
-                refreshAllState();
-              }}
-              onToggleFeatured={(id) => {
-                storage.togglePortalFeatured(id);
-                refreshAllState();
-              }}
+              onAddPortal={handleAddPortal}
+              onDeletePortal={handleDeletePortal}
+              onUpdatePortal={handleUpdatePortal}
+              onToggleFeatured={handleTogglePortalFeatured}
             />
           )}
 
