@@ -48,6 +48,7 @@ import { noteRepository } from './services/noteRepository';
 import { bookmarkRepository } from './services/bookmarkRepository';
 import { summaryRepository } from './services/summaryRepository';
 import { favoriteRepository } from './services/favoriteRepository';
+import { readingProgressRepository } from './services/readingProgressRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -107,13 +108,15 @@ export default function App() {
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(false);
   const [favoritesError, setFavoritesError] = useState<string | null>(null);
 
+  // Server-authoritative Reading Progress State (Phase 1.7 - Reading Progress Migration)
+  const [readingProgress, setReadingProgress] = useState<Record<string, ReadingProgress>>({});
+  const [isReadingProgressLoading, setIsReadingProgressLoading] = useState(false);
+  const [readingProgressError, setReadingProgressError] = useState<string | null>(null);
+
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
   const [config, setConfig] = useState<SystemConfig>(() => storage.getConfig());
-  const [readingProgress, setReadingProgress] = useState<Record<string, { currentPage: number; totalPages: number; lastReadAt?: string; percentage?: number; isCompleted?: boolean }>>(() =>
-    currentUser ? storage.getReadingProgressMap(currentUser.id) : {}
-  );
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -290,6 +293,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative reading progress (Phase 1.7 - Reading Progress Migration)
+  const loadReadingProgress = async () => {
+    setIsReadingProgressLoading(true);
+    try {
+      const res = await readingProgressRepository.getReadingProgressMap();
+      if (res.success && res.data) {
+        setReadingProgress(res.data);
+        setReadingProgressError(null);
+      } else {
+        setReadingProgressError(res.error?.message || 'تعذر استرجاع سجل متابعة القراءة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setReadingProgressError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات متابعة القراءة.');
+    } finally {
+      setIsReadingProgressLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -310,10 +331,6 @@ export default function App() {
     setUsers(storage.getUsers());
     setPortals(storage.getPortals());
     setConfig(storage.getConfig());
-    const curr = targetUser || authUser || storage.getCurrentUser();
-    if (curr) {
-      setReadingProgress(storage.getReadingProgressMap(curr.id));
-    }
   };
 
   // Re-sync all state helper (Server-Authoritative Catalog + Legacy Storage Domains)
@@ -327,6 +344,7 @@ export default function App() {
     loadBookmarks();
     loadSummaries();
     loadFavorites();
+    loadReadingProgress();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -341,6 +359,7 @@ export default function App() {
     loadBookmarks();
     loadSummaries();
     loadFavorites();
+    loadReadingProgress();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
@@ -357,6 +376,7 @@ export default function App() {
       loadBookmarks();
       loadSummaries();
       loadFavorites();
+      loadReadingProgress();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -390,7 +410,7 @@ export default function App() {
     loadBookmarks();
     loadSummaries();
     loadFavorites();
-    setReadingProgress(storage.getReadingProgressMap(user.id));
+    loadReadingProgress();
   };
 
   const handleNavigateToTab = (tab: NavigationTab) => {
@@ -733,11 +753,21 @@ export default function App() {
     }
   };
 
-  // Reader Progress Save
-  const handleSaveReaderProgress = (page: number, totalPages: number) => {
+  // Reader Progress Save (Phase 1.7 - Reading Progress Migration)
+  const handleSaveReaderProgress = async (page: number, totalPages: number) => {
     if (!activeReadingBook) return;
-    storage.saveReadingProgressByBook(activeReadingBook.id, page, totalPages, currentUser.id);
-    setReadingProgress(storage.getReadingProgressMap(currentUser.id));
+    try {
+      const res = await readingProgressRepository.saveReadingProgress({
+        bookId: activeReadingBook.id,
+        currentPage: page,
+        totalPages,
+      });
+      if (res.success) {
+        await loadReadingProgress();
+      }
+    } catch (err) {
+      console.error('Error saving reading progress:', err);
+    }
   };
 
   // Reading Notes (Phase 1.7 - Notes Migration)
@@ -855,15 +885,31 @@ export default function App() {
     }
   };
 
-  // Reading progress dismiss & clear completed
-  const handleDismissReadingProgress = (bookId: string) => {
-    storage.dismissReadingProgress(bookId, currentUser.id);
-    setReadingProgress(storage.getReadingProgressMap(currentUser.id));
+  // Reading progress dismiss & clear completed (Phase 1.7 - Reading Progress Migration)
+  const handleDismissReadingProgress = async (bookId: string) => {
+    try {
+      const res = await readingProgressRepository.dismissReadingProgress(bookId);
+      if (res.success) {
+        await loadReadingProgress();
+      } else {
+        alert(res.error?.message || 'تعذر إخفاء تقدم القراءة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إخفاء تقدم القراءة.');
+    }
   };
 
-  const handleClearCompletedProgress = () => {
-    storage.clearCompletedReading(currentUser.id);
-    setReadingProgress(storage.getReadingProgressMap(currentUser.id));
+  const handleClearCompletedProgress = async () => {
+    try {
+      const res = await readingProgressRepository.clearCompletedReading();
+      if (res.success) {
+        await loadReadingProgress();
+      } else {
+        alert(res.error?.message || 'تعذر تنظيف سجلات القراءة المكتملة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تنظيف سجلات القراءة.');
+    }
   };
 
   // Export JSON Database
