@@ -42,6 +42,7 @@ import { bookRepository } from './services/bookRepository';
 import { loanRepository } from './services/loanRepository';
 import { loanRequestRepository } from './services/loanRequestRepository';
 import { notificationRepository } from './services/notificationRepository';
+import { noteRepository } from './services/noteRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -81,6 +82,11 @@ export default function App() {
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
+  // Server-authoritative Student Notes State (Phase 1.7 - Notes Migration)
+  const [studentNotes, setStudentNotes] = useState<StudentNote[]>([]);
+  const [isNotesLoading, setIsNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
+
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
@@ -88,7 +94,6 @@ export default function App() {
   const [readingProgress, setReadingProgress] = useState<Record<string, { currentPage: number; totalPages: number; lastReadAt?: string; percentage?: number; isCompleted?: boolean }>>(() =>
     currentUser ? storage.getReadingProgressMap(currentUser.id) : {}
   );
-  const [studentNotes, setStudentNotes] = useState<StudentNote[]>(() => currentUser ? storage.getStudentNotes(currentUser.id) : []);
   const [physicalBookmarks, setPhysicalBookmarks] = useState<any[]>(() => currentUser ? storage.getPhysicalBookmarks(currentUser.id) : []);
   const [bookSummaries, setBookSummaries] = useState<any[]>(() => currentUser ? storage.getBookSummaries(currentUser.id) : []);
   const [favorites, setFavorites] = useState<string[]>(() => currentUser ? storage.getFavorites(currentUser.id) : []);
@@ -196,6 +201,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative notes (Phase 1.7 - Notes Migration)
+  const loadNotes = async () => {
+    setIsNotesLoading(true);
+    try {
+      const res = await noteRepository.getNotes();
+      if (res.success && Array.isArray(res.data)) {
+        setStudentNotes(res.data);
+        setNotesError(null);
+      } else {
+        setNotesError(res.error?.message || 'تعذر استرجاع الفوائد والتدوينات من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setNotesError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات التدوينات.');
+    } finally {
+      setIsNotesLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -210,7 +233,7 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Notes, Portals, Submissions, etc.)
+  // Helper to refresh legacy client storage domains (Portals, Submissions, Bookmarks, etc.)
   const refreshLegacyStorageState = (targetUser?: User) => {
     setSubmissions(storage.getSubmissions());
     setUsers(storage.getUsers());
@@ -219,7 +242,6 @@ export default function App() {
     const curr = targetUser || authUser || storage.getCurrentUser();
     if (curr) {
       setReadingProgress(storage.getReadingProgressMap(curr.id));
-      setStudentNotes(storage.getStudentNotes(curr.id));
       setPhysicalBookmarks(storage.getPhysicalBookmarks(curr.id));
       setBookSummaries(storage.getBookSummaries(curr.id));
       setFavorites(storage.getFavorites(curr.id));
@@ -233,6 +255,7 @@ export default function App() {
     loadLoans();
     loadLoanRequests();
     loadNotifications();
+    loadNotes();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -243,18 +266,20 @@ export default function App() {
     loadLoans();
     loadLoanRequests();
     loadNotifications();
+    loadNotes();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
   }, []);
 
-  // Update tab and reload loans/requests/notifications if authenticated user changes
+  // Update tab and reload server-authoritative data if authenticated user changes
   useEffect(() => {
     if (authUser) {
       setActiveTab(authUser.role === 'student' ? 'student_portal' : 'overview');
       loadLoans();
       loadLoanRequests();
       loadNotifications();
+      loadNotes();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -284,8 +309,8 @@ export default function App() {
       setActiveTab('overview');
     }
     loadNotifications();
+    loadNotes();
     setReadingProgress(storage.getReadingProgressMap(user.id));
-    setStudentNotes(storage.getStudentNotes(user.id));
     setPhysicalBookmarks(storage.getPhysicalBookmarks(user.id));
     setBookSummaries(storage.getBookSummaries(user.id));
     setFavorites(storage.getFavorites(user.id));
@@ -638,20 +663,51 @@ export default function App() {
     setReadingProgress(storage.getReadingProgressMap(currentUser.id));
   };
 
-  // Reading Notes
-  const handleAddNote = (note: Omit<StudentNote, 'id' | 'createdAt'>) => {
-    storage.addStudentNote({ ...note, studentId: currentUser.id });
-    setStudentNotes(storage.getStudentNotes(currentUser.id));
+  // Reading Notes (Phase 1.7 - Notes Migration)
+  const handleAddNote = async (note: Omit<StudentNote, 'id' | 'createdAt'>) => {
+    try {
+      const res = await noteRepository.saveNote({ ...note, studentId: currentUser.id });
+      if (res.success) {
+        await loadNotes();
+      } else {
+        alert(res.error?.message || 'تعذر حفظ الفائدة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حفظ الفائدة.');
+    }
   };
 
-  const handleUpdateNote = (noteId: string, updates: Partial<StudentNote>) => {
-    storage.updateStudentNote(noteId, updates);
-    setStudentNotes(storage.getStudentNotes(currentUser.id));
+  const handleUpdateNote = async (noteId: string, updates: Partial<StudentNote>) => {
+    const existingNote = studentNotes.find((n) => n.id === noteId);
+    if (!existingNote) return;
+    try {
+      const res = await noteRepository.saveNote({
+        ...existingNote,
+        ...updates,
+        id: noteId,
+        studentId: existingNote.studentId || currentUser.id,
+      });
+      if (res.success) {
+        await loadNotes();
+      } else {
+        alert(res.error?.message || 'تعذر تحديث الفائدة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تحديث الفائدة.');
+    }
   };
 
-  const handleDeleteNote = (noteId: string) => {
-    storage.deleteStudentNote(noteId);
-    setStudentNotes(storage.getStudentNotes(currentUser.id));
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      const res = await noteRepository.deleteNote(noteId);
+      if (res.success) {
+        await loadNotes();
+      } else {
+        alert(res.error?.message || 'تعذر حذف الفائدة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حذف الفائدة.');
+    }
   };
 
   // Physical Bookmarks Handlers
