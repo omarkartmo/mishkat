@@ -3,7 +3,7 @@
  * Provides server-authoritative Physical and Digital Book data access and mutations via REST API.
  */
 
-import { apiClient, ApiError } from './apiClient';
+import { apiClient, ApiError, ApiResponse } from './apiClient';
 import { PhysicalBook, DigitalBook } from '../types/library';
 
 export interface BookQueryParams {
@@ -378,58 +378,10 @@ export class BookRepository {
   }
 
   /**
-   * Fetch digital book file as authorized Blob (passes JWT Authorization header)
+   * Fetch digital book file as authorized Blob (passes JWT Authorization header via apiClient)
    */
-  public async fetchBookFileBlob(bookId: string): Promise<{
-    success: boolean;
-    data?: Blob;
-    contentType?: string;
-    error?: ApiError;
-  }> {
-    const token = apiClient.getToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    try {
-      const response = await fetch(`/api/v1/books/${bookId}/file`, {
-        method: 'GET',
-        headers,
-      });
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: {
-            code: `HTTP_${response.status}`,
-            message: response.status === 401
-              ? 'غير مصرح لك بتحميل أو فتح هذا المرجع الرقمي. يرجى تسجيل الدخول.'
-              : response.status === 403
-              ? 'ليس لديك صلاحية للوصول إلى هذا الملف الرقمي.'
-              : 'تعذر جلب ملف المرجع الرقمي من الخادم المركزي.',
-            status: response.status,
-          },
-        };
-      }
-
-      const contentType = response.headers.get('Content-Type') || 'application/pdf';
-      const blob = await response.blob();
-      return {
-        success: true,
-        data: blob,
-        contentType,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        error: {
-          code: 'NETWORK_ERROR',
-          message: err?.message || 'تعذر الاتصال بالخادم المركزي لتحميل المرجع الرقمي.',
-          status: 0,
-        },
-      };
-    }
+  public async fetchBookFileBlob(bookId: string): Promise<ApiResponse<Blob>> {
+    return apiClient.getBlob(`/books/${bookId}/file`);
   }
 }
 

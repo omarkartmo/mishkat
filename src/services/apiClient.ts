@@ -44,6 +44,14 @@ class ApiClient {
     }
   }
 
+  public getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    return headers;
+  }
+
   public getToken(): string | null {
     return this.token;
   }
@@ -213,6 +221,61 @@ class ApiClient {
         error: {
           code: 'UPLOAD_FAILED',
           message: 'فشل رفع الملف إلى الخادم المركزي.',
+          status: 0,
+        },
+      };
+    }
+  }
+
+  public async getBlob(endpoint: string): Promise<ApiResponse<Blob>> {
+    const headers = this.getAuthHeaders();
+
+    try {
+      const url = endpoint.startsWith('/api/') ? endpoint : `${API_BASE_URL}${endpoint}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+      });
+
+      if (response.status === 401) {
+        this.notifyUnauthorized();
+      }
+
+      if (!response.ok) {
+        const json = await response.json().catch(() => null);
+        const errorData: ApiError = {
+          code: json?.error?.code || `HTTP_${response.status}`,
+          message:
+            json?.error?.message ||
+            (response.status === 401
+              ? 'انتهت صلاحية الجلسة أو تعذر التحقق من الهوية.'
+              : response.status === 403
+              ? 'ليس لديك صلاحية للوصول إلى هذا الملف الرقمي على الخادم المركزي.'
+              : response.status === 404
+              ? 'ملف الكتاب الرقمي غير موجود على الخادم المركزي.'
+              : 'تعذر تحميل الملف الرقمي من الخادم المركزي.'),
+          status: response.status,
+        };
+
+        return {
+          success: false,
+          error: errorData,
+        };
+      }
+
+      const blob = await response.blob();
+      return {
+        success: true,
+        data: blob,
+      };
+    } catch (err: any) {
+      console.warn(`[ApiClient] getBlob request failed for ${endpoint}:`, err.message);
+      return {
+        success: false,
+        error: {
+          code: 'NETWORK_ERROR',
+          message:
+            'تعذر الاتصال بالخادم المركزي. يرجى التحقق من اتصال الشبكة والمحاولة مرة أخرى.',
           status: 0,
         },
       };
