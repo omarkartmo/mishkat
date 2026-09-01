@@ -195,4 +195,105 @@ router.post('/:id/review', authenticateToken, requireRole('admin', 'librarian'),
   }
 });
 
+// POST /api/v1/submissions/:id/approve
+router.post('/:id/approve', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { categoryId, adminFeedback } = req.body;
+  try {
+    const reviewedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    await db.transaction(async (client) => {
+      const { rows: subRows } = await client.query('SELECT * FROM pending_submissions WHERE id = $1', [id]);
+      if (subRows.length === 0) {
+        throw new Error('الطلب غير موجود.');
+      }
+      const sub = subRows[0];
+
+      await client.query(`
+        UPDATE pending_submissions SET
+          status = 'approved', admin_feedback = $1, reviewed_at = $2, reviewed_by = $3
+        WHERE id = $4
+      `, [adminFeedback || null, reviewedAt, req.user!.id, id]);
+
+      const bookId = `dig-sub-${Date.now()}`;
+      await client.query(`
+        INSERT INTO books (
+          id, type, title, author, category_id, format, file_size, file_url,
+          pages_count, summary, source_origin, uploaded_by, tags, download_count, read_count
+        ) VALUES ($1, 'digital', $2, $3, $4, $5, '2.1 MB', $6, $7, $8, $9, $10, ARRAY['مكتبة معتمدة', 'مُعتمد حديثاً'], 0, 0)
+      `, [
+        bookId,
+        sub.title,
+        sub.author,
+        categoryId || sub.suggested_category_id || 'cat-general',
+        sub.format || 'pdf',
+        sub.source_url || null,
+        sub.pages_estimated || 100,
+        sub.summary || '',
+        sub.source_portal_name,
+        sub.student_id,
+      ]);
+
+      await client.query(`
+        INSERT INTO notifications (
+          id, recipient_id, recipient_role, title, message, type, target_tab, target_entity_id, is_read, created_at
+        ) VALUES ($1, $2, 'student', $3, $4, 'book_approved', 'portals', $5, false, $6)
+      `, [
+        `notif-${Date.now()}`,
+        sub.student_id,
+        'تمت الموافقة على إضافة الكتاب',
+        `تم اعتماد كتاب "${sub.title}" وإضافته للمستودع الرقمي بالمكتبة.`,
+        id,
+        reviewedAt,
+      ]);
+    });
+
+    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'APPROVE_SUBMISSION', 'submission', id, { categoryId }, req);
+    res.json({ success: true, data: { message: 'تم اعتماد الاقتراح وإضافته للمستودع الرقمي بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/submissions/:id/reject
+router.post('/:id/reject', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { reason = 'لم يتم استيفاء شروط النشر الأكاديمي' } = req.body;
+  try {
+    const reviewedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    await db.transaction(async (client) => {
+      const { rows: subRows } = await client.query('SELECT * FROM pending_submissions WHERE id = $1', [id]);
+      if (subRows.length === 0) {
+        throw new Error('الطلب غير موجود.');
+      }
+      const sub = subRows[0];
+
+      await client.query(`
+        UPDATE pending_submissions SET
+          status = 'rejected', admin_feedback = $1, reviewed_at = $2, reviewed_by = $3
+        WHERE id = $4
+      `, [reason, reviewedAt, req.user!.id, id]);
+
+      await client.query(`
+        INSERT INTO notifications (
+          id, recipient_id, recipient_role, title, message, type, target_tab, target_entity_id, is_read, created_at
+        ) VALUES ($1, $2, 'student', $3, $4, 'book_rejected', 'portals', $5, false, $6)
+      `, [
+        `notif-${Date.now()}`,
+        sub.student_id,
+        'تحديث بخصوص الكتاب المقترح',
+        `نعتذر، لم تتم الموافقة على إضافة كتاب "${sub.title}". السبب: ${reason}`,
+        id,
+        reviewedAt,
+      ]);
+    });
+
+    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'REJECT_SUBMISSION', 'submission', id, { reason }, req);
+    res.json({ success: true, data: { message: 'تم رفض الاقتراح بنجاح وإشعار الطالب.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 export default router;

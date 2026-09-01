@@ -49,6 +49,7 @@ import { bookmarkRepository } from './services/bookmarkRepository';
 import { summaryRepository } from './services/summaryRepository';
 import { favoriteRepository } from './services/favoriteRepository';
 import { readingProgressRepository } from './services/readingProgressRepository';
+import { submissionRepository } from './services/submissionRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -113,7 +114,11 @@ export default function App() {
   const [isReadingProgressLoading, setIsReadingProgressLoading] = useState(false);
   const [readingProgressError, setReadingProgressError] = useState<string | null>(null);
 
-  const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
+  // Server-authoritative Submissions State (Phase 1.7 - Submissions Migration)
+  const [submissions, setSubmissions] = useState<PendingBookSubmission[]>([]);
+  const [isSubmissionsLoading, setIsSubmissionsLoading] = useState(false);
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
   const [config, setConfig] = useState<SystemConfig>(() => storage.getConfig());
@@ -311,6 +316,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative submissions (Phase 1.7 - Submissions Migration)
+  const loadSubmissions = async () => {
+    setIsSubmissionsLoading(true);
+    try {
+      const res = await submissionRepository.getSubmissions();
+      if (res.success && Array.isArray(res.data)) {
+        setSubmissions(res.data);
+        setSubmissionsError(null);
+      } else {
+        setSubmissionsError(res.error?.message || 'تعذر استرجاع قائمة الاقتراحات من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setSubmissionsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الاقتراحات.');
+    } finally {
+      setIsSubmissionsLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -325,9 +348,8 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Portals, Submissions, etc.)
+  // Helper to refresh legacy client storage domains (Portals, Config, Users)
   const refreshLegacyStorageState = (targetUser?: User) => {
-    setSubmissions(storage.getSubmissions());
     setUsers(storage.getUsers());
     setPortals(storage.getPortals());
     setConfig(storage.getConfig());
@@ -345,6 +367,7 @@ export default function App() {
     loadSummaries();
     loadFavorites();
     loadReadingProgress();
+    loadSubmissions();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -360,6 +383,7 @@ export default function App() {
     loadSummaries();
     loadFavorites();
     loadReadingProgress();
+    loadSubmissions();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
@@ -377,6 +401,7 @@ export default function App() {
       loadSummaries();
       loadFavorites();
       loadReadingProgress();
+      loadSubmissions();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -411,6 +436,7 @@ export default function App() {
     loadSummaries();
     loadFavorites();
     loadReadingProgress();
+    loadSubmissions();
   };
 
   const handleNavigateToTab = (tab: NavigationTab) => {
@@ -594,10 +620,18 @@ export default function App() {
     }
   };
 
-  // Book Ingestion Submission
-  const handleSubmitIngestion = (submissionData: any) => {
-    storage.addSubmission(submissionData);
-    refreshAllState();
+  // Book Ingestion Submission (Phase 1.7 - Submissions Migration)
+  const handleSubmitIngestion = async (submissionData: any) => {
+    try {
+      const res = await submissionRepository.createSubmission(submissionData);
+      if (res.success) {
+        await loadSubmissions();
+      } else {
+        alert(res.error?.message || 'تعذر إرسال اقتراح الكتاب إلى الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إرسال اقتراح الكتاب.');
+    }
   };
 
   // Server-Authoritative Book Operations (Phase 1.7.3-B)
@@ -675,32 +709,31 @@ export default function App() {
     setActiveReadingBook(book);
   };
 
-  // Admin Approval Queue Actions
+  // Admin Approval Queue Actions (Phase 1.7 - Submissions Migration)
   const handleApproveSubmission = async (submissionId: string, categoryId?: string) => {
-    const sub = submissions.find((s) => s.id === submissionId);
-    if (sub) {
-      const catId = categoryId || sub.suggestedCategoryId;
-      await bookRepository.createDigitalBook({
-        title: sub.title,
-        author: sub.author,
-        categoryId: catId,
-        format: sub.format,
-        fileSize: '8.5 MB',
-        pagesCount: sub.pagesEstimated || 250,
-        sourceOrigin: sub.sourcePortalName,
-        summary: sub.summary,
-        tags: ['مرفوع من الطالب', sub.sourcePortalName],
-        uploadedBy: sub.studentId,
-      });
+    try {
+      const res = await submissionRepository.approveSubmission(submissionId, { categoryId });
+      if (res.success) {
+        await Promise.all([loadSubmissions(), loadBooks(), loadNotifications()]);
+      } else {
+        alert(res.error?.message || 'تعذر اعتماد الاقتراح في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء اعتماد الاقتراح.');
     }
-    storage.approveSubmission(submissionId, categoryId);
-    await loadBooks();
-    refreshAllState();
   };
 
-  const handleRejectSubmission = (submissionId: string, reason: string) => {
-    storage.rejectSubmission(submissionId, reason);
-    refreshAllState();
+  const handleRejectSubmission = async (submissionId: string, reason: string) => {
+    try {
+      const res = await submissionRepository.rejectSubmission(submissionId, reason);
+      if (res.success) {
+        await Promise.all([loadSubmissions(), loadNotifications()]);
+      } else {
+        alert(res.error?.message || 'تعذر رفض الاقتراح في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء رفض الاقتراح.');
+    }
   };
 
   // Category Server-Authoritative Operations (Phase 1.7.3-A)
