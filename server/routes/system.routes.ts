@@ -122,14 +122,15 @@ backupRouter.get('/', authenticateToken, requireRole('admin'), async (req: Reque
 backupRouter.get('/:fileName/download', authenticateToken, requireRole('admin'), (req: Request, res: Response) => {
   const safeFileName = path.basename(req.params.fileName);
   const targetPath = path.join(serverConfig.dirs.backups, safeFileName);
-  const resolvedPath = path.resolve(targetPath);
-  const backupsDir = path.resolve(serverConfig.dirs.backups);
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedBackups = path.resolve(serverConfig.dirs.backups);
+  const relative = path.relative(resolvedBackups, resolvedTarget);
 
-  if (!resolvedPath.startsWith(backupsDir) || !fs.existsSync(resolvedPath)) {
+  if (relative.startsWith('..') || path.isAbsolute(relative) || !fs.existsSync(resolvedTarget)) {
     return res.status(404).json({ success: false, error: { code: 'BACKUP_NOT_FOUND', message: 'ملف النسخة الاحتياطية غير موجود.' } });
   }
 
-  res.download(resolvedPath, safeFileName);
+  res.download(resolvedTarget, safeFileName);
 });
 
 export const systemRouter = Router();

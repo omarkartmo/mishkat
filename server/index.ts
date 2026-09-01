@@ -156,9 +156,15 @@ export async function startServer() {
     }
   });
 
-  // Graceful Process Termination Handler
+  // Graceful Process Termination Handler with safety timeout
   const shutdown = async (signal: string) => {
     console.log(`\n[Server] Received ${signal}. Starting graceful shutdown...`);
+    const forceExitTimeout = setTimeout(() => {
+      console.warn('[Server] Forceful shutdown triggered after timeout.');
+      process.exit(0);
+    }, 5000);
+    forceExitTimeout.unref();
+
     server.close(async () => {
       console.log('[Server] HTTP listener closed.');
       try {

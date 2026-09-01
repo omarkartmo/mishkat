@@ -378,32 +378,35 @@ router.post('/upload', authenticateToken, upload.fields([{ name: 'file', maxCoun
   }
 });
 
+function isWithinDirectory(targetPath: string, parentDir: string): boolean {
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedParent = path.resolve(parentDir);
+  const relative = path.relative(resolvedParent, resolvedTarget);
+  return !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
 // GET /api/v1/books/files/covers/:filename (Secure Cover Delivery with Traversal Guard)
 router.get('/files/covers/:filename', optionalAuth, (req: Request, res: Response) => {
   const safeFilename = path.basename(req.params.filename);
   const targetPath = path.join(serverConfig.dirs.covers, safeFilename);
-  const resolvedPath = path.resolve(targetPath);
-  const coversDir = path.resolve(serverConfig.dirs.covers);
 
-  if (!resolvedPath.startsWith(coversDir) || !fs.existsSync(resolvedPath)) {
+  if (!isWithinDirectory(targetPath, serverConfig.dirs.covers) || !fs.existsSync(targetPath)) {
     return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'صورة الغلاف غير موجودة.' } });
   }
 
-  res.sendFile(resolvedPath);
+  res.sendFile(path.resolve(targetPath));
 });
 
 // GET /api/v1/books/files/digital/:filename (Secure Digital File Direct Stream with Traversal Guard)
 router.get('/files/digital/:filename', authenticateToken, (req: Request, res: Response) => {
   const safeFilename = path.basename(req.params.filename);
   const targetPath = path.join(serverConfig.dirs.digital, safeFilename);
-  const resolvedPath = path.resolve(targetPath);
-  const digitalDir = path.resolve(serverConfig.dirs.digital);
 
-  if (!resolvedPath.startsWith(digitalDir) || !fs.existsSync(resolvedPath)) {
+  if (!isWithinDirectory(targetPath, serverConfig.dirs.digital) || !fs.existsSync(targetPath)) {
     return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'الملف الرقمي غير موجود.' } });
   }
 
-  res.sendFile(resolvedPath);
+  res.sendFile(path.resolve(targetPath));
 });
 
 // GET /api/v1/books/:id/file (Secure File Delivery with HTTP Range Streaming and Path Traversal Protection)
@@ -436,9 +439,7 @@ router.get('/:id/file', authenticateToken, async (req: Request, res: Response) =
 
     // Path Traversal Security Verification
     const resolvedPath = path.resolve(targetFilePath);
-    const digitalDir = path.resolve(serverConfig.dirs.digital);
-    const booksDir = path.resolve(serverConfig.dirs.books);
-    if (!resolvedPath.startsWith(digitalDir) && !resolvedPath.startsWith(booksDir)) {
+    if (!isWithinDirectory(resolvedPath, serverConfig.dirs.digital) && !isWithinDirectory(resolvedPath, serverConfig.dirs.books)) {
       return res.status(403).json({ success: false, error: { code: 'ACCESS_DENIED', message: 'مسار الملف غير مصرح به.' } });
     }
 

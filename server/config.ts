@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs';
 
 // Root data directory outside source code
-const ROOT_DATA_DIR = process.env.DATA_DIRECTORY || path.join(process.cwd(), 'LibraryData');
+const ROOT_DATA_DIR = process.env.DATA_DIRECTORY || process.env.CENTRAL_STORAGE_DIR || path.join(process.cwd(), 'LibraryData');
 
 // Ensure storage directories exist (Central Server File Storage only)
 const DIRS = {
