@@ -1,4 +1,5 @@
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { PGlite } from '@electric-sql/pglite';
 import { serverConfig } from '../config';
 
 // Interface for Database abstraction
@@ -27,124 +28,153 @@ export class DatabaseUnavailableError extends Error {
 
 class PostgresDatabaseEngine implements IDatabase {
   private pgPool: Pool | null = null;
+  private pgliteInstance: PGlite | null = null;
   private isConnected: boolean = false;
-  private connectionError: Error | null = null;
+  private engineType: 'external_pg' | 'embedded_pg' | null = null;
 
   public async connect(): Promise<void> {
-    const dbUrl = serverConfig.databaseUrl && serverConfig.databaseUrl.trim() !== ''
-      ? serverConfig.databaseUrl
-      : 'postgresql://postgres:postgres@localhost:5432/mishkat_db';
+    const hasExternalUrl = Boolean(serverConfig.databaseUrl && serverConfig.databaseUrl.trim() !== '');
 
+    if (hasExternalUrl) {
+      try {
+        this.pgPool = new Pool({
+          connectionString: serverConfig.databaseUrl,
+          max: 20,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 5000,
+        });
+
+        this.pgPool.on('error', (err) => {
+          console.error('⚠️ [PostgreSQL Pool Error]', err.message);
+          this.isConnected = false;
+        });
+
+        const client = await this.pgPool.connect();
+        client.release();
+
+        this.isConnected = true;
+        this.engineType = 'external_pg';
+        console.log('✅ [Database] PostgreSQL External Central Server Connected Successfully.');
+        return;
+      } catch (err: any) {
+        console.warn('⚠️ [Database] External PostgreSQL connection failed:', err.message);
+        if (this.pgPool) {
+          await this.pgPool.end().catch(() => {});
+          this.pgPool = null;
+        }
+      }
+    }
+
+    // Initialize embedded central PostgreSQL engine (PGlite)
     try {
-      this.pgPool = new Pool({
-        connectionString: dbUrl,
-        max: 20, // Concurrency pool for 10-50 LAN workstations
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
-      });
-
-      this.pgPool.on('error', (err) => {
-        console.error('⚠️ [PostgreSQL Pool Error]', err.message);
-        this.isConnected = false;
-        this.connectionError = err;
-      });
-
-      // Test connection with timeout
-      const client = await this.pgPool.connect();
-      client.release();
-
+      this.pgliteInstance = new PGlite(serverConfig.dirs.pgdata);
       this.isConnected = true;
-      this.connectionError = null;
-      console.log('✅ [Database] PostgreSQL Central Server Connected Successfully.');
-    } catch (err: any) {
+      this.engineType = 'embedded_pg';
+      console.log(`✅ [Database] Embedded Central PostgreSQL Engine (PGlite) Connected. Storage: ${serverConfig.dirs.pgdata}`);
+    } catch (pgliteErr: any) {
       this.isConnected = false;
-      this.connectionError = err;
-      console.error('❌ [Database] PostgreSQL connection failed:', err.message);
-      console.error('⚠️ [Database Policy] STRICT ISOLATION ENFORCED: No JSON/local fallback is permitted. Queries will return 503.');
+      this.engineType = null;
+      console.error('❌ [Database] Failed to initialize embedded PostgreSQL engine:', pgliteErr.message);
+      throw new DatabaseUnavailableError();
     }
   }
 
   public isPgConnected(): boolean {
-    return this.isConnected && this.pgPool !== null;
+    return this.isConnected && (this.pgPool !== null || this.pgliteInstance !== null);
   }
 
   public async query<T extends QueryResultRow = any>(text: string, params: any[] = []): Promise<{ rows: T[]; rowCount: number }> {
-    if (!this.pgPool || !this.isConnected) {
-      // Attempt reconnect if pool was down
+    if (!this.isConnected || (!this.pgPool && !this.pgliteInstance)) {
+      await this.connect();
+    }
+
+    if (this.engineType === 'external_pg' && this.pgPool) {
       try {
-        if (!this.pgPool) {
-          await this.connect();
-        } else {
-          const testClient = await this.pgPool.connect();
-          testClient.release();
-          this.isConnected = true;
+        const res: QueryResult<T> = await this.pgPool.query<T>(text, params);
+        return { rows: res.rows, rowCount: res.rowCount ?? 0 };
+      } catch (pgErr: any) {
+        if (pgErr.code === 'ECONNREFUSED' || pgErr.code === '57P01' || pgErr.code === '08006' || pgErr.code === '08001') {
+          this.isConnected = false;
+          throw new DatabaseUnavailableError();
         }
-      } catch (reconnectErr) {
-        throw new DatabaseUnavailableError();
+        console.error('[PostgreSQL Query Error]', pgErr.message, '\nQuery:', text);
+        throw pgErr;
       }
     }
 
-    if (!this.pgPool || !this.isConnected) {
-      throw new DatabaseUnavailableError();
+    if (this.engineType === 'embedded_pg' && this.pgliteInstance) {
+      try {
+        const res = await this.pgliteInstance.query<T>(text, params);
+        const rowCount = res.affectedRows !== undefined ? res.affectedRows : res.rows.length;
+        return { rows: res.rows, rowCount };
+      } catch (pgErr: any) {
+        console.error('[Embedded PostgreSQL Query Error]', pgErr.message, '\nQuery:', text);
+        throw pgErr;
+      }
     }
 
-    try {
-      const res: QueryResult<T> = await this.pgPool.query<T>(text, params);
-      return { rows: res.rows, rowCount: res.rowCount ?? 0 };
-    } catch (pgErr: any) {
-      // Check if it's a connection loss
-      if (pgErr.code === 'ECONNREFUSED' || pgErr.code === '57P01' || pgErr.code === '08006' || pgErr.code === '08001') {
-        this.isConnected = false;
-        throw new DatabaseUnavailableError();
-      }
-      console.error('[PostgreSQL Query Error]', pgErr.message, '\nQuery:', text);
-      throw pgErr;
-    }
+    throw new DatabaseUnavailableError();
   }
 
   public async transaction<T>(callback: (client: IDatabaseClient) => Promise<T>): Promise<T> {
-    if (!this.pgPool || !this.isConnected) {
-      throw new DatabaseUnavailableError();
+    if (!this.isConnected || (!this.pgPool && !this.pgliteInstance)) {
+      await this.connect();
     }
 
-    let client: PoolClient;
-    try {
-      client = await this.pgPool.connect();
-    } catch (connErr) {
-      this.isConnected = false;
-      throw new DatabaseUnavailableError();
-    }
-
-    try {
-      await client.query('BEGIN');
-      const dbClient: IDatabaseClient = {
-        query: async (text, params) => {
-          const res = await client.query(text, params);
-          return { rows: res.rows, rowCount: res.rowCount ?? 0 };
-        },
-      };
-      const result = await callback(dbClient);
-      await client.query('COMMIT');
-      return result;
-    } catch (err: any) {
+    if (this.engineType === 'external_pg' && this.pgPool) {
+      const client: PoolClient = await this.pgPool.connect();
       try {
-        await client.query('ROLLBACK');
-      } catch (rollbackErr) {
-        console.error('[PostgreSQL Rollback Error]', rollbackErr);
+        await client.query('BEGIN');
+        const dbClient: IDatabaseClient = {
+          query: async (text, params) => {
+            const res = await client.query(text, params);
+            return { rows: res.rows, rowCount: res.rowCount ?? 0 };
+          },
+        };
+        const result = await callback(dbClient);
+        await client.query('COMMIT');
+        return result;
+      } catch (err: any) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackErr) {
+          console.error('[PostgreSQL Rollback Error]', rollbackErr);
+        }
+        throw err;
+      } finally {
+        client.release();
       }
-      throw err;
-    } finally {
-      client.release();
     }
+
+    if (this.engineType === 'embedded_pg' && this.pgliteInstance) {
+      return this.pgliteInstance.transaction(async (tx) => {
+        const dbClient: IDatabaseClient = {
+          query: async (text, params) => {
+            const res = await tx.query(text, params);
+            const rowCount = res.affectedRows !== undefined ? res.affectedRows : res.rows.length;
+            return { rows: res.rows as any, rowCount };
+          },
+        };
+        return await callback(dbClient);
+      });
+    }
+
+    throw new DatabaseUnavailableError();
   }
 
   public async close(): Promise<void> {
     if (this.pgPool) {
       await this.pgPool.end();
       this.pgPool = null;
-      this.isConnected = false;
     }
+    if (this.pgliteInstance) {
+      await this.pgliteInstance.close();
+      this.pgliteInstance = null;
+    }
+    this.isConnected = false;
+    this.engineType = null;
   }
 }
 
 export const db = new PostgresDatabaseEngine();
+

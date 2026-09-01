@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",

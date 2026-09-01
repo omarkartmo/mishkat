@@ -14,6 +14,7 @@ const DIRS = {
   backups: path.join(ROOT_DATA_DIR, 'backups'),
   logs: path.join(ROOT_DATA_DIR, 'logs'),
   temp: path.join(ROOT_DATA_DIR, 'temp'),
+  pgdata: path.join(ROOT_DATA_DIR, 'pgdata'),
 };
 
 // Create storage directories if they do not exist
