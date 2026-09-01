@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { StorageService } from './services/storageService';
 import {
   NavigationTab,
   User,
@@ -60,12 +59,11 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const { user: authUser, isAuthenticated, isLoading, login, logout, setUser: setAuthUser } = useAuth();
-  const [storage] = useState(() => StorageService.getInstance());
 
-  // Application State derived from Server Authenticated User
-  const currentUser: User = authUser || storage.getCurrentUser();
+  // Application State derived strictly from Server Authenticated User
+  const currentUser = authUser;
   const [activeTab, setActiveTab] = useState<NavigationTab>(() =>
-    currentUser?.role === 'student' ? 'student_portal' : 'overview'
+    authUser?.role === 'student' ? 'student_portal' : 'overview'
   );
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -419,12 +417,7 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Empty: all domains migrated)
-  const refreshLegacyStorageState = (targetUser?: User) => {
-    // All domains are server-authoritative
-  };
-
-  // Re-sync all state helper (Server-Authoritative Catalog + Repositories)
+  // Re-sync all state helper (Server-Authoritative Repositories)
   const refreshAllState = (targetUser?: User) => {
     loadCategories();
     loadBooks();
@@ -440,7 +433,6 @@ export default function App() {
     loadPortals();
     loadUsers();
     loadSettings();
-    refreshLegacyStorageState(targetUser);
   };
 
   // Synchronize with Central Server on mount
@@ -459,9 +451,6 @@ export default function App() {
     loadPortals();
     loadUsers();
     loadSettings();
-    storage.syncWithServer().then(() => {
-      refreshLegacyStorageState();
-    });
   }, []);
 
   // Update tab and reload server-authoritative data if authenticated user changes
@@ -480,7 +469,6 @@ export default function App() {
       loadPortals();
       loadUsers();
       loadSettings();
-      refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
 
