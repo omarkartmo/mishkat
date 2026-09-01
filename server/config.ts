@@ -24,24 +24,29 @@ Object.values(DIRS).forEach((dirPath) => {
   }
 });
 
-const isProduction = process.env.NODE_ENV === 'production';
 const envJwtSecret = process.env.JWT_SECRET;
 
-if (isProduction && (!envJwtSecret || envJwtSecret.trim() === '')) {
-  console.error('FATAL: JWT_SECRET environment variable is missing in production environment. Server startup aborted.');
+if (!envJwtSecret || envJwtSecret.trim().length < 32) {
+  console.error(
+    'FATAL: JWT_SECRET environment variable is missing or too short (must be ≥ 32 characters). ' +
+    'Set it in your .env file or system environment. Server startup aborted.'
+  );
   process.exit(1);
 }
+
+const jwtSecret: string = envJwtSecret.trim();
+
 
 export const serverConfig = {
   port: 3000,
   host: '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
-  jwtSecret: envJwtSecret || (isProduction ? '' : 'mishkat-dev-jwt-secret-key-lan-only-2026'),
+  jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   databaseUrl: process.env.DATABASE_URL || '',
   dirs: DIRS,
-  allowedCorsOrigins: process.env.CORS_ORIGINS 
-    ? process.env.CORS_ORIGINS.split(',') 
+  allowedCorsOrigins: process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',')
     : ['http://localhost:3000', 'http://127.0.0.1:3000'],
   maxFileSizeMB: parseInt(process.env.MAX_FILE_SIZE_MB || '100', 10),
   rateLimitWindowMs: 15 * 60 * 1000, // 15 minutes

@@ -31,17 +31,19 @@ export async function createExpressApp() {
 
   // Basic Middlewares
   app.use(cors({
-    origin: '*',
+    origin: serverConfig.allowedCorsOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   }));
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-  // Static storage for book covers & digital previews
-  app.use('/api/v1/books/files/covers', express.static(serverConfig.dirs.covers));
-  app.use('/api/v1/books/files/digital', express.static(serverConfig.dirs.digital));
+  // NOTE: Private digital files and covers are NOT served via express.static.
+  // All digital file access goes through the authenticated GET /api/v1/books/:id/file
+  // route which enforces JWT authentication and path traversal protection.
+
 
   // Initialize DB Connection, Migrations, and Seed safely
   try {

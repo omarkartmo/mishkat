@@ -29,9 +29,6 @@ import {
   sanitizeText,
   isSafeUrl,
   sanitizeObject,
-  checkRateLimit,
-  recordFailedAttempt,
-  resetRateLimit,
 } from '../utils/security';
 import { apiClient } from './apiClient';
 
@@ -371,100 +368,8 @@ export class StorageService {
     saveToStorage(STORAGE_KEYS.CURRENT_USER, user);
   }
 
-  /** @deprecated Use AuthContext.logout() / AuthRepository.logout() instead. */
-  public logout(): void {
-    this.authenticated = false;
-    saveToStorage(STORAGE_KEYS.SESSION_ACTIVE, false);
-  }
 
-  /** @deprecated Use AuthContext.login() / AuthRepository.login() instead. */
-  public loginUser(
-    regNumber: string,
-    password?: string
-  ): {
-    success: boolean;
-    user?: User;
-    error?: string;
-    isLocked?: boolean;
-    remainingSeconds?: number;
-    attemptsLeft?: number;
-  } {
-    const cleanReg = sanitizeText(regNumber).trim().toUpperCase();
-    if (!cleanReg) {
-      return { success: false, error: 'يرجى إدخال رقم القيد / رمز الدخول' };
-    }
 
-    // 1. Check Brute-Force Rate Limiting Lockout
-    const rateCheck = checkRateLimit(cleanReg);
-    if (rateCheck.isLocked) {
-      return {
-        success: false,
-        error: `تم حظر محاولات الدخول مؤقتاً لحماية الحساب. يرجى الانتظار لمدة ${rateCheck.remainingSeconds} ثانية.`,
-        isLocked: true,
-        remainingSeconds: rateCheck.remainingSeconds,
-        attemptsLeft: 0,
-      };
-    }
-
-    // 2. Admin Authentication check
-    const isAdminIdentifier = 
-      this.admin.registrationNumber.toUpperCase() === cleanReg ||
-      cleanReg === 'ADMIN' ||
-      cleanReg === 'ADM-001' ||
-      (this.admin.email && this.admin.email.toUpperCase() === cleanReg);
-
-    if (isAdminIdentifier) {
-      const trimmedPass = (password || '').trim();
-      const adminPass = 'admin@central#2026';
-      
-      if (!trimmedPass || trimmedPass !== adminPass) {
-        const failResult = recordFailedAttempt(cleanReg);
-        if (failResult.isNowLocked) {
-          return {
-            success: false,
-            error: `تم قفل الحساب لمدة ${failResult.remainingSeconds} ثانية لاستنفاد 5 محاولات خاطئة متتالية.`,
-            isLocked: true,
-            remainingSeconds: failResult.remainingSeconds,
-            attemptsLeft: 0,
-          };
-        }
-        return {
-          success: false,
-          error: `كلمة المرور غير صحيحة. متبقي لديك ${failResult.attemptsLeft} محاولات.`,
-          attemptsLeft: failResult.attemptsLeft,
-        };
-      }
-
-      // Successful Admin Authentication
-      resetRateLimit(cleanReg);
-      this.authenticated = true;
-      this.setCurrentUser(this.admin);
-      saveToStorage(STORAGE_KEYS.SESSION_ACTIVE, true);
-      return { success: true, user: this.admin };
-    }
-
-    // 3. Student Authentication check
-    const student = this.students.find(
-      s => s.registrationNumber.toUpperCase() === cleanReg ||
-      (s.email && s.email.toUpperCase() === cleanReg) ||
-      (s.id && s.id.toUpperCase() === cleanReg)
-    );
-    if (!student) {
-      const failResult = recordFailedAttempt(cleanReg);
-      return {
-        success: false,
-        error: `رقم القيد أو المعرف «${regNumber}» غير مسجل بالنظام.`,
-        attemptsLeft: failResult.attemptsLeft,
-      };
-    }
-
-    // Successful Student Authentication
-    resetRateLimit(cleanReg);
-    this.authenticated = true;
-    this.setCurrentUser(student);
-    saveToStorage(STORAGE_KEYS.SESSION_ACTIVE, true);
-    return { success: true, user: student };
-  }
 
   // --- Legacy Physical Books (Deprecated in Phase 1.7.3-B - Use BookRepository) ---
   

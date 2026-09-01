@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Runtime database — must never be committed
+LibraryData/
+pgdata/
+*.db
+*.sqlite
+*.sqlite3
