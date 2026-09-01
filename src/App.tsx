@@ -14,6 +14,7 @@ import {
   ReadingProgress,
   LoanPurpose,
   PhysicalLoanRequest,
+  AppNotification,
 } from './types/library';
 
 // Components
@@ -40,6 +41,7 @@ import { categoryRepository } from './services/categoryRepository';
 import { bookRepository } from './services/bookRepository';
 import { loanRepository } from './services/loanRepository';
 import { loanRequestRepository } from './services/loanRequestRepository';
+import { notificationRepository } from './services/notificationRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -74,13 +76,15 @@ export default function App() {
   const [isLoanRequestsLoading, setIsLoanRequestsLoading] = useState(false);
   const [loanRequestsError, setLoanRequestsError] = useState<string | null>(null);
 
+  // Server-authoritative Notifications State (Phase 1.7 - Notifications Migration)
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
+
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
   const [config, setConfig] = useState<SystemConfig>(() => storage.getConfig());
-  const [notifications, setNotifications] = useState(() =>
-    currentUser ? storage.getNotifications(currentUser.id, currentUser.role) : []
-  );
   const [readingProgress, setReadingProgress] = useState<Record<string, { currentPage: number; totalPages: number; lastReadAt?: string; percentage?: number; isCompleted?: boolean }>>(() =>
     currentUser ? storage.getReadingProgressMap(currentUser.id) : {}
   );
@@ -174,6 +178,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative notifications (Phase 1.7 - Notifications Migration)
+  const loadNotifications = async () => {
+    setIsNotificationsLoading(true);
+    try {
+      const res = await notificationRepository.getNotifications();
+      if (res.success && Array.isArray(res.data)) {
+        setNotifications(res.data);
+        setNotificationsError(null);
+      } else {
+        setNotificationsError(res.error?.message || 'تعذر استرجاع الإشعارات من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setNotificationsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الإشعارات.');
+    } finally {
+      setIsNotificationsLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -196,7 +218,6 @@ export default function App() {
     setConfig(storage.getConfig());
     const curr = targetUser || authUser || storage.getCurrentUser();
     if (curr) {
-      setNotifications(storage.getNotifications(curr.id, curr.role));
       setReadingProgress(storage.getReadingProgressMap(curr.id));
       setStudentNotes(storage.getStudentNotes(curr.id));
       setPhysicalBookmarks(storage.getPhysicalBookmarks(curr.id));
@@ -205,12 +226,13 @@ export default function App() {
     }
   };
 
-  // Re-sync all state helper (Server-Authoritative Book/Category/Loan/Request Catalog + Legacy Storage Domains)
+  // Re-sync all state helper (Server-Authoritative Catalog + Legacy Storage Domains)
   const refreshAllState = (targetUser?: User) => {
     loadCategories();
     loadBooks();
     loadLoans();
     loadLoanRequests();
+    loadNotifications();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -220,17 +242,19 @@ export default function App() {
     loadBooks();
     loadLoans();
     loadLoanRequests();
+    loadNotifications();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
   }, []);
 
-  // Update tab and reload loans/requests if authenticated user changes
+  // Update tab and reload loans/requests/notifications if authenticated user changes
   useEffect(() => {
     if (authUser) {
       setActiveTab(authUser.role === 'student' ? 'student_portal' : 'overview');
       loadLoans();
       loadLoanRequests();
+      loadNotifications();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -259,7 +283,7 @@ export default function App() {
     } else if (user.role === 'admin' && activeTab === 'student_portal') {
       setActiveTab('overview');
     }
-    setNotifications(storage.getNotifications(user.id, user.role));
+    loadNotifications();
     setReadingProgress(storage.getReadingProgressMap(user.id));
     setStudentNotes(storage.getStudentNotes(user.id));
     setPhysicalBookmarks(storage.getPhysicalBookmarks(user.id));
@@ -360,20 +384,44 @@ export default function App() {
     }
   };
 
-  // Notification actions
-  const handleMarkNotificationRead = (id: string) => {
-    storage.markNotificationAsRead(id);
-    setNotifications(storage.getNotifications(currentUser.id, currentUser.role));
+  // Notification actions (Phase 1.7 - Notifications Migration)
+  const handleMarkNotificationRead = async (id: string) => {
+    try {
+      const res = await notificationRepository.markAsRead(id);
+      if (res.success) {
+        await loadNotifications();
+      } else {
+        alert(res.error?.message || 'تعذر تحديث حالة الإشعار في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تحديث حالة الإشعار.');
+    }
   };
 
-  const handleMarkAllNotificationsRead = () => {
-    storage.markAllNotificationsAsRead(currentUser.id, currentUser.role);
-    setNotifications(storage.getNotifications(currentUser.id, currentUser.role));
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      const res = await notificationRepository.markAllAsRead();
+      if (res.success) {
+        await loadNotifications();
+      } else {
+        alert(res.error?.message || 'تعذر تحديث حالة جميع الإشعارات في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تحديث حالة الإشعارات.');
+    }
   };
 
-  const handleClearNotifications = () => {
-    storage.clearNotifications(currentUser.id, currentUser.role);
-    setNotifications(storage.getNotifications(currentUser.id, currentUser.role));
+  const handleClearNotifications = async () => {
+    try {
+      const res = await notificationRepository.clearNotifications();
+      if (res.success) {
+        await loadNotifications();
+      } else {
+        alert(res.error?.message || 'تعذر حذف الإشعارات في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حذف الإشعارات.');
+    }
   };
 
   // Circulation Actions (Phase 1.7 - Loans Migration)
