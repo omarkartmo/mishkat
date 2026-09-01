@@ -37,6 +37,7 @@ import { LoginView } from './components/auth/LoginView';
 import { useAuth } from './context/AuthContext';
 import { categoryRepository } from './services/categoryRepository';
 import { bookRepository } from './services/bookRepository';
+import { loanRepository } from './services/loanRepository';
 import { apiClient } from './services/apiClient';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -61,7 +62,11 @@ export default function App() {
   const [isBooksLoading, setIsBooksLoading] = useState(false);
   const [booksError, setBooksError] = useState<string | null>(null);
 
-  const [loans, setLoans] = useState<LoanRecord[]>(() => storage.getLoans());
+  // Server-authoritative Loans State (Phase 1.7 - Complete Loans Migration)
+  const [loans, setLoans] = useState<LoanRecord[]>([]);
+  const [isLoansLoading, setIsLoansLoading] = useState(false);
+  const [loansError, setLoansError] = useState<string | null>(null);
+
   const [submissions, setSubmissions] = useState<PendingBookSubmission[]>(() => storage.getSubmissions());
   const [users, setUsers] = useState<User[]>(() => storage.getUsers());
   const [portals, setPortals] = useState<WhitelistedPortal[]>(() => storage.getPortals());
@@ -127,6 +132,24 @@ export default function App() {
     }
   };
 
+  // Load server-authoritative loans (Phase 1.7 - Complete Loans Migration)
+  const loadLoans = async () => {
+    setIsLoansLoading(true);
+    try {
+      const res = await loanRepository.getLoans();
+      if (res.success && Array.isArray(res.data)) {
+        setLoans(res.data);
+        setLoansError(null);
+      } else {
+        setLoansError(res.error?.message || 'تعذر استرجاع سجل الإعارات من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      setLoansError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الإعارات.');
+    } finally {
+      setIsLoansLoading(false);
+    }
+  };
+
   // Quick physical bookmark modal triggered from student portal or physical library
   const [activePhysicalBookmarkModal, setActivePhysicalBookmarkModal] = useState<{
     isOpen: boolean;
@@ -141,9 +164,8 @@ export default function App() {
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
   const [preSelectedBookId, setPreSelectedBookId] = useState<string | undefined>(undefined);
 
-  // Helper to refresh legacy client storage domains (Loans, Notes, Portals, etc.)
+  // Helper to refresh legacy client storage domains (Notes, Portals, Submissions, etc.)
   const refreshLegacyStorageState = (targetUser?: User) => {
-    setLoans(storage.getLoans());
     setSubmissions(storage.getSubmissions());
     setUsers(storage.getUsers());
     setPortals(storage.getPortals());
@@ -160,10 +182,11 @@ export default function App() {
     }
   };
 
-  // Re-sync all state helper (Server-Authoritative Book/Category Catalog + Legacy Storage Domains)
+  // Re-sync all state helper (Server-Authoritative Book/Category/Loan Catalog + Legacy Storage Domains)
   const refreshAllState = (targetUser?: User) => {
     loadCategories();
     loadBooks();
+    loadLoans();
     refreshLegacyStorageState(targetUser);
   };
 
@@ -171,15 +194,17 @@ export default function App() {
   useEffect(() => {
     loadCategories();
     loadBooks();
+    loadLoans();
     storage.syncWithServer().then(() => {
       refreshLegacyStorageState();
     });
   }, []);
 
-  // Update tab if authenticated user role changes
+  // Update tab and reload loans if authenticated user changes
   useEffect(() => {
     if (authUser) {
       setActiveTab(authUser.role === 'student' ? 'student_portal' : 'overview');
+      loadLoans();
       refreshLegacyStorageState(authUser);
     }
   }, [authUser?.id, authUser?.role]);
@@ -311,10 +336,9 @@ export default function App() {
     overrideReason?: string;
   }) => {
     try {
-      const res = await apiClient.post<LoanRecord>('/loans', params);
+      const res = await loanRepository.createLoan(params);
       if (res.success) {
-        await storage.syncWithServer();
-        refreshAllState();
+        await Promise.all([loadLoans(), loadBooks()]);
       } else {
         alert(res.error?.message || 'تعذر تسجيل الإعارة في الخادم المركزي.');
       }
@@ -325,10 +349,9 @@ export default function App() {
 
   const handleExtendLoan = async (loanId: string, additionalDays: number, notes?: string) => {
     try {
-      const res = await apiClient.put(`/loans/${loanId}/extend`, { additionalDays, notes });
+      const res = await loanRepository.extendLoan(loanId, { additionalDays, notes });
       if (res.success) {
-        await storage.syncWithServer();
-        refreshAllState();
+        await loadLoans();
       } else {
         alert(res.error?.message || 'تعذر تمديد الإعارة في الخادم المركزي.');
       }
@@ -339,10 +362,9 @@ export default function App() {
 
   const handleReturnBook = async (loanId: string, notes?: string) => {
     try {
-      const res = await apiClient.put(`/loans/${loanId}/return`, { notes });
+      const res = await loanRepository.returnLoan(loanId, { notes });
       if (res.success) {
-        await storage.syncWithServer();
-        refreshAllState();
+        await Promise.all([loadLoans(), loadBooks()]);
       } else {
         alert(res.error?.message || 'تعذر تسجيل الإرجاع في الخادم المركزي.');
       }
@@ -797,7 +819,9 @@ export default function App() {
               onCreateLoan={handleCreateLoan}
               onExtendLoan={handleExtendLoan}
               onReturnBook={handleReturnBook}
-              onCheckStudentEligibility={(studentId) => storage.canStudentBorrow(studentId)}
+              onCheckStudentEligibility={(studentId) =>
+                loanRepository.checkEligibility(studentId, loans, users, config)
+              }
               isNewLoanModalOpen={isNewLoanModalOpen}
               setIsNewLoanModalOpen={setIsNewLoanModalOpen}
               preSelectedBookId={preSelectedBookId}

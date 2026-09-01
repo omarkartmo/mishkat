@@ -31,24 +31,31 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     const { rows } = await db.query(sql, params);
 
-    const formatted = rows.map((l) => ({
-      id: l.id,
-      bookId: l.book_id,
-      bookTitle: l.book_title,
-      studentId: l.student_id,
-      studentName: l.student_name,
-      studentRegNumber: l.student_reg_number,
-      purpose: l.purpose,
-      issueDate: l.issue_date,
-      dueDate: l.due_date,
-      returnDate: l.return_date,
-      status: l.status,
-      extensionCount: l.extension_count || 0,
-      maxExtensionsAllowed: l.max_extensions_allowed || 1,
-      notes: l.notes,
-      isOverrideExemption: l.is_override_exemption,
-      overrideReason: l.override_reason,
-    }));
+    const today = new Date().toISOString().split('T')[0];
+    const formatted = rows.map((l) => {
+      let status = l.status;
+      if (status !== 'returned' && l.due_date && l.due_date < today) {
+        status = 'overdue';
+      }
+      return {
+        id: l.id,
+        bookId: l.book_id,
+        bookTitle: l.book_title,
+        studentId: l.student_id,
+        studentName: l.student_name,
+        studentRegNumber: l.student_reg_number,
+        purpose: l.purpose,
+        issueDate: l.issue_date,
+        dueDate: l.due_date,
+        returnDate: l.return_date,
+        status,
+        extensionCount: l.extension_count || 0,
+        maxExtensionsAllowed: l.max_extensions_allowed || 1,
+        notes: l.notes,
+        isOverrideExemption: l.is_override_exemption,
+        overrideReason: l.override_reason,
+      };
+    });
 
     res.json({ success: true, data: formatted });
   } catch (err: any) {
