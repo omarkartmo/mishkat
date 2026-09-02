@@ -54,4 +54,4 @@ npx electron-builder --win
   netsh advfirewall firewall add rule name="Mishkat Library" dir=in action=allow protocol=TCP localport=3000 profile=private
   ```
 - **سجلات التشغيل:** تسجل كافة أحداث الخادم في: `LibraryData\logs\mishkat.log`.
-- **ملاحظة النسخ والاسترجاع:** النسخ الاحتياطي متاح عبر لوحة الإدارة (`/api/v1/backups/create`)، واسترجاع قاعدة البيانات التلقائي مجدول للمرحلة 15.3.
+- **النسخ الاحتياطي والاسترجاع الذري:** متاح بالكامل عبر لوحة تحكم أمين المكتبة (إعدادات النظام) أو واجهة الـ API (`/api/v1/backups/create` للتصدير، و`/api/v1/backups/:fileName/restore` للاسترجاع الذري التلقائي مع نسخة أمان مسبقة).

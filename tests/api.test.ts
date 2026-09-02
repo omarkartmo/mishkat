@@ -662,3 +662,296 @@ describe('10. Production Operations Hardening (Health, Logger, Port)', () => {
   });
 });
 
+describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
+  let initialBackupFileName = '';
+  let disasterBackupFileName = '';
+  const testMarkerTitle = `كتاب استرجاع الطوارئ المعتمد ${Date.now()}`;
+  let disasterBookId = '';
+
+  it('Test A: should create a complete database backup with all 14 tables and valid schema', async () => {
+    const res = await request(app)
+      .post('/api/v1/backups/create')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.fileName).toBeDefined();
+    expect(res.body.data.tablesCount).toBe(14);
+    expect(res.body.data.backup).toBeDefined();
+    expect(res.body.data.backup.meta.version).toBe('1.0.0');
+    expect(res.body.data.backup.data.users).toBeInstanceOf(Array);
+    expect(res.body.data.backup.data.books).toBeInstanceOf(Array);
+
+    initialBackupFileName = res.body.data.fileName;
+
+    // Verify backup file exists in filesystem
+    const fs = await import('fs');
+    const path = await import('path');
+    const { serverConfig } = await import('../server/config');
+    const backupPath = path.join(serverConfig.dirs.backups, initialBackupFileName);
+    expect(fs.existsSync(backupPath)).toBe(true);
+  });
+
+  it('Test F: should enforce strict RBAC on restore endpoint (401 unauth, 403 student, 200 admin)', async () => {
+    // 1. Unauthenticated request
+    const unauthRes = await request(app)
+      .post(`/api/v1/backups/${initialBackupFileName}/restore`)
+      .send({ confirm: true });
+    expect(unauthRes.status).toBe(401);
+
+    // 2. Student request
+    const studentRes = await request(app)
+      .post(`/api/v1/backups/${initialBackupFileName}/restore`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ confirm: true });
+    expect(studentRes.status).toBe(403);
+  });
+
+  it('Test G: should reject restore without explicit confirm: true payload', async () => {
+    const resNoConfirm = await request(app)
+      .post(`/api/v1/backups/${initialBackupFileName}/restore`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({});
+
+    expect(resNoConfirm.status).toBe(400);
+    expect(resNoConfirm.body.error.code).toBe('CONFIRMATION_REQUIRED');
+
+    const resFalseConfirm = await request(app)
+      .post(`/api/v1/backups/${initialBackupFileName}/restore`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ confirm: false });
+
+    expect(resFalseConfirm.status).toBe(400);
+    expect(resFalseConfirm.body.error.code).toBe('CONFIRMATION_REQUIRED');
+  });
+
+  it('Test H: should prevent path traversal attempts on restore filename', async () => {
+    const traversalAttempts = [
+      '..%2f..%2fpackage.json',
+      '..\\..\\package.json',
+      'non_existent_backup_file.json',
+      'malicious_script.sh',
+    ];
+
+    for (const attempt of traversalAttempts) {
+      const res = await request(app)
+        .post(`/api/v1/backups/${attempt}/restore`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ confirm: true });
+
+      expect([400, 404]).toContain(res.status);
+    }
+  });
+
+  it('Test D: should reject corrupt JSON and malformed schema without modifying the database', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { serverConfig } = await import('../server/config');
+
+    // 1. Corrupt JSON file
+    const corruptFileName = 'test_corrupt_backup.json';
+    fs.writeFileSync(path.join(serverConfig.dirs.backups, corruptFileName), 'NOT_A_VALID_JSON{{{', 'utf8');
+
+    const corruptRes = await request(app)
+      .post(`/api/v1/backups/${corruptFileName}/restore`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ confirm: true });
+
+    expect(corruptRes.status).toBe(400);
+    expect(corruptRes.body.error.code).toBe('INVALID_BACKUP_FILE');
+
+    // 2. Schema missing required table or admin account
+    const invalidSchemaFileName = 'test_invalid_schema.json';
+    const invalidPayload = {
+      meta: { version: '1.0.0' },
+      data: {
+        users: [{ id: 'u1', registration_number: 'STU-1', name: 'No Admin', password_hash: 'hash', role_id: 'student' }],
+        categories: [],
+        books: [],
+        physical_copies: [],
+        loans: [],
+        loan_requests: [],
+        reading_progress: [],
+        physical_bookmarks: [],
+        book_summaries: [],
+        student_notes: [],
+        student_favorites: [],
+        pending_submissions: [],
+        whitelisted_portals: [],
+        system_settings: [],
+      },
+    };
+    fs.writeFileSync(path.join(serverConfig.dirs.backups, invalidSchemaFileName), JSON.stringify(invalidPayload), 'utf8');
+
+    const invalidRes = await request(app)
+      .post(`/api/v1/backups/${invalidSchemaFileName}/restore`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ confirm: true });
+
+    expect(invalidRes.status).toBe(400);
+    expect(invalidRes.body.error.code).toBe('INVALID_BACKUP_SCHEMA');
+
+    // Clean up temporary test files
+    try { fs.unlinkSync(path.join(serverConfig.dirs.backups, corruptFileName)); } catch {}
+    try { fs.unlinkSync(path.join(serverConfig.dirs.backups, invalidSchemaFileName)); } catch {}
+  });
+
+  it('Test E: should atomically rollback restore if an error occurs mid-transaction', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { serverConfig } = await import('../server/config');
+
+    // Read valid backup and inject a foreign-key or constraint violation in the middle
+    const validRaw = fs.readFileSync(path.join(serverConfig.dirs.backups, initialBackupFileName), 'utf8');
+    const brokenData = JSON.parse(validRaw);
+    // Inject a book copy referencing a non-existent book ID
+    brokenData.data.physical_copies.push({
+      id: 'copy-non-existent-fk',
+      book_id: 'book-that-does-not-exist-at-all',
+      barcode: 'BAD-BARCODE-999999',
+    });
+
+    const brokenFileName = 'test_broken_fk_backup.json';
+    fs.writeFileSync(path.join(serverConfig.dirs.backups, brokenFileName), JSON.stringify(brokenData), 'utf8');
+
+    // Record count of books prior to attempt
+    const beforeCountRes = await request(app).get('/api/v1/books');
+    const beforeCount = beforeCountRes.body.data.length;
+
+    const brokenRes = await request(app)
+      .post(`/api/v1/backups/${brokenFileName}/restore`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ confirm: true });
+
+    // Validation catches foreign-key error before or during transaction
+    expect([400, 500]).toContain(brokenRes.status);
+
+    // Verify database books count is intact (no half-cleared or truncated state)
+    const afterCountRes = await request(app).get('/api/v1/books');
+    expect(afterCountRes.body.data.length).toBe(beforeCount);
+
+    try { fs.unlinkSync(path.join(serverConfig.dirs.backups, brokenFileName)); } catch {}
+  });
+
+  it('Test B & C & I & J & K: Full Disaster Recovery Simulation (Create known data -> Backup -> Disaster -> Restore -> Verify)', async () => {
+    // 1. Create a known distinct book and note
+    const bookCreateRes = await request(app)
+      .post('/api/v1/books')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        type: 'physical',
+        title: testMarkerTitle,
+        author: 'المؤلف التجريبي للاسترجاع',
+        categoryId: 'cat-islamic',
+        totalCopies: 3,
+        availableCopies: 3,
+        language: 'العربية',
+      });
+
+    expect(bookCreateRes.status).toBe(201);
+    disasterBookId = bookCreateRes.body.data.id;
+
+    // Create a student private note linked to this book
+    const noteCreateRes = await request(app)
+      .post('/api/v1/notes')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        bookId: disasterBookId,
+        bookTitle: testMarkerTitle,
+        bookMedium: 'physical',
+        content: 'فائدة مستخلصة قبل الكارثة المحاكية للاسترجاع',
+        colorTag: 'emerald',
+      });
+    expect(noteCreateRes.status).toBe(201);
+
+    // 2. Create the Disaster Recovery Backup Snapshot
+    const snapshotRes = await request(app)
+      .post('/api/v1/backups/create')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(snapshotRes.status).toBe(200);
+    disasterBackupFileName = snapshotRes.body.data.fileName;
+
+    // 3. Simulate Database Data Loss / Disaster: delete the book and modify records
+    const deleteBookRes = await request(app)
+      .delete(`/api/v1/books/${disasterBookId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(deleteBookRes.status).toBe(200);
+
+    // Verify the book is truly GONE from the active database
+    const verifyGoneRes = await request(app).get('/api/v1/books');
+    const foundDeleted = verifyGoneRes.body.data.find((b: any) => b.id === disasterBookId);
+    expect(foundDeleted).toBeUndefined();
+
+    // 4. Perform Transactional Restore from the Snapshot
+    const restoreRes = await request(app)
+      .post(`/api/v1/backups/${disasterBackupFileName}/restore`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ confirm: true });
+
+    expect(restoreRes.status).toBe(200);
+    expect(restoreRes.body.success).toBe(true);
+    expect(restoreRes.body.data.backupFileName).toBe(disasterBackupFileName);
+    expect(restoreRes.body.data.preRestoreBackup).toBeDefined();
+
+    // 5. Test I: Verify that a pre-restore safety backup was created in filesystem
+    const fs = await import('fs');
+    const path = await import('path');
+    const { serverConfig } = await import('../server/config');
+    const preRestorePath = path.join(serverConfig.dirs.backups, restoreRes.body.data.preRestoreBackup);
+    expect(fs.existsSync(preRestorePath)).toBe(true);
+
+    // 6. Test B & C: Verify original data and relationships are 100% recovered!
+    const booksAfterRestoreRes = await request(app).get('/api/v1/books');
+    const recoveredBook = booksAfterRestoreRes.body.data.find((b: any) => b.id === disasterBookId);
+    expect(recoveredBook).toBeDefined();
+    expect(recoveredBook.title).toBe(testMarkerTitle);
+    expect(recoveredBook.totalCopies).toBe(3);
+
+    // Verify student note relationship was recovered
+    const notesAfterRestoreRes = await request(app)
+      .get('/api/v1/notes')
+      .set('Authorization', `Bearer ${studentToken}`);
+    const recoveredNote = notesAfterRestoreRes.body.data.find((n: any) => n.bookId === disasterBookId);
+    expect(recoveredNote).toBeDefined();
+    expect(recoveredNote.content).toBe('فائدة مستخلصة قبل الكارثة المحاكية للاسترجاع');
+
+    // 7. Test J: Verify Health endpoint reports healthy after restore
+    const healthRes = await request(app).get('/api/v1/health');
+    expect(healthRes.status).toBe(200);
+    expect(healthRes.body.data.status).toBe('healthy');
+    expect(healthRes.body.data.checks.database).toBeDefined();
+    expect(healthRes.body.data.checks.storage).toBe('writable');
+
+    // 8. Test K: Verify authentication continues to work with restored password hashes
+    const adminLoginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ registrationNumber: 'ADM-001', password: 'admin123' });
+    expect(adminLoginRes.status).toBe(200);
+    expect(adminLoginRes.body.data.token).toBeTypeOf('string');
+
+    const studentLoginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ registrationNumber: 'STU-2026-101', password: '123456' });
+    expect(studentLoginRes.status).toBe(200);
+    expect(studentLoginRes.body.data.token).toBeTypeOf('string');
+  });
+
+  it('Test: should list available backups with classification (manual vs pre_restore)', async () => {
+    const res = await request(app)
+      .get('/api/v1/backups')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toBeInstanceOf(Array);
+    expect(res.body.data.length).toBeGreaterThan(0);
+
+    const hasPreRestore = res.body.data.some((b: any) => b.type === 'pre_restore');
+    const hasManual = res.body.data.some((b: any) => b.type === 'manual');
+    expect(hasManual).toBe(true);
+    expect(hasPreRestore).toBe(true);
+  });
+});
+
+

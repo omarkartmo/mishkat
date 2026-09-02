@@ -17,6 +17,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { SystemConfig } from '../../types/library';
+import { settingsRepository } from '../../services/settingsRepository';
 
 interface SystemSettingsViewProps {
   config: SystemConfig;
@@ -43,6 +44,49 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   });
   const [newReasonInput, setNewReasonInput] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Backup & Restore State
+  const [backups, setBackups] = useState<Array<{ fileName: string; type: 'manual' | 'pre_restore'; sizeFormatted: string; createdAt: string }>>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [restoringFile, setRestoringFile] = useState<string | null>(null);
+  const [showBackupsList, setShowBackupsList] = useState(false);
+
+  const fetchBackups = async () => {
+    setLoadingBackups(true);
+    try {
+      const res = await settingsRepository.listBackups();
+      if (res.success && res.data) {
+        setBackups(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  const handleRestore = async (fileName: string) => {
+    const confirmed = window.confirm(
+      `⚠️ تحذير شديد الأهمية:\n\nاسترجاع النسخة (${fileName}) سيستبدل بيانات قاعدة البيانات الحالية بالكامل.\nسيقوم الخادم تلقائياً بإنشاء نسخة أمان احتياطية قبل الاستبدال.\n\nهل أنت متأكد تماماً من رغبتك في الاستمرار؟`
+    );
+    if (!confirmed) return;
+
+    setRestoringFile(fileName);
+    try {
+      const res = await settingsRepository.restoreBackup(fileName);
+      if (res.success && res.data) {
+        alert(`✨ ${res.data.message}\nتم حفظ نسخة أمان في: ${res.data.preRestoreBackup}`);
+        await onResetData();
+        fetchBackups();
+      } else {
+        alert(`❌ فشل استرجاع النسخة: ${res.error?.message || 'خطأ غير معروف'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    } finally {
+      setRestoringFile(null);
+    }
+  };
 
   const handleAddReason = () => {
     if (!newReasonInput.trim()) return;
@@ -361,6 +405,82 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             <RotateCcw className="w-4 h-4" />
             <span>استعادة البيانات النموذجية</span>
           </button>
+        </div>
+
+        {/* Restore from Server Backup Section */}
+        <div className="pt-3 border-t border-slate-800 space-y-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-slate-400">
+              استرجاع قاعدة البيانات من نسخة احتياطية محفوظة على الخادم (مع إنشاء نسخة أمان تلقائية).
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const nextState = !showBackupsList;
+                setShowBackupsList(nextState);
+                if (nextState) fetchBackups();
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
+            >
+              <HardDrive className="w-4 h-4" />
+              <span>{showBackupsList ? 'إخفاء قائمة النسخ' : 'إدارة واسترجاع النسخ'}</span>
+            </button>
+          </div>
+
+          {showBackupsList && (
+            <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between text-slate-300 font-bold text-xs pb-2 border-b border-slate-800">
+                <span>ملفات النسخ الاحتياطية المتوفرة على الخادم المركزي</span>
+                <button
+                  type="button"
+                  onClick={fetchBackups}
+                  disabled={loadingBackups}
+                  className="text-indigo-400 hover:text-indigo-300 text-xs flex items-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className={`w-3 h-3 ${loadingBackups ? 'animate-spin' : ''}`} />
+                  تحديث
+                </button>
+              </div>
+
+              {loadingBackups ? (
+                <div className="text-center py-4 text-slate-500">جاري تحميل قائمة النسخ...</div>
+              ) : backups.length === 0 ? (
+                <div className="text-center py-4 text-slate-500">لا توجد نسخ احتياطية محفوظة حالياً في الخادم.</div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {backups.map((b) => (
+                    <div
+                      key={b.fileName}
+                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-slate-200 text-xs">{b.fileName}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            b.type === 'pre_restore' ? 'bg-indigo-950 text-indigo-300 border border-indigo-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                          }`}>
+                            {b.type === 'pre_restore' ? 'نسخة أمان تلقائية' : 'نسخة يدوية'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          الحجم: {b.sizeFormatted} • التاريخ: {new Date(b.createdAt).toLocaleString('ar-SA')}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRestore(b.fileName)}
+                        disabled={restoringFile === b.fileName}
+                        className="px-3 py-1.5 bg-rose-900/30 hover:bg-rose-700 text-rose-300 hover:text-white border border-rose-800/60 rounded-lg text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                      >
+                        {restoringFile === b.fileName ? 'جاري الاسترجاع...' : 'استرجاع هذه النسخة'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

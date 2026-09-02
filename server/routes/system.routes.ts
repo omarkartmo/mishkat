@@ -8,6 +8,14 @@ import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
 import { seedInitialData } from '../db/seed';
 
+import {
+  createDatabaseBackup,
+  validateBackupPayload,
+  restoreDatabaseFromBackup,
+  BackupData,
+} from '../services/backupService';
+import { logger } from '../utils/logger';
+
 export const auditRouter = Router();
 
 // GET /api/v1/audit-logs
@@ -40,59 +48,39 @@ auditRouter.get('/', authenticateToken, requireRole('admin'), async (req: Reques
 
 export const backupRouter = Router();
 
-// POST /api/v1/backups/create
+// POST /api/v1/backups/create (Admin only manual backup)
 backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFileName = `mishkat_backup_${timestamp}.json`;
-    const backupFilePath = path.join(serverConfig.dirs.backups, backupFileName);
+    const { fileName, tablesCount, data } = await createDatabaseBackup(req.user!.name, 'manual');
 
-    // Export all tables
-    const tables = [
-      'users', 'categories', 'books', 'physical_copies', 'loans',
-      'loan_requests', 'reading_progress', 'physical_bookmarks',
-      'book_summaries', 'student_notes', 'student_favorites',
-      'pending_submissions', 'whitelisted_portals', 'system_settings'
-    ];
-
-    const backupDump: Record<string, any> = {
-      meta: {
-        exportedAt: new Date().toISOString(),
-        exportedBy: req.user!.name,
-        version: '1.0.0',
-      },
-      data: {},
-    };
-
-    for (const table of tables) {
-      const { rows } = await db.query(`SELECT * FROM ${table}`);
-      backupDump.data[table] = rows;
-    }
-
-    if (!fs.existsSync(serverConfig.dirs.backups)) {
-      fs.mkdirSync(serverConfig.dirs.backups, { recursive: true });
-    }
-
-    fs.writeFileSync(backupFilePath, JSON.stringify(backupDump, null, 2), 'utf8');
-
-    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'CREATE_BACKUP', 'system', backupFileName, null, req);
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'CREATE_BACKUP',
+      'system',
+      fileName,
+      null,
+      req
+    );
 
     res.json({
       success: true,
       data: {
         message: 'تم إنشاء النسخة الاحتياطية بنجاح على الخادم المركزي.',
-        fileName: backupFileName,
-        createdAt: new Date().toISOString(),
-        tablesCount: tables.length,
-        backup: backupDump,
+        fileName,
+        createdAt: data.meta.exportedAt,
+        tablesCount,
+        backup: data,
       },
     });
   } catch (err: any) {
+    logger.error(`[Backup] Creation failed: ${err.message}`);
     res.status(500).json({ success: false, error: { code: 'BACKUP_FAILED', message: err.message } });
   }
 });
 
-// GET /api/v1/backups
+// GET /api/v1/backups (Admin only list backups with classification)
 backupRouter.get('/', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     if (!fs.existsSync(serverConfig.dirs.backups)) {
@@ -103,8 +91,10 @@ backupRouter.get('/', authenticateToken, requireRole('admin'), async (req: Reque
       .filter((f) => f.endsWith('.json'))
       .map((fileName) => {
         const stats = fs.statSync(path.join(serverConfig.dirs.backups, fileName));
+        const isPreRestore = fileName.startsWith('mishkat_pre_restore_');
         return {
           fileName,
+          type: isPreRestore ? 'pre_restore' : 'manual',
           sizeBytes: stats.size,
           sizeFormatted: `${(stats.size / 1024).toFixed(1)} KB`,
           createdAt: stats.birthtime.toISOString(),
@@ -131,6 +121,132 @@ backupRouter.get('/:fileName/download', authenticateToken, requireRole('admin'),
   }
 
   res.download(resolvedTarget, safeFileName);
+});
+
+// POST /api/v1/backups/:fileName/restore (Admin only with validation, pre-restore safety backup, and atomic rollback)
+backupRouter.post('/:fileName/restore', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const safeFileName = path.basename(req.params.fileName);
+  if (!safeFileName.endsWith('.json')) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_FILE_TYPE', message: 'يُسمح فقط بملفات النسخ الاحتياطية بتنسيق JSON (.json).' },
+    });
+  }
+
+  const targetPath = path.join(serverConfig.dirs.backups, safeFileName);
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedBackups = path.resolve(serverConfig.dirs.backups);
+  const relative = path.relative(resolvedBackups, resolvedTarget);
+
+  if (relative.startsWith('..') || path.isAbsolute(relative) || !fs.existsSync(resolvedTarget)) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'BACKUP_NOT_FOUND', message: 'ملف النسخة الاحتياطية غير موجود على الخادم المركزي.' },
+    });
+  }
+
+  // 1. Mandatory confirmation check
+  const { confirm } = req.body || {};
+  if (!confirm) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'CONFIRMATION_REQUIRED',
+        message: 'يرجى تأكيد طلب استرجاع قاعدة البيانات صراحة (confirm: true). استرجاع النسخة الاحتياطية سيستبدل البيانات الحالية.',
+      },
+    });
+  }
+
+  // 2. Read and parse file
+  let parsedBackup: any;
+  try {
+    const rawContent = fs.readFileSync(resolvedTarget, 'utf8');
+    parsedBackup = JSON.parse(rawContent);
+  } catch (err: any) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_BACKUP_FILE',
+        message: 'تعذر قراءة ملف النسخة الاحتياطية (تنسيق JSON تالف أو غير صالح).',
+      },
+    });
+  }
+
+  // 3. Comprehensive structural & constraint validation before touching database
+  const validation = validateBackupPayload(parsedBackup);
+  if (!validation.valid) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_BACKUP_SCHEMA',
+        message: `ملف النسخة الاحتياطية غير متوافق: ${validation.error}`,
+      },
+    });
+  }
+
+  // 4. Create pre-restore safety backup of CURRENT database state
+  let preRestoreFileName: string | null = null;
+  try {
+    const safetyBackup = await createDatabaseBackup(req.user!.name, 'pre_restore');
+    preRestoreFileName = safetyBackup.fileName;
+    logger.info(`[Backup] Pre-restore safety backup created: ${preRestoreFileName}`);
+  } catch (safetyErr: any) {
+    logger.error(`[Backup] Failed to create pre-restore safety backup: ${safetyErr.message}`);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'SAFETY_BACKUP_FAILED',
+        message: 'تعذر إنشاء نسخة الأمان الاحتياطية قبل الاسترجاع. تم إيقاف عملية الاسترجاع حماية للبيانات.',
+      },
+    });
+  }
+
+  // 5. Perform atomic transactional restore
+  try {
+    const result = await db.transaction(async (client) => {
+      return await restoreDatabaseFromBackup(parsedBackup as BackupData, client);
+    });
+
+    logger.info(`[Backup] Database restored successfully from ${safeFileName}`, {
+      restoredBy: req.user!.name,
+      preRestoreBackup: preRestoreFileName,
+      counts: result.restoredCounts,
+    });
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'RESTORE_DATABASE',
+      'system',
+      safeFileName,
+      {
+        backupFileName: safeFileName,
+        preRestoreBackup: preRestoreFileName,
+        restoredCounts: result.restoredCounts,
+      },
+      req
+    );
+
+    res.json({
+      success: true,
+      data: {
+        message: 'تم استرجاع قاعدة البيانات المركزية بنجاح واستعادة كافة السجلات.',
+        backupFileName: safeFileName,
+        preRestoreBackup: preRestoreFileName,
+        restoredCounts: result.restoredCounts,
+      },
+    });
+  } catch (restoreErr: any) {
+    logger.error(`[Backup] Database restore failed and was rolled back: ${restoreErr.message}`);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'RESTORE_FAILED',
+        message: `فشلت عملية استرجاع قاعدة البيانات وتم إلغاء التغييرات تلقائياً (Rollback): ${restoreErr.message}`,
+      },
+    });
+  }
 });
 
 export const systemRouter = Router();

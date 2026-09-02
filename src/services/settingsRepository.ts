@@ -108,6 +108,59 @@ export class SettingsRepository {
       },
     };
   }
+
+  /**
+   * List available database backups (GET /api/v1/backups)
+   */
+  public async listBackups(): Promise<{
+    success: boolean;
+    data?: Array<{
+      fileName: string;
+      type: 'manual' | 'pre_restore';
+      sizeBytes: number;
+      sizeFormatted: string;
+      createdAt: string;
+    }>;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.get<any[]>('/backups');
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'LIST_BACKUPS_FAILED',
+        message: 'تعذر جلب قائمة النسخ الاحتياطية من الخادم المركزي.',
+      },
+    };
+  }
+
+  /**
+   * Restore database from a backup file (POST /api/v1/backups/:fileName/restore)
+   */
+  public async restoreBackup(fileName: string): Promise<{
+    success: boolean;
+    data?: {
+      message: string;
+      backupFileName: string;
+      preRestoreBackup: string;
+      restoredCounts: Record<string, number>;
+    };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<any>(`/backups/${encodeURIComponent(fileName)}/restore`, { confirm: true });
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'RESTORE_BACKUP_FAILED',
+        message: 'تعذر استرجاع النسخة الاحتياطية على الخادم المركزي.',
+      },
+    };
+  }
 }
 
 export const settingsRepository = new SettingsRepository();
