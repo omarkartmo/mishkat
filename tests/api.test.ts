@@ -617,3 +617,48 @@ describe('9. Physical Copy Concurrency & Race-Condition Hardening', () => {
     expect(book.availableCopies).toBe(0);
   });
 });
+
+describe('10. Production Operations Hardening (Health, Logger, Port)', () => {
+  it('should return 200 with structured health checks in GET /api/v1/health', async () => {
+    const res = await request(app).get('/api/v1/health');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.status).toBe('healthy');
+    expect(res.body.data.checks).toBeDefined();
+    expect(res.body.data.checks.process).toBe('alive');
+    expect(res.body.data.checks.storage).toBe('writable');
+    expect(['connected', 'embedded_wal_connected']).toContain(res.body.data.checks.database);
+    expect(res.body.data.storagePaths).toBeDefined();
+    expect(res.body.data.counts).toBeDefined();
+  });
+
+  it('should redact sensitive credentials in logger data sanitizer', async () => {
+    const { sanitizeLogData } = await import('../server/utils/logger');
+    const sensitivePayload = {
+      user: 'admin',
+      password: 'superSecretPassword123',
+      token: 'jwt.token.secret',
+      nested: {
+        jwtSecret: 'veryLongSecretKeyMinimum32Characters',
+        authorization: 'Bearer secret_auth_token',
+        regularField: 'safeValue',
+      },
+    };
+
+    const sanitized = sanitizeLogData(sensitivePayload);
+    expect(sanitized.user).toBe('admin');
+    expect(sanitized.password).toBe('[REDACTED]');
+    expect(sanitized.token).toBe('[REDACTED]');
+    expect(sanitized.nested.jwtSecret).toBe('[REDACTED]');
+    expect(sanitized.nested.authorization).toBe('[REDACTED]');
+    expect(sanitized.nested.regularField).toBe('safeValue');
+  });
+
+  it('should have valid numeric port configured in serverConfig', async () => {
+    const { serverConfig } = await import('../server/config');
+    expect(typeof serverConfig.port).toBe('number');
+    expect(serverConfig.port).toBeGreaterThan(0);
+    expect(serverConfig.port).toBeLessThanOrEqual(65535);
+  });
+});
+

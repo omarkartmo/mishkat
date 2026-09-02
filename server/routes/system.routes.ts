@@ -194,16 +194,39 @@ export const healthRouter = Router();
 
 // GET /api/v1/health
 healthRouter.get('/', async (req: Request, res: Response) => {
+  let dbStatus = 'disconnected';
+  let storageStatus = 'inaccessible';
+
+  // 1. Verify Storage Read/Write accessibility
+  try {
+    if (fs.existsSync(serverConfig.dirs.root)) {
+      fs.accessSync(serverConfig.dirs.root, fs.constants.R_OK | fs.constants.W_OK);
+      storageStatus = 'writable';
+    }
+  } catch {
+    storageStatus = 'error';
+  }
+
+  // 2. Verify Database connectivity and responsiveness
   try {
     const isPg = db.isPgConnected();
     const { rows: bookCount } = await db.query('SELECT count(*) as count FROM books');
     const { rows: userCount } = await db.query('SELECT count(*) as count FROM users');
     const { rows: loanCount } = await db.query("SELECT count(*) as count FROM loans WHERE status = 'active'");
+    dbStatus = isPg ? 'connected' : 'embedded_wal_connected';
 
-    res.json({
-      success: true,
+    const isHealthy = storageStatus === 'writable';
+    const statusCode = isHealthy ? 200 : 503;
+
+    res.status(statusCode).json({
+      success: isHealthy,
       data: {
-        status: 'healthy',
+        status: isHealthy ? 'healthy' : 'degraded',
+        checks: {
+          process: 'alive',
+          database: dbStatus,
+          storage: storageStatus,
+        },
         serverTime: new Date().toISOString(),
         version: '1.0.0',
         environment: process.env.NODE_ENV || 'development',
@@ -221,7 +244,22 @@ healthRouter.get('/', async (req: Request, res: Response) => {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'HEALTH_CHECK_FAILED', message: err.message } });
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'SERVICE_UNHEALTHY',
+        message: 'تعذر التحقق من سلامة الخادم أو قاعدة البيانات المركزية.',
+      },
+      data: {
+        status: 'unhealthy',
+        checks: {
+          process: 'alive',
+          database: 'error',
+          storage: storageStatus,
+        },
+        serverTime: new Date().toISOString(),
+      },
+    });
   }
 });
 

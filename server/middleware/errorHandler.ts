@@ -1,7 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
 
 export function errorHandler(err: any, req: Request, res: Response, next: NextFunction) {
-  console.error('💥 [Server Internal Error]', err);
+  logger.error(`[Server Internal Error] ${err.message}`, {
+    method: req.method,
+    url: req.originalUrl || req.url,
+    ip: req.ip,
+    status: err.status || err.statusCode || 500,
+    code: err.code,
+  });
 
   const status = err.status || err.statusCode || 500;
   const code = err.code || 'INTERNAL_SERVER_ERROR';

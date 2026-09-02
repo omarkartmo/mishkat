@@ -25,6 +25,7 @@ import submissionsRoutes from './routes/submissions.routes';
 import settingsRoutes from './routes/settings.routes';
 import { auditRouter, backupRouter, healthRouter, systemRouter } from './routes/system.routes';
 import { errorHandler } from './middleware/errorHandler';
+import { logger } from './utils/logger';
 
 // Helper to determine whether an origin is from a private LAN subnet
 const isLanOrigin = (origin: string): boolean => {
@@ -141,6 +142,12 @@ export async function startServer() {
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`🚀 Mishkat Library Central Server running on http://0.0.0.0:${PORT}`, {
+      port: PORT,
+      host: '0.0.0.0',
+      dataDir: serverConfig.dirs.root,
+      mode: process.env.NODE_ENV || 'development',
+    });
     console.log(`\n======================================================`);
     console.log(`🚀 Mishkat Library Central Server running on http://0.0.0.0:${PORT}`);
     console.log(`📚 Central Data Directory: ${serverConfig.dirs.root}`);
@@ -150,27 +157,34 @@ export async function startServer() {
 
   server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
+      logger.warn(`[Server] Port ${PORT} is busy, address already in use.`, { port: PORT });
       console.warn(`[Server] Port ${PORT} was busy, waiting before retry...`);
     } else {
+      logger.error(`[Server Error] ${err.message}`, { code: err.code });
       console.error('[Server Error]', err);
     }
   });
 
   // Graceful Process Termination Handler with safety timeout
   const shutdown = async (signal: string) => {
+    logger.info(`[Server] Received ${signal}. Starting graceful shutdown...`, { signal });
     console.log(`\n[Server] Received ${signal}. Starting graceful shutdown...`);
     const forceExitTimeout = setTimeout(() => {
+      logger.warn('[Server] Forceful shutdown triggered after timeout.');
       console.warn('[Server] Forceful shutdown triggered after timeout.');
       process.exit(0);
     }, 5000);
     forceExitTimeout.unref();
 
     server.close(async () => {
+      logger.info('[Server] HTTP listener closed.');
       console.log('[Server] HTTP listener closed.');
       try {
         await db.close();
+        logger.info('[Database] Database pool and engine closed cleanly.');
         console.log('[Database] Database pool and engine closed cleanly.');
       } catch (err: any) {
+        logger.error(`[Database Shutdown Error] ${err.message}`);
         console.error('[Database Shutdown Error]', err.message);
       }
       process.exit(0);

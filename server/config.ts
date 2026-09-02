@@ -36,9 +36,15 @@ if (!envJwtSecret || envJwtSecret.trim().length < 32) {
 
 const jwtSecret: string = envJwtSecret.trim();
 
+const rawPort = process.env.PORT;
+const parsedPort = rawPort ? parseInt(rawPort, 10) : 3000;
+const port = (!isNaN(parsedPort) && parsedPort > 0 && parsedPort <= 65535) ? parsedPort : 3000;
+if (rawPort && (isNaN(parsedPort) || parsedPort <= 0 || parsedPort > 65535)) {
+  console.warn(`⚠️ [Config] Invalid PORT '${rawPort}' specified in environment. Defaulting to 3000.`);
+}
 
 export const serverConfig = {
-  port: 3000,
+  port,
   host: '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
   jwtSecret,
@@ -46,8 +52,8 @@ export const serverConfig = {
   databaseUrl: process.env.DATABASE_URL || '',
   dirs: DIRS,
   allowedCorsOrigins: process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',')
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+    : [`http://localhost:${port}`, `http://127.0.0.1:${port}`, 'http://localhost:3000', 'http://127.0.0.1:3000'],
   maxFileSizeMB: parseInt(process.env.MAX_FILE_SIZE_MB || '100', 10),
   rateLimitWindowMs: 15 * 60 * 1000, // 15 minutes
   rateLimitMaxRequests: 300, // per window
