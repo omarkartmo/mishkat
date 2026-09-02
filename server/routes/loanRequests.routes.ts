@@ -243,20 +243,37 @@ router.post('/:id/handover', authenticateToken, requireRole('admin', 'librarian'
       }
       const r = reqRows[0];
 
-      // Check available copies
-      const { rows: bookRows } = await client.query('SELECT * FROM books WHERE id = $1', [r.book_id]);
-      if (bookRows.length === 0) {
-        throw new Error('الكتاب غير موجود.');
+      // Check available copies and atomically decrement
+      const { rows: updatedBooks } = await client.query(`
+        UPDATE books
+        SET available_copies = GREATEST(0, available_copies - 1)
+        WHERE id = $1 AND available_copies > 0
+        RETURNING *
+      `, [r.book_id]);
+
+      if (updatedBooks.length === 0) {
+        throw new Error('عذراً، لا توجد نسخ متوفرة حالياً من هذا الكتاب للإعارة.');
       }
-      const book = bookRows[0];
+      const book = updatedBooks[0];
 
-      // Decrement copies and set copy to borrowed
-      await client.query('UPDATE books SET available_copies = GREATEST(0, available_copies - 1) WHERE id = $1', [r.book_id]);
+      // Atomically claim an available physical copy
+      let copyId: string | null = null;
+      const { rows: claimedCopies } = await client.query(`
+        UPDATE physical_copies
+        SET status = 'borrowed'
+        WHERE id = (
+          SELECT id
+          FROM physical_copies
+          WHERE book_id = $1 AND status = 'available'
+          ORDER BY copy_number ASC
+          LIMIT 1
+          FOR UPDATE
+        )
+        RETURNING id
+      `, [r.book_id]);
 
-      const { rows: copyRows } = await client.query("SELECT id FROM physical_copies WHERE book_id = $1 AND status = 'available' LIMIT 1", [r.book_id]);
-      const copyId = copyRows.length > 0 ? copyRows[0].id : null;
-      if (copyId) {
-        await client.query("UPDATE physical_copies SET status = 'borrowed' WHERE id = $1", [copyId]);
+      if (claimedCopies.length > 0) {
+        copyId = claimedCopies[0].id;
       }
 
       const issueDate = new Date().toISOString().split('T')[0];

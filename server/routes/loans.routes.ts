@@ -102,19 +102,45 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
         throw new Error('الطالب محظور من الاستعارة بسبب تأخيرات سابقة.');
       }
 
-      // 3. Find an available physical copy
-      const { rows: copyRows } = await client.query("SELECT id FROM physical_copies WHERE book_id = $1 AND status = 'available' LIMIT 1", [bookId]);
-      const copyId = copyRows.length > 0 ? copyRows[0].id : null;
+      // 3. Atomically claim an available physical copy with row-level lock
+      let copyId: string | null = null;
+      const { rows: claimedCopies } = await client.query(`
+        UPDATE physical_copies
+        SET status = 'borrowed'
+        WHERE id = (
+          SELECT id
+          FROM physical_copies
+          WHERE book_id = $1 AND status = 'available'
+          ORDER BY copy_number ASC
+          LIMIT 1
+          FOR UPDATE
+        )
+        RETURNING id
+      `, [bookId]);
 
-      // 4. Update physical copy status if exists
-      if (copyId) {
-        await client.query("UPDATE physical_copies SET status = 'borrowed' WHERE id = $1", [copyId]);
+      if (claimedCopies.length > 0) {
+        copyId = claimedCopies[0].id;
+      } else if (!isOverrideExemption) {
+        const { rows: totalCopiesRows } = await client.query('SELECT count(*) as count FROM physical_copies WHERE book_id = $1', [bookId]);
+        const hasPhysicalCopies = parseInt(totalCopiesRows[0]?.count || '0', 10) > 0;
+        if (hasPhysicalCopies) {
+          throw new Error('عذراً، لا توجد نسخ متوفرة حالياً من هذا الكتاب للإعارة.');
+        }
       }
 
-      // 5. Decrement available copies on master book
-      await client.query('UPDATE books SET available_copies = GREATEST(0, available_copies - 1) WHERE id = $1', [bookId]);
+      // 4. Decrement available copies atomically on master book
+      const { rows: updatedBooks } = await client.query(`
+        UPDATE books
+        SET available_copies = GREATEST(0, available_copies - 1)
+        WHERE id = $1 AND (available_copies > 0 OR $2 = true)
+        RETURNING available_copies
+      `, [bookId, Boolean(isOverrideExemption)]);
 
-      // 6. Insert loan record
+      if (updatedBooks.length === 0 && !isOverrideExemption) {
+        throw new Error('عذراً، لا توجد نسخ متوفرة حالياً من هذا الكتاب للإعارة.');
+      }
+
+      // 5. Insert loan record
       await client.query(`
         INSERT INTO loans (
           id, book_id, book_title, copy_id, student_id, student_name, student_reg_number,

@@ -499,3 +499,121 @@ describe('8. System Security, Backups & Reset Endpoints', () => {
     expect(res.body.success).toBe(false);
   });
 });
+
+describe('9. Physical Copy Concurrency & Race-Condition Hardening', () => {
+  let singleCopyBookId: string;
+  let doubleCopyBookId: string;
+
+  beforeAll(async () => {
+    // 1. Create a book with exactly 1 available copy
+    const book1Res = await request(app)
+      .post('/api/v1/books')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        type: 'physical',
+        title: 'كتاب اختبار التزامن - نسخة واحدة',
+        author: 'مؤلف التزامن',
+        categoryId: 'cat-islamic',
+        totalCopies: 1,
+        availableCopies: 1,
+        location: { cabinet: 'A', shelf: '1', section: '1' },
+      });
+    singleCopyBookId = book1Res.body.data.id;
+
+    // 2. Create a book with exactly 2 available copies
+    const book2Res = await request(app)
+      .post('/api/v1/books')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        type: 'physical',
+        title: 'كتاب اختبار التزامن - نسختان',
+        author: 'مؤلف التزامن',
+        categoryId: 'cat-islamic',
+        totalCopies: 2,
+        availableCopies: 2,
+        location: { cabinet: 'A', shelf: '2', section: '1' },
+      });
+    doubleCopyBookId = book2Res.body.data.id;
+  });
+
+  it('should prevent dual allocation when 2 concurrent requests compete for 1 available copy', async () => {
+    // Fire two concurrent loan issuance requests simultaneously
+    const [resA, resB] = await Promise.all([
+      request(app)
+        .post('/api/v1/loans')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          bookId: singleCopyBookId,
+          studentId: studentId,
+          purpose: 'academic_research',
+          customDurationDays: 7,
+        }),
+      request(app)
+        .post('/api/v1/loans')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          bookId: singleCopyBookId,
+          studentId: studentBId,
+          purpose: 'general_reading',
+          customDurationDays: 7,
+        }),
+    ]);
+
+    const statuses = [resA.status, resB.status];
+    // Exactly one request must succeed (201) and the competing request must fail (400)
+    expect(statuses).toContain(201);
+    expect(statuses).toContain(400);
+
+    // Verify book stock is exactly 0
+    const checkRes = await request(app).get('/api/v1/books');
+    const book = checkRes.body.data.find((b: any) => b.id === singleCopyBookId);
+    expect(book.availableCopies).toBe(0);
+
+    // Verify exactly 1 active loan exists for this book
+    const loansRes = await request(app)
+      .get(`/api/v1/loans?bookId=${singleCopyBookId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    const activeLoans = loansRes.body.data.filter((l: any) => l.bookId === singleCopyBookId && l.status === 'active');
+    expect(activeLoans.length).toBe(1);
+  });
+
+  it('should allocate distinct physical copies when 2 concurrent requests compete for 2 available copies', async () => {
+    // Fire two concurrent loan requests for the book with 2 copies
+    const [resA, resB] = await Promise.all([
+      request(app)
+        .post('/api/v1/loans')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          bookId: doubleCopyBookId,
+          studentId: studentId,
+          purpose: 'academic_research',
+          customDurationDays: 7,
+        }),
+      request(app)
+        .post('/api/v1/loans')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          bookId: doubleCopyBookId,
+          studentId: studentBId,
+          purpose: 'general_reading',
+          customDurationDays: 7,
+        }),
+    ]);
+
+    // Both requests must succeed
+    expect(resA.status).toBe(201);
+    expect(resB.status).toBe(201);
+
+    // Verify they received different copy IDs (no dual assignment of the same physical copy)
+    const copyIdA = resA.body.data.copyId;
+    const copyIdB = resB.body.data.copyId;
+    if (copyIdA && copyIdB) {
+      expect(copyIdA).not.toBe(copyIdB);
+    }
+
+    // Verify book stock is now 0
+    const checkRes = await request(app).get('/api/v1/books');
+    const book = checkRes.body.data.find((b: any) => b.id === doubleCopyBookId);
+    expect(book.availableCopies).toBe(0);
+  });
+});
