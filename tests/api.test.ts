@@ -662,13 +662,14 @@ describe('10. Production Operations Hardening (Health, Logger, Port)', () => {
   });
 });
 
-describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
+describe('11. Backup, Restore & Disaster Recovery (Phase 15.3 & 15.3.1)', () => {
   let initialBackupFileName = '';
   let disasterBackupFileName = '';
   const testMarkerTitle = `كتاب استرجاع الطوارئ المعتمد ${Date.now()}`;
   let disasterBookId = '';
+  let disasterNotificationId = '';
 
-  it('Test A: should create a complete database backup with all 14 tables and valid schema', async () => {
+  it('Test A: should create a complete database backup with all 15 tables including notifications', async () => {
     const res = await request(app)
       .post('/api/v1/backups/create')
       .set('Authorization', `Bearer ${adminToken}`);
@@ -676,11 +677,12 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.fileName).toBeDefined();
-    expect(res.body.data.tablesCount).toBe(14);
+    expect(res.body.data.tablesCount).toBe(15);
     expect(res.body.data.backup).toBeDefined();
     expect(res.body.data.backup.meta.version).toBe('1.0.0');
     expect(res.body.data.backup.data.users).toBeInstanceOf(Array);
     expect(res.body.data.backup.data.books).toBeInstanceOf(Array);
+    expect(res.body.data.backup.data.notifications).toBeInstanceOf(Array);
 
     initialBackupFileName = res.body.data.fileName;
 
@@ -778,6 +780,7 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
         student_favorites: [],
         pending_submissions: [],
         whitelisted_portals: [],
+        notifications: [],
         system_settings: [],
       },
     };
@@ -796,44 +799,64 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
     try { fs.unlinkSync(path.join(serverConfig.dirs.backups, invalidSchemaFileName)); } catch {}
   });
 
-  it('Test E: should atomically rollback restore if an error occurs mid-transaction', async () => {
-    const fs = await import('fs');
-    const path = await import('path');
-    const { serverConfig } = await import('../server/config');
+  it('Test E: REAL Transaction Rollback Verification (Mid-Transaction Forced Failure)', async () => {
+    const { setRestoreTestFailureHook } = await import('../server/services/backupService');
+    const { db } = await import('../server/db/pool');
 
-    // Read valid backup and inject a foreign-key or constraint violation in the middle
-    const validRaw = fs.readFileSync(path.join(serverConfig.dirs.backups, initialBackupFileName), 'utf8');
-    const brokenData = JSON.parse(validRaw);
-    // Inject a book copy referencing a non-existent book ID
-    brokenData.data.physical_copies.push({
-      id: 'copy-non-existent-fk',
-      book_id: 'book-that-does-not-exist-at-all',
-      barcode: 'BAD-BARCODE-999999',
+    // 1. Capture exact state of representative records before restore attempt
+    const { rows: preUsers } = await db.query('SELECT id, registration_number, name, role_id FROM users ORDER BY id');
+    const { rows: preBooks } = await db.query('SELECT id, title, available_copies FROM books ORDER BY id');
+    const { rows: preLoans } = await db.query('SELECT id, student_id, book_id, status FROM loans ORDER BY id');
+    const { rows: preNotes } = await db.query('SELECT id, student_id, book_id, content FROM student_notes ORDER BY id');
+    const { rows: preSettings } = await db.query('SELECT key, value FROM system_settings ORDER BY key');
+
+    expect(preUsers.length).toBeGreaterThan(0);
+    expect(preBooks.length).toBeGreaterThan(0);
+
+    // 2. Set the test-only failure hook to trigger AFTER truncate and partial insert (mid-transaction after 'books')
+    let hookWasTriggered = false;
+    setRestoreTestFailureHook((stage) => {
+      if (stage === 'mid_insert') {
+        hookWasTriggered = true;
+        throw new Error('SIMULATED_DATABASE_CRASH_MID_RESTORE_TRANSACTION');
+      }
     });
 
-    const brokenFileName = 'test_broken_fk_backup.json';
-    fs.writeFileSync(path.join(serverConfig.dirs.backups, brokenFileName), JSON.stringify(brokenData), 'utf8');
+    try {
+      // 3. Attempt restore of a valid backup
+      const res = await request(app)
+        .post(`/api/v1/backups/${initialBackupFileName}/restore`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ confirm: true });
 
-    // Record count of books prior to attempt
-    const beforeCountRes = await request(app).get('/api/v1/books');
-    const beforeCount = beforeCountRes.body.data.length;
+      // Must fail with 500 RESTORE_FAILED
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('RESTORE_FAILED');
+      expect(res.body.error.message).toContain('SIMULATED_DATABASE_CRASH_MID_RESTORE_TRANSACTION');
+      expect(hookWasTriggered).toBe(true);
 
-    const brokenRes = await request(app)
-      .post(`/api/v1/backups/${brokenFileName}/restore`)
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ confirm: true });
+      // 4. Assert that rollback restored the EXACT pre-restore records and relationships
+      const { rows: postUsers } = await db.query('SELECT id, registration_number, name, role_id FROM users ORDER BY id');
+      const { rows: postBooks } = await db.query('SELECT id, title, available_copies FROM books ORDER BY id');
+      const { rows: postLoans } = await db.query('SELECT id, student_id, book_id, status FROM loans ORDER BY id');
+      const { rows: postNotes } = await db.query('SELECT id, student_id, book_id, content FROM student_notes ORDER BY id');
+      const { rows: postSettings } = await db.query('SELECT key, value FROM system_settings ORDER BY key');
 
-    // Validation catches foreign-key error before or during transaction
-    expect([400, 500]).toContain(brokenRes.status);
-
-    // Verify database books count is intact (no half-cleared or truncated state)
-    const afterCountRes = await request(app).get('/api/v1/books');
-    expect(afterCountRes.body.data.length).toBe(beforeCount);
-
-    try { fs.unlinkSync(path.join(serverConfig.dirs.backups, brokenFileName)); } catch {}
+      // Same IDs, same values, same counts, same relationships
+      expect(postUsers).toEqual(preUsers);
+      expect(postBooks).toEqual(preBooks);
+      expect(postLoans).toEqual(preLoans);
+      expect(postNotes).toEqual(preNotes);
+      expect(postSettings).toEqual(preSettings);
+    } finally {
+      // Always reset hook
+      setRestoreTestFailureHook(null);
+    }
   });
 
   it('Test B & C & I & J & K: Full Disaster Recovery Simulation (Create known data -> Backup -> Disaster -> Restore -> Verify)', async () => {
+    const { db } = await import('../server/db/pool');
+
     // 1. Create a known distinct book and note
     const bookCreateRes = await request(app)
       .post('/api/v1/books')
@@ -864,6 +887,23 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
       });
     expect(noteCreateRes.status).toBe(201);
 
+    // Create a notification for the student
+    disasterNotificationId = `notif-${Date.now()}`;
+    await db.query(`
+      INSERT INTO notifications (id, recipient_id, recipient_role, title, message, type, target_tab, is_read, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      disasterNotificationId,
+      'user-student-1',
+      'student',
+      'إشعار تجريبي لاختبار الاسترجاع الكامل',
+      'تم اعتماد استعارتك بنجاح قبل محاكاة الكارثة',
+      'loan_approved',
+      'loans',
+      false,
+      new Date().toISOString(),
+    ]);
+
     // 2. Create the Disaster Recovery Backup Snapshot
     const snapshotRes = await request(app)
       .post('/api/v1/backups/create')
@@ -872,16 +912,22 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
     expect(snapshotRes.status).toBe(200);
     disasterBackupFileName = snapshotRes.body.data.fileName;
 
-    // 3. Simulate Database Data Loss / Disaster: delete the book and modify records
+    // 3. Simulate Database Data Loss / Disaster: delete the book and delete the notification
     const deleteBookRes = await request(app)
       .delete(`/api/v1/books/${disasterBookId}`)
       .set('Authorization', `Bearer ${adminToken}`);
     expect(deleteBookRes.status).toBe(200);
 
+    await db.query('DELETE FROM notifications WHERE id = $1', [disasterNotificationId]);
+
     // Verify the book is truly GONE from the active database
     const verifyGoneRes = await request(app).get('/api/v1/books');
     const foundDeleted = verifyGoneRes.body.data.find((b: any) => b.id === disasterBookId);
     expect(foundDeleted).toBeUndefined();
+
+    // Verify notification is gone
+    const verifyNotifGone = await db.query('SELECT * FROM notifications WHERE id = $1', [disasterNotificationId]);
+    expect(verifyNotifGone.rows.length).toBe(0);
 
     // 4. Perform Transactional Restore from the Snapshot
     const restoreRes = await request(app)
@@ -916,6 +962,11 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
     expect(recoveredNote).toBeDefined();
     expect(recoveredNote.content).toBe('فائدة مستخلصة قبل الكارثة المحاكية للاسترجاع');
 
+    // Verify notification was 100% recovered
+    const recoveredNotif = await db.query('SELECT * FROM notifications WHERE id = $1', [disasterNotificationId]);
+    expect(recoveredNotif.rows.length).toBe(1);
+    expect(recoveredNotif.rows[0].title).toBe('إشعار تجريبي لاختبار الاسترجاع الكامل');
+
     // 7. Test J: Verify Health endpoint reports healthy after restore
     const healthRes = await request(app).get('/api/v1/health');
     expect(healthRes.status).toBe(200);
@@ -935,6 +986,75 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3)', () => {
       .send({ registrationNumber: 'STU-2026-101', password: '123456' });
     expect(studentLoginRes.status).toBe(200);
     expect(studentLoginRes.body.data.token).toBeTypeOf('string');
+  });
+
+  it('Test: should ensure all persistent application database tables are covered by BACKUP_TABLES_ORDER', async () => {
+    const { db } = await import('../server/db/pool');
+    const { BACKUP_TABLES_ORDER } = await import('../server/services/backupService');
+
+    // Query all base tables in the public schema
+    const { rows } = await db.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+        AND table_type = 'BASE TABLE'
+      ORDER BY table_name;
+    `);
+
+    const allDbTables = rows.map((r: any) => r.table_name);
+
+    // Explicit non-application / infrastructure / audit tables
+    const infrastructureAndAuditTables = new Set([
+      'schema_migrations', // migration version control
+      'roles',             // static RBAC seed data
+      'permissions',       // static RBAC seed data
+      'role_permissions',  // static RBAC seed data
+      'audit_logs',        // append-only compliance audit trail (intentionally preserved across restore)
+    ]);
+
+    const persistentAppTables = allDbTables.filter((t: string) => !infrastructureAndAuditTables.has(t));
+
+    // Every single persistent application table MUST be in BACKUP_TABLES_ORDER
+    for (const table of persistentAppTables) {
+      expect(BACKUP_TABLES_ORDER).toContain(table);
+    }
+
+    // Exact count parity
+    expect(BACKUP_TABLES_ORDER.length).toBe(persistentAppTables.length);
+  });
+
+  it('Test: should successfully create new records without sequence/ID collision after restore', async () => {
+    // 1. Create a new book after restore
+    const newBookRes = await request(app)
+      .post('/api/v1/books')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        type: 'physical',
+        title: `كتاب ما بعد الاسترجاع ${Date.now()}`,
+        author: 'مؤلف جديد',
+        categoryId: 'cat-islamic',
+        totalCopies: 2,
+        availableCopies: 2,
+        language: 'العربية',
+      });
+
+    expect(newBookRes.status).toBe(201);
+    expect(newBookRes.body.data.id).toBeDefined();
+
+    // 2. Create a new student note after restore
+    const newNoteRes = await request(app)
+      .post('/api/v1/notes')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        bookId: newBookRes.body.data.id,
+        bookTitle: newBookRes.body.data.title,
+        bookMedium: 'physical',
+        content: 'ملاحظة جديدة ما بعد الاسترجاع للتأكد من عدم وجود تعارض في المعرفات',
+        colorTag: 'amber',
+      });
+
+    expect(newNoteRes.status).toBe(201);
+    expect(newNoteRes.body.data.id).toBeDefined();
   });
 
   it('Test: should list available backups with classification (manual vs pre_restore)', async () => {

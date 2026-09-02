@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 
 export const BACKUP_FORMAT_VERSION = '1.0.0';
 
+// 15 persistent application data tables in strict dependency order
 export const BACKUP_TABLES_ORDER = [
   'users',
   'categories',
@@ -20,6 +21,7 @@ export const BACKUP_TABLES_ORDER = [
   'student_favorites',
   'pending_submissions',
   'whitelisted_portals',
+  'notifications',
   'system_settings',
 ] as const;
 
@@ -100,6 +102,11 @@ export const TABLE_COLUMNS_ALLOWLIST: Record<BackupTableName, string[]> = {
     'id', 'name', 'description', 'url', 'category', 'icon',
     'is_featured', 'notes', 'allowed_domains', 'created_at',
   ],
+  notifications: [
+    'id', 'recipient_id', 'recipient_role', 'title', 'message',
+    'type', 'target_tab', 'target_entity_id', 'is_read', 'created_at',
+    'created_timestamp',
+  ],
   system_settings: [
     'key', 'value', 'updated_at',
   ],
@@ -124,6 +131,19 @@ export interface ValidationResult {
   tableCounts?: Record<string, number>;
 }
 
+// Test-only failure hook mechanism strictly guarded by NODE_ENV === 'test'
+export type RestoreTestHookStage = 'after_truncate' | 'mid_insert' | 'before_commit';
+let testFailureHook: ((stage: RestoreTestHookStage, client: IDatabaseClient) => Promise<void> | void) | null = null;
+
+export function setRestoreTestFailureHook(
+  hook: ((stage: RestoreTestHookStage, client: IDatabaseClient) => Promise<void> | void) | null
+): void {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('Restore test failure hook can only be used when NODE_ENV === test');
+  }
+  testFailureHook = hook;
+}
+
 /**
  * Validates a backup JSON payload thoroughly before destructive restore.
  */
@@ -145,6 +165,11 @@ export function validateBackupPayload(parsed: any): ValidationResult {
   // 2. Validate data object
   if (!parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) {
     return { valid: false, error: 'قسم البيانات (data) مفقود أو غير صالح في النسخة الاحتياطية.' };
+  }
+
+  // Backward-compatibility: if notifications is missing from older 14-table backup, default to empty array
+  if (!parsed.data.notifications) {
+    parsed.data.notifications = [];
   }
 
   // 3. Verify all expected tables exist and are arrays
@@ -205,9 +230,6 @@ export function validateBackupPayload(parsed: any): ValidationResult {
     if (b.format && b.format !== 'pdf' && b.format !== 'epub') {
       return { valid: false, error: `امتداد رقمي غير صالح (${b.format}) في الكتاب معرف: ${b.id}` };
     }
-    if (b.category_id && !categoryIds.has(b.category_id)) {
-      // Allow orphan category with set null or warning, but verify integrity
-    }
     if (bookIds.has(b.id)) {
       return { valid: false, error: `تكرار في المعرف الأساسي للكتاب: ${b.id}` };
     }
@@ -255,10 +277,22 @@ export function validateBackupPayload(parsed: any): ValidationResult {
     loanIds.add(l.id);
   }
 
-  // 9. Calculate table counts
+  // 9. Validate Notifications
+  const notificationIds = new Set<string>();
+  for (const n of parsed.data.notifications) {
+    if (!n.id || !n.recipient_id || !n.title || !n.message) {
+      return { valid: false, error: 'سجل إشعار غير مكتمل الحقول الأساسية في النسخة الاحتياطية.' };
+    }
+    if (notificationIds.has(n.id)) {
+      return { valid: false, error: `تكرار في المعرف الأساسي للإشعار: ${n.id}` };
+    }
+    notificationIds.add(n.id);
+  }
+
+  // 10. Calculate table counts
   const tableCounts: Record<string, number> = {};
   for (const table of BACKUP_TABLES_ORDER) {
-    tableCounts[table] = parsed.data[table].length;
+    tableCounts[table] = (parsed.data[table] || []).length;
   }
 
   return {
@@ -360,15 +394,15 @@ export async function restoreDatabaseFromBackup(
   backup: BackupData,
   client: IDatabaseClient
 ): Promise<{ restoredCounts: Record<string, number> }> {
-  // 1. Truncate all dynamic relational tables in clean CASCADE
+  // 1. Truncate all 15 dynamic relational tables in clean CASCADE
   await client.query(`
     TRUNCATE TABLE
+      notifications,
       student_notes,
       book_summaries,
       physical_bookmarks,
       reading_progress,
       student_favorites,
-      notifications,
       loans,
       loan_requests,
       pending_submissions,
@@ -380,6 +414,10 @@ export async function restoreDatabaseFromBackup(
       system_settings
     CASCADE;
   `);
+
+  if (process.env.NODE_ENV === 'test' && testFailureHook) {
+    await testFailureHook('after_truncate', client);
+  }
 
   const restoredCounts: Record<string, number> = {};
 
@@ -419,6 +457,11 @@ export async function restoreDatabaseFromBackup(
         await client.query(sql, values);
       }
     }
+
+    // If test failure hook is registered, invoke it after inserting books (multiple tables written!)
+    if (process.env.NODE_ENV === 'test' && testFailureHook && table === 'books') {
+      await testFailureHook('mid_insert', client);
+    }
   }
 
   // 3. Post-Restore Integrity Checks (before commit)
@@ -428,6 +471,10 @@ export async function restoreDatabaseFromBackup(
   );
   if (adminRows.length === 0) {
     throw new Error('فشل التحقق من سلامة البيانات: لم يتم العثور على حساب مدير نشط بعد الاسترجاع.');
+  }
+
+  if (process.env.NODE_ENV === 'test' && testFailureHook) {
+    await testFailureHook('before_commit', client);
   }
 
   return { restoredCounts };
