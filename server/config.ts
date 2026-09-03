@@ -14,7 +14,11 @@ const DIRS = {
   backups: path.join(ROOT_DATA_DIR, 'backups'),
   logs: path.join(ROOT_DATA_DIR, 'logs'),
   temp: path.join(ROOT_DATA_DIR, 'temp'),
-  pgdata: path.join(ROOT_DATA_DIR, 'pgdata'),
+  pgdata: process.env.PGDATA_DIR || (
+    process.env.NODE_ENV === 'test'
+      ? path.join(ROOT_DATA_DIR, 'test_pgdata')
+      : path.join(ROOT_DATA_DIR, 'pgdata')
+  ),
 };
 
 // Create storage directories if they do not exist
