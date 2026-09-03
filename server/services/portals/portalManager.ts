@@ -23,6 +23,14 @@ export class PortalManager {
   private static adapterCache = new Map<string, ExternalPortalAdapter>();
 
   /**
+   * Retrieves portal definition from the database
+   */
+  public static async getPortal(portalId: string): Promise<any | null> {
+    const { rows } = await db.query('SELECT * FROM whitelisted_portals WHERE id = $1', [portalId]);
+    return rows[0] || null;
+  }
+
+  /**
    * Resolves or instantiates an adapter for a given portalId
    */
   public static async getAdapter(portalId: string): Promise<ExternalPortalAdapter | null> {
@@ -31,12 +39,11 @@ export class PortalManager {
     }
 
     // Check database for portal definition
-    const { rows } = await db.query('SELECT * FROM whitelisted_portals WHERE id = $1', [portalId]);
-    if (rows.length === 0) {
+    const portal = await this.getPortal(portalId);
+    if (!portal) {
       return null;
     }
 
-    const portal = rows[0];
     const allowedDomains = Array.isArray(portal.allowed_domains) ? portal.allowed_domains : [];
     const integrationMethod = portal.integration_method || 'NONE';
 
@@ -54,7 +61,7 @@ export class PortalManager {
         integrationMethod: 'MANUAL_VERIFIED_CATALOG',
         capabilities: portal.capabilities,
       });
-    } else if (integrationMethod === 'OAI_PMH') {
+    } else if (integrationMethod === 'OAI_PMH' || integrationMethod === 'LIVE_OAI_PMH') {
       adapter = new OaiPmhAdapter({
         portalId: portal.id,
         portalName: portal.name,
@@ -63,7 +70,7 @@ export class PortalManager {
         integrationMethod: 'OAI_PMH',
         capabilities: portal.capabilities,
       });
-    } else if (integrationMethod === 'OFFICIAL_API') {
+    } else if (integrationMethod === 'OFFICIAL_API' || integrationMethod === 'LIVE_OFFICIAL_API') {
       adapter = new OfficialApiAdapter({
         portalId: portal.id,
         portalName: portal.name,
@@ -72,7 +79,7 @@ export class PortalManager {
         integrationMethod: 'OFFICIAL_API',
         capabilities: portal.capabilities,
       });
-    } else if (integrationMethod === 'OFFICIAL_SEARCH_ENDPOINT') {
+    } else if (integrationMethod === 'OFFICIAL_SEARCH_ENDPOINT' || integrationMethod === 'LIVE_OFFICIAL_SEARCH') {
       const template = portal.discovery_details?.searchEndpoint || `${portal.url}/search?q={query}`;
       adapter = new OfficialSearchEndpointAdapter({
         portalId: portal.id,
@@ -83,14 +90,17 @@ export class PortalManager {
         capabilities: portal.capabilities,
         searchUrlTemplate: template,
       });
+    } else if (integrationMethod === 'BROWSE_ONLY') {
+      // Browse-only portals do not have automated search adapters
+      return null;
     } else {
-      // Default to VerifiedCatalogAdapter if ID matches, else fallback
+      // Default to VerifiedCatalogAdapter (STATIC_VERIFIED_SNAPSHOT)
       adapter = new VerifiedCatalogAdapter({
         portalId: portal.id,
         portalName: portal.name,
         baseUrl: portal.url,
         allowedDomains,
-        integrationMethod: 'MANUAL_VERIFIED_CATALOG',
+        integrationMethod: 'STATIC_VERIFIED_SNAPSHOT',
       });
     }
 
@@ -107,6 +117,14 @@ export class PortalManager {
     query: string,
     options?: PortalSearchOptions
   ): Promise<VerifiedPortalRecord[]> {
+    const portal = await this.getPortal(portalId);
+    if (!portal) return [];
+
+    // BROWSE_ONLY portals have search explorer strictly disabled
+    if (portal.status === 'BROWSE_ONLY' || portal.integration_method === 'BROWSE_ONLY') {
+      return [];
+    }
+
     const adapter = await this.getAdapter(portalId);
     if (!adapter) {
       return [];

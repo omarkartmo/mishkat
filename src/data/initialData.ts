@@ -411,7 +411,7 @@ export const INITIAL_WHITELISTED_PORTALS: WhitelistedPortal[] = [
     allowedDomains: ['al-maktaba.org', 'shamela.ws', 'ibadhiyah.net'],
     notes: 'مصدر رئيسي موصى به لأبحاث الدراسات الإسلامية والتاريخية',
     status: 'VERIFIED',
-    integrationMethod: 'MANUAL_VERIFIED_CATALOG',
+    integrationMethod: 'STATIC_VERIFIED_SNAPSHOT',
     healthStatus: 'HEALTHY',
     capabilities: {
       searchSupported: true,
@@ -420,6 +420,9 @@ export const INITIAL_WHITELISTED_PORTALS: WhitelistedPortal[] = [
       metadataSupported: true,
       fullTextSupported: true,
       verificationSupported: true,
+      isLiveSearchSupported: false,
+      isStaticSnapshot: true,
+      isBrowseOnly: false,
     },
   },
   {
@@ -433,7 +436,7 @@ export const INITIAL_WHITELISTED_PORTALS: WhitelistedPortal[] = [
     allowedDomains: ['shamela.ws'],
     notes: 'فهارس شاملة ومحركات بحث متقدمة في متون الكتب',
     status: 'VERIFIED',
-    integrationMethod: 'MANUAL_VERIFIED_CATALOG',
+    integrationMethod: 'STATIC_VERIFIED_SNAPSHOT',
     healthStatus: 'HEALTHY',
     capabilities: {
       searchSupported: true,
@@ -442,6 +445,9 @@ export const INITIAL_WHITELISTED_PORTALS: WhitelistedPortal[] = [
       metadataSupported: true,
       fullTextSupported: true,
       verificationSupported: true,
+      isLiveSearchSupported: false,
+      isStaticSnapshot: true,
+      isBrowseOnly: false,
     },
   },
   {
@@ -455,7 +461,7 @@ export const INITIAL_WHITELISTED_PORTALS: WhitelistedPortal[] = [
     allowedDomains: ['ksaa.gov.sa', 'arabicacademy.org.eg'],
     notes: 'للاستشهاد بالمعاجم اللغوية الموثقة',
     status: 'VERIFIED',
-    integrationMethod: 'MANUAL_VERIFIED_CATALOG',
+    integrationMethod: 'STATIC_VERIFIED_SNAPSHOT',
     healthStatus: 'HEALTHY',
     capabilities: {
       searchSupported: true,
@@ -464,6 +470,9 @@ export const INITIAL_WHITELISTED_PORTALS: WhitelistedPortal[] = [
       metadataSupported: true,
       fullTextSupported: true,
       verificationSupported: true,
+      isLiveSearchSupported: false,
+      isStaticSnapshot: true,
+      isBrowseOnly: false,
     },
   },
   {
@@ -477,7 +486,7 @@ export const INITIAL_WHITELISTED_PORTALS: WhitelistedPortal[] = [
     allowedDomains: ['localhost', 'school.internal'],
     notes: 'مشاريع وأبحاث تم تقييمها واعتمادها من قبل أساتذة المدرسة',
     status: 'VERIFIED',
-    integrationMethod: 'MANUAL_VERIFIED_CATALOG',
+    integrationMethod: 'STATIC_VERIFIED_SNAPSHOT',
     healthStatus: 'HEALTHY',
     capabilities: {
       searchSupported: true,
@@ -486,6 +495,9 @@ export const INITIAL_WHITELISTED_PORTALS: WhitelistedPortal[] = [
       metadataSupported: true,
       fullTextSupported: true,
       verificationSupported: true,
+      isLiveSearchSupported: false,
+      isStaticSnapshot: true,
+      isBrowseOnly: false,
     },
   },
 ];

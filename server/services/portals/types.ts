@@ -9,12 +9,29 @@ export type PortalStatus =
   | 'ANALYZING'
   | 'TESTING'
   | 'VERIFIED'
+  | 'STATIC_SNAPSHOT'
+  | 'BROWSE_ONLY'
   | 'UNSUPPORTED'
   | 'FAILED'
   | 'NEEDS_REVIEW'
   | 'BLOCKED';
 
+export type PortalCapabilityType =
+  | 'LIVE_OFFICIAL_API'
+  | 'LIVE_OAI_PMH'
+  | 'LIVE_OFFICIAL_SEARCH'
+  | 'LIVE_STRUCTURED_METADATA'
+  | 'STATIC_VERIFIED_SNAPSHOT'
+  | 'BROWSE_ONLY'
+  | 'UNSUPPORTED';
+
 export type IntegrationMethod =
+  | 'LIVE_OFFICIAL_API'
+  | 'LIVE_OAI_PMH'
+  | 'LIVE_OFFICIAL_SEARCH'
+  | 'LIVE_STRUCTURED_METADATA'
+  | 'STATIC_VERIFIED_SNAPSHOT'
+  | 'BROWSE_ONLY'
   | 'OFFICIAL_API'
   | 'OAI_PMH'
   | 'OFFICIAL_SEARCH_ENDPOINT'
@@ -40,6 +57,9 @@ export interface PortalCapabilities {
   metadataSupported: boolean;
   fullTextSupported: boolean;
   verificationSupported: boolean;
+  isLiveSearchSupported?: boolean;
+  isStaticSnapshot?: boolean;
+  isBrowseOnly?: boolean;
 }
 
 export interface ImmutableProvenance {
@@ -120,6 +140,7 @@ export interface PortalDiscoveryResult {
   reachable: boolean;
   httpStatus?: number;
   detectedMethod: IntegrationMethod;
+  capabilityType?: PortalCapabilityType;
   apiEndpoints?: string[];
   oaiPmhBaseUrl?: string;
   searchEndpoint?: string;

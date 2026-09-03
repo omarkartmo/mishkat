@@ -110,12 +110,18 @@ router.get('/:id/search', optionalAuth, async (req: Request, res: Response) => {
     }
 
     const portal = rows[0];
-    if (portal.status === 'UNSUPPORTED' || portal.status === 'BLOCKED') {
+    if (
+      portal.status === 'UNSUPPORTED' ||
+      portal.status === 'BLOCKED' ||
+      portal.status === 'BROWSE_ONLY' ||
+      portal.integration_method === 'BROWSE_ONLY'
+    ) {
       return res.json({
         success: true,
         data: [],
         portalStatus: portal.status,
-        message: `البوابة بحالة (${portal.status}) ولا تدعم البحث الآلي الموثق.`,
+        isBrowseOnly: true,
+        message: `البوابة بحالة (${portal.status}) مخصصة للتصفح المباشر فقط ولا تدعم البحث الآلي بالمستكشف.`,
       });
     }
 
@@ -129,6 +135,17 @@ router.get('/:id/search', optionalAuth, async (req: Request, res: Response) => {
       data: results,
       total: results.length,
       provenancePortalId: id,
+      isStaticSnapshot:
+        portal.integration_method === 'STATIC_VERIFIED_SNAPSHOT' ||
+        portal.integration_method === 'MANUAL_VERIFIED_CATALOG',
+      isLiveSearch: [
+        'OFFICIAL_API',
+        'LIVE_OFFICIAL_API',
+        'OAI_PMH',
+        'LIVE_OAI_PMH',
+        'OFFICIAL_SEARCH_ENDPOINT',
+        'LIVE_OFFICIAL_SEARCH',
+      ].includes(portal.integration_method),
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SEARCH_ERROR', message: err.message } });

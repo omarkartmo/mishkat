@@ -15,10 +15,20 @@ import { PORTAL_CATALOG_DATABASE, PortalBookItem } from '../../../../src/data/po
 import { VerificationService } from '../VerificationService';
 
 export class VerifiedCatalogAdapter extends ExternalPortalAdapter {
+  private static bypassLocalCatalog = false;
+
+  public static setBypassLocalCatalog(bypass: boolean) {
+    VerifiedCatalogAdapter.bypassLocalCatalog = bypass;
+  }
+
+  public static isBypassLocalCatalog(): boolean {
+    return VerifiedCatalogAdapter.bypassLocalCatalog;
+  }
+
   constructor(config: ExternalPortalAdapterConfig) {
     super({
       ...config,
-      integrationMethod: 'MANUAL_VERIFIED_CATALOG',
+      integrationMethod: 'STATIC_VERIFIED_SNAPSHOT',
       capabilities: {
         searchSupported: true,
         recordLookupSupported: true,
@@ -26,6 +36,9 @@ export class VerifiedCatalogAdapter extends ExternalPortalAdapter {
         metadataSupported: true,
         fullTextSupported: true,
         verificationSupported: true,
+        isLiveSearchSupported: false,
+        isStaticSnapshot: true,
+        isBrowseOnly: false,
         ...config.capabilities,
       },
     });
@@ -35,12 +48,12 @@ export class VerifiedCatalogAdapter extends ExternalPortalAdapter {
     return {
       reachable: true,
       httpStatus: 200,
-      detectedMethod: 'MANUAL_VERIFIED_CATALOG',
+      detectedMethod: 'STATIC_VERIFIED_SNAPSHOT',
       hasStructuredMetadata: true,
       supportsHttps: this.baseUrl.startsWith('https://'),
       capabilities: this.capabilities,
       notes: [
-        'Curated and verified academic catalog with strict source records and chapter previews.',
+        'Curated pre-verified catalog snapshot with authentic manuscript chapters (NOT live synchronous search).',
       ],
     };
   }
@@ -53,11 +66,16 @@ export class VerifiedCatalogAdapter extends ExternalPortalAdapter {
     return {
       status: 'HEALTHY',
       responseTimeMs: 5,
-      message: 'Curated repository catalog active and responsive.',
+      message: 'Curated repository snapshot active and verified.',
     };
   }
 
   public async search(query: string, options?: PortalSearchOptions): Promise<VerifiedPortalRecord[]> {
+    // If local catalog is bypassed in controlled testing, return empty array
+    if (VerifiedCatalogAdapter.bypassLocalCatalog) {
+      return [];
+    }
+
     // STRICT SOURCE ISOLATION: Filter strictly by this portalId
     const portalItems = PORTAL_CATALOG_DATABASE.filter((b) => b.portalId === this.portalId);
     const q = (query || '').trim().toLowerCase();

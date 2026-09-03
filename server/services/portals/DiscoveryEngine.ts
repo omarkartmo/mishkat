@@ -79,6 +79,7 @@ export class DiscoveryEngine {
             reachable: true,
             httpStatus: 200,
             detectedMethod: 'OFFICIAL_API',
+            capabilityType: 'LIVE_OFFICIAL_API',
             apiEndpoints: [apiUrl],
             searchEndpoint: apiUrl,
             hasStructuredMetadata: true,
@@ -90,6 +91,9 @@ export class DiscoveryEngine {
               metadataSupported: true,
               fullTextSupported: true,
               verificationSupported: true,
+              isLiveSearchSupported: true,
+              isStaticSnapshot: false,
+              isBrowseOnly: false,
             },
             notes,
           };
@@ -116,6 +120,7 @@ export class DiscoveryEngine {
             reachable: true,
             httpStatus: 200,
             detectedMethod: 'OAI_PMH',
+            capabilityType: 'LIVE_OAI_PMH',
             oaiPmhBaseUrl: `${cleanUrl}${op}`,
             hasStructuredMetadata: true,
             supportsHttps: cleanUrl.startsWith('https://'),
@@ -126,6 +131,9 @@ export class DiscoveryEngine {
               metadataSupported: true,
               fullTextSupported: false,
               verificationSupported: true,
+              isLiveSearchSupported: true,
+              isStaticSnapshot: false,
+              isBrowseOnly: false,
             },
             notes,
           };
@@ -153,6 +161,7 @@ export class DiscoveryEngine {
             reachable: true,
             httpStatus: searchRes.status,
             detectedMethod: 'OFFICIAL_SEARCH_ENDPOINT',
+            capabilityType: 'LIVE_OFFICIAL_SEARCH',
             searchEndpoint: template,
             hasStructuredMetadata: false,
             supportsHttps: cleanUrl.startsWith('https://'),
@@ -163,6 +172,9 @@ export class DiscoveryEngine {
               metadataSupported: false,
               fullTextSupported: false,
               verificationSupported: true,
+              isLiveSearchSupported: true,
+              isStaticSnapshot: false,
+              isBrowseOnly: false,
             },
             notes,
           };
@@ -179,6 +191,7 @@ export class DiscoveryEngine {
         reachable: true,
         httpStatus: homeRes.status,
         detectedMethod: 'STRUCTURED_METADATA',
+        capabilityType: 'LIVE_STRUCTURED_METADATA',
         hasStructuredMetadata: true,
         supportsHttps: cleanUrl.startsWith('https://'),
         capabilities: {
@@ -188,20 +201,29 @@ export class DiscoveryEngine {
           metadataSupported: true,
           fullTextSupported: false,
           verificationSupported: true,
+          isLiveSearchSupported: false,
+          isStaticSnapshot: false,
+          isBrowseOnly: true,
         },
         notes,
       };
     }
 
     // 6. Strict principle: DO NOT INVENT AN API.
-    notes.push('No official API, OAI-PMH, or verifiable search endpoint detected.');
+    notes.push('No official API, OAI-PMH, or verifiable search endpoint detected. Classified as BROWSE_ONLY.');
     return {
       reachable: true,
       httpStatus: homeRes.status,
       detectedMethod: 'NONE',
+      capabilityType: 'BROWSE_ONLY',
       hasStructuredMetadata: false,
       supportsHttps: cleanUrl.startsWith('https://'),
-      capabilities: this.getEmptyCapabilities(),
+      capabilities: {
+        ...this.getEmptyCapabilities(),
+        isLiveSearchSupported: false,
+        isStaticSnapshot: false,
+        isBrowseOnly: true,
+      },
       notes,
     };
   }

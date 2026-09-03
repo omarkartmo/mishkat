@@ -136,8 +136,13 @@ export class OfficialApiAdapter extends ExternalPortalAdapter {
     if (!q) return [];
 
     try {
-      const sep = this.searchEndpoint.includes('?') ? '&' : '?';
-      const url = `${this.searchEndpoint}${sep}q=${encodeURIComponent(q)}&limit=${options?.limit || 20}`;
+      let url: string;
+      if (this.searchEndpoint.includes('{query}')) {
+        url = this.searchEndpoint.replace('{query}', encodeURIComponent(q));
+      } else {
+        const sep = this.searchEndpoint.includes('?') ? '&' : '?';
+        url = `${this.searchEndpoint}${sep}q=${encodeURIComponent(q)}&limit=${options?.limit || 20}`;
+      }
 
       const res = await securityFetch(url, {
         allowedDomains: this.allowedDomains,

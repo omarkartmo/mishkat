@@ -93,6 +93,10 @@ CREATE TABLE IF NOT EXISTS books (
     file_url TEXT,
     file_hash VARCHAR(100),
     source_origin VARCHAR(200),
+    source_portal_id VARCHAR(50),
+    source_record_id VARCHAR(100),
+    source_record_url TEXT,
+    download_url TEXT,
     uploaded_by VARCHAR(50) REFERENCES users(id) ON DELETE SET NULL,
     download_count INT DEFAULT 0,
     read_count INT DEFAULT 0,
@@ -321,6 +325,10 @@ CREATE TABLE IF NOT EXISTS pending_submissions (
     source_method VARCHAR(50) DEFAULT 'OFFICIAL_CATALOG',
     source_retrieved_at TIMESTAMP WITH TIME ZONE,
     verification_status VARCHAR(50) DEFAULT 'UNVERIFIED',
+    download_url TEXT,
+    server_file_path TEXT,
+    server_file_size VARCHAR(50),
+    server_file_hash VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

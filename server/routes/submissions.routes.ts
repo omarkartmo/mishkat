@@ -3,6 +3,7 @@ import { db } from '../db/pool';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
+import { DigitalDownloadService } from '../services/portals/digitalDownloadService';
 
 const router = Router();
 
@@ -35,6 +36,10 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       sourceMethod: s.source_method || 'OFFICIAL_CATALOG',
       sourceRetrievedAt: s.source_retrieved_at,
       verificationStatus: s.verification_status || 'UNVERIFIED',
+      downloadUrl: s.download_url,
+      serverFilePath: s.server_file_path,
+      serverFileSize: s.server_file_size,
+      serverFileHash: s.server_file_hash,
       summary: s.summary,
       studentId: s.student_id,
       studentName: s.student_name,
@@ -63,6 +68,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     sourcePortalId,
     sourceRecordId,
     sourceRecordUrl,
+    downloadUrl,
     sourceMethod = 'MANUAL_VERIFIED_CATALOG',
     sourceRetrievedAt,
     verificationStatus = 'VERIFIED',
@@ -86,8 +92,9 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       INSERT INTO pending_submissions (
         id, title, author, suggested_category_id, format, source_url, source_portal_name,
         summary, student_id, student_name, student_reg_number, submitted_at, status, pages_estimated,
-        source_portal_id, source_record_id, source_record_url, source_method, source_retrieved_at, verification_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', $13, $14, $15, $16, $17, $18, $19)
+        source_portal_id, source_record_id, source_record_url, source_method, source_retrieved_at, verification_status,
+        download_url
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', $13, $14, $15, $16, $17, $18, $19, $20)
     `, [
       id,
       title,
@@ -108,6 +115,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       sourceMethod,
       sourceRetrievedAt || new Date().toISOString(),
       verificationStatus,
+      downloadUrl || null,
     ]);
 
     // Send admin notification
@@ -178,22 +186,58 @@ router.post('/:id/review', authenticateToken, requireRole('admin', 'librarian'),
       // If approved, create Digital Book entry in master catalog
       if (status === 'approved') {
         const bookId = `dig-sub-${Date.now()}`;
-        const validFileUrl = sub.temp_file_url || '/api/v1/books/files/digital/test-sample.pdf';
+        let finalFilePath = null;
+        let finalFileSize = '2.1 MB';
+        let finalFileUrl = sub.temp_file_url || '/api/v1/books/files/digital/test-sample.pdf';
+        let finalFileHash = null;
+
+        // If a real external download URL was captured (e.g. from browse-only or verified portal)
+        if (sub.download_url) {
+          try {
+            const downloadRes = await DigitalDownloadService.downloadAndValidate(sub.download_url, {
+              bookId,
+              format: sub.format || 'pdf',
+              allowLocalhost: process.env.NODE_ENV === 'test',
+            });
+            finalFilePath = downloadRes.filePath;
+            finalFileSize = downloadRes.fileSizeStr;
+            finalFileUrl = `/api/v1/books/${bookId}/file`;
+            finalFileHash = downloadRes.fileHash;
+
+            // Record server storage metadata in submission
+            await client.query(`
+              UPDATE pending_submissions SET
+                server_file_path = $1, server_file_size = $2, server_file_hash = $3
+              WHERE id = $4
+            `, [finalFilePath, finalFileSize, finalFileHash, id]);
+          } catch (dlErr: any) {
+            throw new Error(`فشل تحميل الملف الرقمي من المصدر الخارجي: ${dlErr.message}. تم إلغاء الاعتماد ولم يتم إنشاء أي كتاب وهمي.`);
+          }
+        }
+
         await client.query(`
           INSERT INTO books (
-            id, type, title, author, category_id, format, file_size, file_url,
-            pages_count, summary, source_origin, uploaded_by, tags, download_count, read_count
-          ) VALUES ($1, 'digital', $2, $3, $4, $5, '2.1 MB', $6, $7, $8, $9, $10, ARRAY['مكتبة معتمدة', 'مُعتمد حديثاً'], 0, 0)
+            id, type, title, author, category_id, format, file_size, file_path, file_url, file_hash,
+            pages_count, summary, source_origin, source_portal_id, source_record_id, source_record_url,
+            download_url, uploaded_by, tags, download_count, read_count
+          ) VALUES ($1, 'digital', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, ARRAY['مكتبة معتمدة', 'مُعتمد حديثاً'], 0, 0)
         `, [
           bookId,
           sub.title,
           sub.author,
           categoryId || sub.suggested_category_id || 'cat-general',
           sub.format || 'pdf',
-          validFileUrl,
+          finalFileSize,
+          finalFilePath,
+          finalFileUrl,
+          finalFileHash,
           sub.pages_estimated || 100,
           sub.summary || '',
           sub.source_portal_name,
+          sub.source_portal_id,
+          sub.source_record_id,
+          sub.source_record_url,
+          sub.download_url,
           sub.student_id,
         ]);
       }

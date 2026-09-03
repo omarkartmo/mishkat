@@ -36,6 +36,7 @@ interface BookIngestionModalProps {
     sourceRetrievedAt?: string;
     verificationStatus?: string;
     format?: BookFormat;
+    downloadUrl?: string;
   };
   onClose: () => void;
   onSubmit: (submission: {
@@ -51,6 +52,7 @@ interface BookIngestionModalProps {
     sourceMethod?: string;
     sourceRetrievedAt?: string;
     verificationStatus?: string;
+    downloadUrl?: string;
     summary: string;
     studentId: string;
     studentName: string;
@@ -86,6 +88,7 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
   });
   const [format, setFormat] = useState<BookFormat>(prefillData?.format || 'pdf');
   const [url, setUrl] = useState(effectiveUrl);
+  const [downloadUrl, setDownloadUrl] = useState(prefillData?.downloadUrl || '');
   const [portal, setPortal] = useState(effectivePortalName);
   const [summary, setSummary] = useState(prefillData?.summary || '');
   const [pagesEstimated, setPagesEstimated] = useState<number>(prefillData?.pages || 250);
@@ -129,6 +132,7 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
         sourceMethod: prefillData?.sourceMethod || 'MANUAL_VERIFIED_CATALOG',
         sourceRetrievedAt: prefillData?.sourceRetrievedAt || new Date().toISOString(),
         verificationStatus: prefillData?.verificationStatus || 'VERIFIED',
+        downloadUrl: downloadUrl.trim() || undefined,
         summary: summary.trim(),
         studentId: currentUser.id,
         studentName: currentUser.name || 'طالب',
@@ -305,6 +309,25 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] disabled:opacity-50"
                 />
               </div>
+            </div>
+
+            {/* Direct Download URL (For Central Server Ingestion) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-slate-300 font-medium">رابط تحميل الملف المباشر (PDF / EPUB)</label>
+                <span className="text-[10px] text-sky-400">تحميل خادم مركزي آمن وموثق</span>
+              </div>
+              <input
+                type="url"
+                disabled={isSubmitting}
+                value={downloadUrl}
+                onChange={(e) => setDownloadUrl(e.target.value)}
+                placeholder="مثال: https://al-maktaba.org/download/book-full.pdf"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] outline-none focus:border-sky-500 disabled:opacity-50"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                عند اعتماد المشرف، يقوم الخادم المركزي بتحميل الملف والتحقق من سلامته وتخزينه في مستودع المكتبة الرقمي.
+              </p>
             </div>
 
             {/* Summary */}

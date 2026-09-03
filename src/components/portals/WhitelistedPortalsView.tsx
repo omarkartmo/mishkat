@@ -74,6 +74,13 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
     url?: string;
     prefill?: any;
   } | null>(null);
+
+  // Phase 15.4-E: If portal is BROWSE_ONLY, default directly to embedded web browser
+  useEffect(() => {
+    if (selectedPortal?.status === 'BROWSE_ONLY' || selectedPortal?.integrationMethod === 'BROWSE_ONLY') {
+      setViewMode('browser');
+    }
+  }, [selectedPortal]);
   const [isAddPortalOpen, setIsAddPortalOpen] = useState(false);
   const [editingPortal, setEditingPortal] = useState<WhitelistedPortal | null>(null);
   const [portalToDelete, setPortalToDelete] = useState<WhitelistedPortal | null>(null);
@@ -566,6 +573,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
             <div className="flex items-center gap-2">
               <div className="flex items-center p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
                 <button
+                  disabled={selectedPortal.status === 'BROWSE_ONLY' || selectedPortal.integrationMethod === 'BROWSE_ONLY'}
                   onClick={() => {
                     setViewMode('explorer');
                     setActiveReadingPortalBook(null);
@@ -574,10 +582,23 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                     viewMode === 'explorer'
                       ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  } ${
+                    (selectedPortal.status === 'BROWSE_ONLY' || selectedPortal.integrationMethod === 'BROWSE_ONLY')
+                      ? 'opacity-40 cursor-not-allowed'
+                      : ''
                   }`}
+                  title={
+                    (selectedPortal.status === 'BROWSE_ONLY' || selectedPortal.integrationMethod === 'BROWSE_ONLY')
+                      ? 'هذا الموقع مخصص للتصفح المباشر فقط'
+                      : ''
+                  }
                 >
                   <Compass className="w-3.5 h-3.5" />
-                  <span>المستكشف التفاعلي للمخطوطات والكتب ({portalBooks.length})</span>
+                  <span>
+                    {selectedPortal.integrationMethod === 'STATIC_VERIFIED_SNAPSHOT' || selectedPortal.integrationMethod === 'MANUAL_VERIFIED_CATALOG'
+                      ? `فهرس المخطوطات الموثق (${portalBooks.length})`
+                      : `المستكشف التفاعلي للمخطوطات والكتب (${portalBooks.length})`}
+                  </span>
                 </button>
                 <button
                   onClick={() => setViewMode('browser')}
@@ -620,6 +641,23 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
           {/* Mode 1: Comprehensive Interactive Portal Explorer (Never Fails, Rich Ingestion & Direct Reading) */}
           {viewMode === 'explorer' && (
             <div className={`flex-1 flex flex-col p-4 sm:p-6 space-y-5 overflow-y-auto ${isFullscreen ? 'h-[calc(100vh-4rem)]' : 'min-h-[580px]'}`}>
+              {/* Snapshot Notice Banner for Curated Catalogs */}
+              {(selectedPortal.integrationMethod === 'STATIC_VERIFIED_SNAPSHOT' || selectedPortal.integrationMethod === 'MANUAL_VERIFIED_CATALOG') && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 px-4 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200">
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <div>
+                      <span className="font-bold">نسخة فهرس موثقة مسبقاً (غير متزامن حياً)</span>
+                      <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80 mt-0.5">
+                        هذا الفهرس يمثل نسخة موثقة مسبقاً من متون ومخطوطات البوابة مع معاينة الأبواب والتحقيق. للتصفح الحي للموقع، انتقل إلى "إطار الويب المباشر".
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-lg text-[10px] font-bold shrink-0 font-mono">
+                    STATIC_VERIFIED_SNAPSHOT
+                  </span>
+                </div>
+              )}
               {/* Search & Filter Header inside portal */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-2 w-full md:w-auto">
@@ -917,37 +955,35 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setViewMode('explorer')}
-                    className="flex items-center gap-1 px-3 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  >
-                    <Compass className="w-3.5 h-3.5 text-sky-500" />
-                    <span>الانتقال للمستكشف السريع</span>
-                  </button>
+                  {selectedPortal.status !== 'BROWSE_ONLY' && selectedPortal.integrationMethod !== 'BROWSE_ONLY' && (
+                    <button
+                      onClick={() => setViewMode('explorer')}
+                      className="flex items-center gap-1 px-3 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <Compass className="w-3.5 h-3.5 text-sky-500" />
+                      <span>الانتقال للمستكشف السريع</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() => {
-                      const defaultBook = portalBooks[0];
                       setIngestionModalData({
                         portalName: selectedPortal.name,
                         url: selectedPortal.url,
-                        prefill: defaultBook
-                          ? {
-                              title: defaultBook.title,
-                              author: defaultBook.author,
-                              categorySuggestion: defaultBook.categorySuggestion,
-                              summary: defaultBook.summary,
-                              pages: defaultBook.pagesCount,
-                              tags: defaultBook.tags,
-                              sourceUrl: selectedPortal.url,
-                            }
-                          : undefined,
+                        prefill: {
+                          sourcePortalId: selectedPortal.id,
+                          sourcePortalName: selectedPortal.name,
+                          sourceUrl: selectedPortal.url,
+                          sourceRecordUrl: selectedPortal.url,
+                          sourceMethod: selectedPortal.integrationMethod || 'BROWSE_ONLY',
+                          verificationStatus: 'UNVERIFIED',
+                        },
                       });
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold transition-all shadow cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all shadow cursor-pointer"
                   >
                     <Upload className="w-3.5 h-3.5" />
-                    <span>استيراد كتاب</span>
+                    <span>اقتراح كتاب من هذا الموقع للمكتبة</span>
                   </button>
                 </div>
               </div>
