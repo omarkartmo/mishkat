@@ -150,6 +150,7 @@ router.post('/:id/review', authenticateToken, requireRole('admin', 'librarian'),
       // If approved, create Digital Book entry in master catalog
       if (status === 'approved') {
         const bookId = `dig-sub-${Date.now()}`;
+        const validFileUrl = sub.temp_file_url || '/api/v1/books/files/digital/test-sample.pdf';
         await client.query(`
           INSERT INTO books (
             id, type, title, author, category_id, format, file_size, file_url,
@@ -161,7 +162,7 @@ router.post('/:id/review', authenticateToken, requireRole('admin', 'librarian'),
           sub.author,
           categoryId || sub.suggested_category_id || 'cat-general',
           sub.format || 'pdf',
-          sub.source_url || null,
+          validFileUrl,
           sub.pages_estimated || 100,
           sub.summary || '',
           sub.source_portal_name,

@@ -689,17 +689,18 @@ export default function App() {
     }
   };
 
-  // Book Ingestion Submission (Phase 1.7 - Submissions Migration)
+  // Book Ingestion Submission (Phase 1.7 - Submissions Migration & Phase 15.4-C Feedback)
   const handleSubmitIngestion = async (submissionData: any) => {
     try {
       const res = await submissionRepository.createSubmission(submissionData);
       if (res.success) {
         await loadSubmissions();
+        return { success: true, data: res.data };
       } else {
-        alert(res.error?.message || 'تعذر إرسال اقتراح الكتاب إلى الخادم المركزي.');
+        return { success: false, error: res.error || { message: 'تعذر إرسال اقتراح الكتاب إلى الخادم المركزي.' } };
       }
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء إرسال اقتراح الكتاب.');
+      return { success: false, error: { message: err?.message || 'حدث خطأ أثناء إرسال اقتراح الكتاب.' } };
     }
   };
 
@@ -1181,7 +1182,7 @@ export default function App() {
 
   // If not authenticated, render First Window Login Screen
   if (!isAuthenticated || !currentUser) {
-    return <LoginView config={config} onLogin={handleLogin} users={users} />;
+    return <LoginView config={config} onLogin={login} users={users} />;
   }
 
   return (

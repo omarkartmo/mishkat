@@ -154,7 +154,7 @@ export async function seedInitialData(): Promise<void> {
         book.summary,
         book.coverImage || null,
         book.sourceOrigin || null,
-        book.uploadedBy || 'admin',
+        book.uploadedBy || INITIAL_ADMIN.id,
         book.tags,
         book.downloadCount,
         book.readCount,

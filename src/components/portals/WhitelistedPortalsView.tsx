@@ -106,73 +106,31 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen]);
 
-  // Fetch books for selected portal or generate fallback catalog for custom added portals
+  // Strict Source-Bound Retrieval (Phase 15.4-C): Only return verified records originating strictly from the selected portal.
+  // NEVER synthesize or hallucinate records.
   const portalBooks = useMemo(() => {
     if (!selectedPortal?.id) return [];
-    const direct = PORTAL_CATALOG_DATABASE.filter((b) => b.portalId === selectedPortal.id);
-    if (direct.length > 0) return direct;
-
-    // Synthesize rich catalog items for newly added portals (like custom Ibadi or academic repos)
-    return [
-      {
-        id: `custom-${selectedPortal.id}-1`,
-        portalId: selectedPortal.id,
-        title: `مخطوطات ومصنفات ${selectedPortal.name}`,
-        author: 'نخبة من علماء ومحققي التراث',
-        categoryName: 'الدراسات والمخطوطات التوثيقية',
-        categorySuggestion: 'cat-islamic',
-        volumeInfo: 'المجموعة الأولى المعتمدة',
-        pagesCount: 350,
-        publishYear: 'مرجع معتمد',
-        summary: `خلاصة المراجع والمؤلفات المفهرسة في موقع ${selectedPortal.name} مع إمكانية الاطلاع والاستيراد المباشر.`,
-        tags: ['تراث', 'توثيق', selectedPortal.name],
-        sampleChapters: [
-          {
-            title: `المبحث الأول: مدخل تعريفي بمصادر ${selectedPortal.name}`,
-            page: 1,
-            previewText: `بسم الله الرحمن الرحيم. يتضمن هذا المرجع أهم الأصول والقواعد التوثيقية المستخرجة من بوابة ${selectedPortal.name} لحفظ المراجع والعلوم النافعة.`,
-          },
-          {
-            title: 'المبحث الثاني: الشواهد والقضايا التوثيقية والمسائل المعاصرة',
-            page: 45,
-            previewText: 'دراسة مستفيضة للأدلة والمصادر مع ربط الفروع بالأصول ومقارنة الآراء المعتمدة.',
-          },
-        ],
-      },
-      {
-        id: `custom-${selectedPortal.id}-2`,
-        portalId: selectedPortal.id,
-        title: `الفهرس الشامل للكتب الرقمية - ${selectedPortal.name}`,
-        author: 'لجنة الفهرسة والتوثيق الإلكتروني',
-        categoryName: 'الفهارس والمعاجم',
-        categorySuggestion: 'cat-general',
-        volumeInfo: 'الفهرس العام',
-        pagesCount: 220,
-        publishYear: '2024 م',
-        summary: `دليل استرشادي شامل لجميع المواد المتاحة في قاعدة بيانات ${selectedPortal.name}.`,
-        tags: ['فهارس', 'معاجم', 'إلكتروني'],
-        sampleChapters: [
-          {
-            title: 'مقدمة الفهرسة ومنهجية التبويب والاسترجاع',
-            page: 1,
-            previewText: 'يقدم هذا الفهرس تصنيفاً منهجياً للمواد وفق التقسيمات الموضوعية للمكتبات المعتمدة.',
-          },
-        ],
-      },
-    ];
+    return PORTAL_CATALOG_DATABASE.filter((b) => b.portalId === selectedPortal.id);
   }, [selectedPortal]);
 
-  // Filtered books
+  // Filtered books within the selected portal
   const filteredPortalBooks = useMemo(() => {
+    if (!portalBooks.length) return [];
+    const q = portalSearch.trim().toLowerCase();
     return portalBooks.filter((book) => {
       const matchSearch =
-        !portalSearch.trim() ||
-        book.title.includes(portalSearch.trim()) ||
-        book.author.includes(portalSearch.trim()) ||
-        book.summary.includes(portalSearch.trim()) ||
-        book.tags.some((t) => t.includes(portalSearch.trim()));
+        !q ||
+        book.title.toLowerCase().includes(q) ||
+        book.author.toLowerCase().includes(q) ||
+        book.summary.toLowerCase().includes(q) ||
+        (book.investigator && book.investigator.toLowerCase().includes(q)) ||
+        (book.tags && book.tags.some((t) => t.toLowerCase().includes(q)));
 
-      const matchCat = selectedCategoryFilter === 'all' || book.categorySuggestion === selectedCategoryFilter;
+      const matchCat =
+        selectedCategoryFilter === 'all' ||
+        book.categorySuggestion === selectedCategoryFilter ||
+        book.categoryName.includes(selectedCategoryFilter);
+
       return matchSearch && matchCat;
     });
   }, [portalBooks, portalSearch, selectedCategoryFilter]);
@@ -669,6 +627,24 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
                                   المؤلف: {book.author} {book.investigator ? `• ${book.investigator}` : ''}
                                 </p>
+                                {/* Source Provenance Badge */}
+                                <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400 mt-1.5">
+                                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                    <span>المصدر الموثق: {book.sourcePortalName}</span>
+                                  </span>
+                                  {book.sourceRecordUrl && (
+                                    <a
+                                      href={book.sourceRecordUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sky-500 hover:underline flex items-center gap-0.5"
+                                    >
+                                      <span>السجل الأصلي</span>
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  )}
+                                </div>
                               </div>
 
                               <span className="text-[11px] font-mono text-slate-400 shrink-0">
@@ -1121,18 +1097,18 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
         </div>
       )}
 
-      {/* Book Ingestion Modal */}
+      {/* Book Ingestion Modal with Strict Provenance & Feedback */}
       {ingestionModalData && (
         <BookIngestionModal
           isOpen={!!ingestionModalData}
-          onClose={() => setIngestionModalData(null)}
-          portalName={ingestionModalData.portalName}
+          currentUser={currentUser}
+          sourcePortalName={ingestionModalData.portalName || selectedPortal.name}
           categories={categories}
           initialUrl={ingestionModalData.url}
           prefillData={ingestionModalData.prefill}
-          onSubmit={(data) => {
-            onSubmitIngestion(data);
-            setIngestionModalData(null);
+          onClose={() => setIngestionModalData(null)}
+          onSubmit={async (data) => {
+            return onSubmitIngestion(data);
           }}
         />
       )}
