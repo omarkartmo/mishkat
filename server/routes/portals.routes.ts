@@ -237,6 +237,11 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
     const effectiveDomains =
       allowedDomains.length > 0 ? allowedDomains : [parsed.hostname];
 
+    const effectiveCategory =
+      category && typeof category === 'string' && category.trim().length > 0
+        ? category.trim()
+        : 'المصادر والأبحاث الرقمية';
+
     // Initial insert with DRAFT status
     await db.query(
       `
@@ -251,7 +256,7 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
         name,
         description || '',
         url,
-        category,
+        effectiveCategory,
         icon,
         isFeatured,
         notes || null,

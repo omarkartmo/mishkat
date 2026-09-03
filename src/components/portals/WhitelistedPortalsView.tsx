@@ -88,6 +88,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
   // New Portal form state
   const [newPortalName, setNewPortalName] = useState('');
   const [newPortalUrl, setNewPortalUrl] = useState('');
+  const [newPortalCategory, setNewPortalCategory] = useState('المصادر والأبحاث الرقمية');
   const [newPortalDesc, setNewPortalDesc] = useState('');
   const [newPortalDomains, setNewPortalDomains] = useState('');
   const [newPortalIsFeatured, setNewPortalIsFeatured] = useState(false);
@@ -95,6 +96,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
   // Edit Portal form state
   const [editPortalName, setEditPortalName] = useState('');
   const [editPortalUrl, setEditPortalUrl] = useState('');
+  const [editPortalCategory, setEditPortalCategory] = useState('المصادر والأبحاث الرقمية');
   const [editPortalDesc, setEditPortalDesc] = useState('');
   const [editPortalDomains, setEditPortalDomains] = useState('');
   const [editPortalIsFeatured, setEditPortalIsFeatured] = useState(false);
@@ -257,6 +259,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
     onAddPortal({
       name: newPortalName.trim(),
       url: newPortalUrl.trim(),
+      category: newPortalCategory.trim() || 'المصادر والأبحاث الرقمية',
       description: newPortalDesc.trim() || `موقع معتمد لتصفح المراجع والكتب الرقمية: ${newPortalName.trim()}`,
       allowedDomains: domains.length > 0 ? domains : [newPortalUrl.replace(/https?:\/\//, '').split('/')[0]],
       isFeatured: newPortalIsFeatured,
@@ -267,6 +270,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
 
     setNewPortalName('');
     setNewPortalUrl('');
+    setNewPortalCategory('المصادر والأبحاث الرقمية');
     setNewPortalDesc('');
     setNewPortalDomains('');
     setNewPortalIsFeatured(false);
@@ -279,6 +283,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
     setEditingPortal(portal);
     setEditPortalName(portal.name);
     setEditPortalUrl(portal.url);
+    setEditPortalCategory(portal.category || 'المصادر والأبحاث الرقمية');
     setEditPortalDesc(portal.description);
     setEditPortalDomains(portal.allowedDomains.join(', '));
     setEditPortalIsFeatured(!!portal.isFeatured);
@@ -296,6 +301,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
     const updates: Partial<WhitelistedPortal> = {
       name: editPortalName.trim(),
       url: editPortalUrl.trim(),
+      category: editPortalCategory.trim() || 'المصادر والأبحاث الرقمية',
       description: editPortalDesc.trim() || `موقع معتمد لتصفح المراجع والكتب الرقمية: ${editPortalName.trim()}`,
       allowedDomains: domains.length > 0 ? domains : [editPortalUrl.replace(/https?:\/\//, '').split('/')[0]],
       isFeatured: editPortalIsFeatured,
@@ -1127,6 +1133,26 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
               )}
 
               <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تصنيف وتخصص البوابة العلمي:</label>
+                <select
+                  value={newPortalCategory}
+                  onChange={(e) => setNewPortalCategory(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500 text-xs"
+                >
+                  <option value="المصادر والأبحاث الرقمية">المصادر والأبحاث الرقمية</option>
+                  <option value="التراث والفقه الإسلامي">التراث والفقه الإسلامي</option>
+                  <option value="المعاجم واللغة العربية">المعاجم واللغة العربية</option>
+                  <option value="المناهج والأبحاث الطلابية">المناهج والأبحاث الطلابية</option>
+                  <option value="المستودعات الأكاديمية والجامعية">المستودعات الأكاديمية والجامعية</option>
+                  {categories
+                    .filter((c) => !['المصادر والأبحاث الرقمية', 'التراث والفقه الإسلامي', 'المعاجم واللغة العربية', 'المناهج والأبحاث الطلابية', 'المستودعات الأكاديمية والجامعية'].includes(c.name))
+                    .map((c) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">النطاقات المسموحة للتصفح (مفصولة بفاصلة):</label>
                 <input
                   type="text"
@@ -1344,6 +1370,26 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                   placeholder="https://al-maktaba.org"
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
                 />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تصنيف وتخصص البوابة العلمي:</label>
+                <select
+                  value={editPortalCategory}
+                  onChange={(e) => setEditPortalCategory(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 text-xs"
+                >
+                  <option value="المصادر والأبحاث الرقمية">المصادر والأبحاث الرقمية</option>
+                  <option value="التراث والفقه الإسلامي">التراث والفقه الإسلامي</option>
+                  <option value="المعاجم واللغة العربية">المعاجم واللغة العربية</option>
+                  <option value="المناهج والأبحاث الطلابية">المناهج والأبحاث الطلابية</option>
+                  <option value="المستودعات الأكاديمية والجامعية">المستودعات الأكاديمية والجامعية</option>
+                  {categories
+                    .filter((c) => !['المصادر والأبحاث الرقمية', 'التراث والفقه الإسلامي', 'المعاجم واللغة العربية', 'المناهج والأبحاث الطلابية', 'المستودعات الأكاديمية والجامعية'].includes(c.name))
+                    .map((c) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                </select>
               </div>
 
               <div>
