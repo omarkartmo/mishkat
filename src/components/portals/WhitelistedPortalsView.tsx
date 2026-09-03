@@ -29,18 +29,22 @@ import {
   FileText,
   Star,
   Edit3,
+  Loader2,
+  AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { WhitelistedPortal, User, Category } from '../../types/library';
 import { BookIngestionModal } from './BookIngestionModal';
 import { PORTAL_CATALOG_DATABASE, PortalBookItem } from '../../data/portalCatalogs';
 import { isSafeUrl, sanitizeText } from '../../utils/security';
+import { portalRepository } from '../../services/portalRepository';
 
 interface WhitelistedPortalsViewProps {
   portals: WhitelistedPortal[];
   currentUser: User;
   categories: Category[];
   onSubmitIngestion: (data: any) => void;
-  onAddPortal: (portal: Omit<WhitelistedPortal, 'id'>) => void;
+  onAddPortal: (portal: any) => void;
   onDeletePortal: (id: string) => void;
   onUpdatePortal?: (id: string, updates: Partial<WhitelistedPortal>) => void;
   onToggleFeatured?: (id: string) => void;
@@ -87,6 +91,99 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
   const [editPortalDesc, setEditPortalDesc] = useState('');
   const [editPortalDomains, setEditPortalDomains] = useState('');
   const [editPortalIsFeatured, setEditPortalIsFeatured] = useState(false);
+
+  // Phase 15.4-D: Live Source Verification & Technical Test Suite State
+  const [verificationStates, setVerificationStates] = useState<
+    Record<string, { status: string; details?: string; loading?: boolean }>
+  >({});
+  const [isTestingPortalId, setIsTestingPortalId] = useState<string | null>(null);
+  const [activeTestReport, setActiveTestReport] = useState<any | null>(null);
+  const [isDiscoveringPreview, setIsDiscoveringPreview] = useState(false);
+  const [previewDiscoveryResult, setPreviewDiscoveryResult] = useState<any | null>(null);
+  const [previewDiscoveryError, setPreviewDiscoveryError] = useState<string | null>(null);
+
+  const handleVerifyRecord = async (book: PortalBookItem) => {
+    setVerificationStates((prev) => ({
+      ...prev,
+      [book.id]: { status: 'LOADING', loading: true },
+    }));
+    try {
+      const res = await portalRepository.verifyRecord({
+        portalId: book.portalId,
+        recordUrl: book.sourceRecordUrl,
+        title: book.title,
+        author: book.author,
+        recordId: book.id,
+      });
+      if (res.success && res.data) {
+        setVerificationStates((prev) => ({
+          ...prev,
+          [book.id]: {
+            status: res.data.status,
+            details: res.data.details,
+            loading: false,
+          },
+        }));
+      } else {
+        setVerificationStates((prev) => ({
+          ...prev,
+          [book.id]: {
+            status: 'ERROR',
+            details: res.error?.message || 'فشل التحقق',
+            loading: false,
+          },
+        }));
+      }
+    } catch (err: any) {
+      setVerificationStates((prev) => ({
+        ...prev,
+        [book.id]: {
+          status: 'ERROR',
+          details: err.message,
+          loading: false,
+        },
+      }));
+    }
+  };
+
+  const handleRunOnboardingTests = async (portalId: string) => {
+    setIsTestingPortalId(portalId);
+    try {
+      const res = await portalRepository.runTests(portalId);
+      if (res.success && res.data) {
+        setActiveTestReport(res.data);
+      }
+    } catch (err: any) {
+      alert(`تعذر تشغيل حزمة الفحص الفني: ${err.message}`);
+    } finally {
+      setIsTestingPortalId(null);
+    }
+  };
+
+  const handleRunDiscoveryPreview = async () => {
+    if (!newPortalUrl.trim()) return;
+    setIsDiscoveringPreview(true);
+    setPreviewDiscoveryError(null);
+    setPreviewDiscoveryResult(null);
+
+    const domains = newPortalDomains
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean);
+
+    try {
+      const res = await portalRepository.discoverPreview(newPortalUrl.trim(), domains);
+      if (res.success && res.data) {
+        setPreviewDiscoveryResult(res.data);
+      } else {
+        setPreviewDiscoveryError(res.error?.message || 'فشل الاستكشاف التقني للبوابة.');
+      }
+    } catch (err: any) {
+      setPreviewDiscoveryError(err.message || 'فشل الاستكشاف التقني.');
+    } finally {
+      setIsDiscoveringPreview(false);
+    }
+  };
 
   // Keep selected portal synchronized with portals list
   useEffect(() => {
@@ -144,12 +241,21 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
       .map((d) => d.trim())
       .filter(Boolean);
 
+    const initialStatus =
+      previewDiscoveryResult && previewDiscoveryResult.detectedMethod !== 'NONE'
+        ? 'DISCOVERING'
+        : 'DRAFT';
+    const initialMethod = previewDiscoveryResult?.detectedMethod || 'NONE';
+
     onAddPortal({
       name: newPortalName.trim(),
       url: newPortalUrl.trim(),
       description: newPortalDesc.trim() || `موقع معتمد لتصفح المراجع والكتب الرقمية: ${newPortalName.trim()}`,
       allowedDomains: domains.length > 0 ? domains : [newPortalUrl.replace(/https?:\/\//, '').split('/')[0]],
       isFeatured: newPortalIsFeatured,
+      status: initialStatus,
+      integrationMethod: initialMethod,
+      capabilities: previewDiscoveryResult?.capabilities,
     });
 
     setNewPortalName('');
@@ -157,6 +263,8 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
     setNewPortalDesc('');
     setNewPortalDomains('');
     setNewPortalIsFeatured(false);
+    setPreviewDiscoveryResult(null);
+    setPreviewDiscoveryError(null);
     setIsAddPortalOpen(false);
   };
 
@@ -286,17 +394,54 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                 >
                   <BookOpen className="w-4 h-4" />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {portal.isFeatured ? (
-                    <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md font-bold border border-amber-500/20 flex items-center gap-1">
-                      <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                      <span>رئيسي</span>
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  {/* Phase 15.4-D: Technical Status Badge */}
+                  {portal.status === 'VERIFIED' ? (
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md font-bold border border-emerald-500/30 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      <span>موثق VERIFIED</span>
+                    </span>
+                  ) : portal.status === 'UNSUPPORTED' ? (
+                    <span className="text-[10px] bg-rose-500/10 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded-md font-bold border border-rose-500/30 flex items-center gap-1" title="لم يتم رصد واجهة برمجية أو وسيلة تكامل موثوقة">
+                      <AlertCircle className="w-3 h-3 text-rose-500" />
+                      <span>غير مدعوم UNSUPPORTED</span>
+                    </span>
+                  ) : portal.status === 'BLOCKED' ? (
+                    <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md font-bold border border-amber-500/30 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-500" />
+                      <span>محظور BLOCKED</span>
                     </span>
                   ) : (
                     <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-md font-medium border border-slate-200 dark:border-slate-700">
-                      فرعي / تخصصي
+                      {portal.status || 'مسودة DRAFT'}
                     </span>
                   )}
+
+                  {portal.isFeatured && (
+                    <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-bold border border-amber-500/20 flex items-center gap-0.5">
+                      <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                    </span>
+                  )}
+
+                  {currentUser?.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRunOnboardingTests(portal.id);
+                      }}
+                      disabled={isTestingPortalId === portal.id}
+                      className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-sky-50 dark:hover:bg-sky-950/50 text-slate-400 hover:text-sky-500 transition-colors"
+                      title="تشغيل حزمة الفحص الفني المعتمدة (12 اختباراً) للتأكد من البروتوكول والمصداقية"
+                    >
+                      {isTestingPortalId === portal.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-500" />
+                      ) : (
+                        <ShieldCheck className="w-3.5 h-3.5 text-sky-500" />
+                      )}
+                    </button>
+                  )}
+
                   {currentUser?.role === 'admin' && onToggleFeatured && (
                     <button
                       type="button"
@@ -627,12 +772,51 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
                                   المؤلف: {book.author} {book.investigator ? `• ${book.investigator}` : ''}
                                 </p>
-                                {/* Source Provenance Badge */}
-                                <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400 mt-1.5">
+                                {/* Source Provenance Badge & Live Verification Button */}
+                                <div className="flex items-center gap-2 flex-wrap text-[10px] text-slate-500 dark:text-slate-400 mt-1.5">
                                   <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
                                     <ShieldCheck className="w-3.5 h-3.5" />
                                     <span>المصدر الموثق: {book.sourcePortalName}</span>
                                   </span>
+
+                                  {/* Live Verification Button (Phase 15.4-D) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleVerifyRecord(book)}
+                                    disabled={verificationStates[book.id]?.loading}
+                                    className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
+                                      verificationStates[book.id]?.status === 'VERIFIED'
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold'
+                                        : verificationStates[book.id]?.status === 'NOT_FOUND'
+                                        ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold'
+                                        : verificationStates[book.id]?.status === 'BLOCKED'
+                                        ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold'
+                                        : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-sky-500'
+                                    }`}
+                                    title={verificationStates[book.id]?.details || 'التحقق المباشر من وجود وصحة السجل الأصلي لدى خادم المصدر'}
+                                  >
+                                    {verificationStates[book.id]?.loading ? (
+                                      <Loader2 className="w-3 h-3 animate-spin text-sky-500" />
+                                    ) : verificationStates[book.id]?.status === 'VERIFIED' ? (
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                    ) : verificationStates[book.id]?.status === 'NOT_FOUND' ? (
+                                      <AlertCircle className="w-3 h-3 text-rose-500" />
+                                    ) : (
+                                      <ShieldCheck className="w-3 h-3 text-sky-500" />
+                                    )}
+                                    <span>
+                                      {verificationStates[book.id]?.loading
+                                        ? 'جارٍ فحص المصدر...'
+                                        : verificationStates[book.id]?.status === 'VERIFIED'
+                                        ? '✓ موثق من المصدر'
+                                        : verificationStates[book.id]?.status === 'NOT_FOUND'
+                                        ? '⚠ صفحة غير موجودة (404)'
+                                        : verificationStates[book.id]?.status === 'BLOCKED'
+                                        ? '⚠ محظور آلياً'
+                                        : 'تحقق من المصدر'}
+                                    </span>
+                                  </button>
+
                                   {book.sourceRecordUrl && (
                                     <a
                                       href={book.sourceRecordUrl}
@@ -686,7 +870,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                               onClick={() =>
                                 setIngestionModalData({
                                   portalName: selectedPortal.name,
-                                  url: selectedPortal.url,
+                                  url: book.sourceRecordUrl || selectedPortal.url,
                                   prefill: {
                                     title: book.title,
                                     author: book.author,
@@ -694,6 +878,14 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                                     summary: book.summary,
                                     pages: book.pagesCount,
                                     tags: book.tags,
+                                    sourceUrl: book.sourceRecordUrl,
+                                    sourcePortalId: book.portalId,
+                                    sourcePortalName: book.sourcePortalName,
+                                    sourceRecordId: book.id,
+                                    sourceRecordUrl: book.sourceRecordUrl,
+                                    sourceMethod: book.extractionMethod,
+                                    sourceRetrievedAt: book.retrievedAt,
+                                    verificationStatus: 'VERIFIED',
                                   },
                                 })
                               }
@@ -826,22 +1018,77 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                   required
                   value={newPortalName}
                   onChange={(e) => setNewPortalName(e.target.value)}
-                  placeholder="مثال: المكتبة الشاملة الإباضية"
+                  placeholder="مثال: مستودع الرسائل الجامعية"
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">رابط الموقع المباشر (URL):</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold">رابط الموقع المباشر (URL):</label>
+                  <button
+                    type="button"
+                    onClick={handleRunDiscoveryPreview}
+                    disabled={!newPortalUrl.trim() || isDiscoveringPreview}
+                    className="text-[11px] text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 font-semibold disabled:opacity-50 cursor-pointer"
+                  >
+                    {isDiscoveringPreview ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    <span>فحص واكتشاف البروتوكول تقنياً (Discovery)</span>
+                  </button>
+                </div>
                 <input
                   type="url"
                   required
                   value={newPortalUrl}
                   onChange={(e) => setNewPortalUrl(e.target.value)}
-                  placeholder="https://al-maktaba.org"
+                  placeholder="https://repository.example.edu"
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500 font-mono"
                 />
               </div>
+
+              {/* Discovery Preview Output */}
+              {isDiscoveringPreview && (
+                <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-xl text-sky-700 dark:text-sky-300 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-sky-500" />
+                  <span>جارٍ الفحص التقني للرابط، وفحص بروتوكولات OAI-PMH وواجهات الـ REST API وجدار الحماية...</span>
+                </div>
+              )}
+
+              {previewDiscoveryError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>فشل الاستكشاف: {previewDiscoveryError}</span>
+                </div>
+              )}
+
+              {previewDiscoveryResult && (
+                <div className={`p-3 rounded-xl border space-y-1.5 ${
+                  previewDiscoveryResult.detectedMethod !== 'NONE'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-200'
+                }`}>
+                  <div className="flex items-center justify-between font-bold">
+                    <span>نتيجة الاستكشاف الفني:</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] bg-white dark:bg-slate-900 border">
+                      {previewDiscoveryResult.detectedMethod}
+                    </span>
+                  </div>
+                  <ul className="list-disc list-inside text-[11px] space-y-0.5 opacity-90">
+                    {previewDiscoveryResult.notes?.map((n: string, i: number) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                  {previewDiscoveryResult.detectedMethod === 'NONE' && (
+                    <p className="text-[11px] text-rose-600 dark:text-rose-400 pt-1 font-semibold">
+                      ⚠️ سيتم حفظ البوابة كـ UNSUPPORTED ولن يتم تفعيلها للبحث التلقائي حتى يتم إثبات وسيلة تكامل موثوقة.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">النطاقات المسموحة للتصفح (مفصولة بفاصلة):</label>
@@ -865,7 +1112,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                 />
               </div>
 
-              {/* Classification Option: Primary/Featured vs Specialized */}
+              {/* Classification Option */}
               <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl">
                 <label className="flex items-start gap-2.5 cursor-pointer">
                   <input
@@ -880,7 +1127,7 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                       تعيين هذا الموقع كوسم «رئيسي» (مصدر مرجعي أساسي)
                     </span>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                      المواقع الموسومة بـ «رئيسي» تظهر في مقدمة البوابات المعتمدة كأولوية للمطالعة والبحث الأكاديمي الشامل، بينما المواقع غير المحددة تصنف كبوابات تخصصية وفرعية.
+                      المواقع الموسومة بـ «رئيسي» تظهر في مقدمة البوابات المعتمدة كأولوية للمطالعة والبحث الأكاديمي الشامل.
                     </p>
                   </div>
                 </label>
@@ -889,7 +1136,11 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
               <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddPortalOpen(false)}
+                  onClick={() => {
+                    setIsAddPortalOpen(false);
+                    setPreviewDiscoveryResult(null);
+                    setPreviewDiscoveryError(null);
+                  }}
                   className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-200 dark:hover:bg-slate-700"
                 >
                   إلغاء
@@ -898,10 +1149,111 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                   type="submit"
                   className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold shadow-md shadow-sky-600/30 cursor-pointer"
                 >
-                  اعتماد الموقع وإضافته
+                  اعتماد الموقع والبدء في الفحص
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 15.4-D: Technical Onboarding 12-Test Report Modal */}
+      {activeTestReport && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-sky-500/10 text-sky-500 rounded-xl">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                    تقرير الفحص الفني المعتمد للبوابة (12 اختباراً)
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">{activeTestReport.portalName} ({activeTestReport.url})</p>
+                </div>
+              </div>
+              <button onClick={() => setActiveTestReport(null)} className="text-slate-400 hover:text-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Verdict banner */}
+            <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+              activeTestReport.suggestedStatus === 'VERIFIED'
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+            }`}>
+              <div>
+                <h4 className="font-bold text-sm">
+                  الحالة الفنية للبوابة: {activeTestReport.suggestedStatus}
+                </h4>
+                <p className="text-xs opacity-90 mt-0.5">
+                  طريقة التكامل المعتمدة: {activeTestReport.suggestedMethod}
+                </p>
+                {activeTestReport.failureReason && (
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-semibold">
+                    {activeTestReport.failureReason}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono font-bold">
+                  {activeTestReport.checks.filter((c: any) => c.passed).length} / {activeTestReport.checks.length} ناجح
+                </span>
+              </div>
+            </div>
+
+            {/* Checks list */}
+            <div className="space-y-2 text-xs">
+              {activeTestReport.checks.map((check: any, idx: number) => (
+                <div
+                  key={check.id || idx}
+                  className={`p-3 rounded-xl border flex items-start justify-between gap-3 ${
+                    check.passed
+                      ? 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800'
+                      : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50'
+                  }`}
+                >
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2">
+                      {check.passed ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                      )}
+                      <span className="font-bold text-slate-800 dark:text-slate-200">{check.name}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mr-6">
+                      {check.description}
+                    </p>
+                    {check.details && (
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono mr-6">
+                        {check.details}
+                      </p>
+                    )}
+                    {check.error && (
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 mr-6 font-semibold">
+                        خطأ: {check.error}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                    {check.durationMs}ms
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveTestReport(null)}
+                className="px-5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold"
+              >
+                إغلاق التقرير
+              </button>
+            </div>
           </div>
         </div>
       )}

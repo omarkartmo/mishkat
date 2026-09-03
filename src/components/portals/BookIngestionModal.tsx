@@ -28,6 +28,13 @@ interface BookIngestionModalProps {
     pages?: number;
     tags?: string[];
     sourceUrl?: string;
+    sourcePortalId?: string;
+    sourcePortalName?: string;
+    sourceRecordId?: string;
+    sourceRecordUrl?: string;
+    sourceMethod?: string;
+    sourceRetrievedAt?: string;
+    verificationStatus?: string;
     format?: BookFormat;
   };
   onClose: () => void;
@@ -38,6 +45,12 @@ interface BookIngestionModalProps {
     format: BookFormat;
     sourceUrl?: string;
     sourcePortalName: string;
+    sourcePortalId?: string;
+    sourceRecordId?: string;
+    sourceRecordUrl?: string;
+    sourceMethod?: string;
+    sourceRetrievedAt?: string;
+    verificationStatus?: string;
     summary: string;
     studentId: string;
     studentName: string;
@@ -110,6 +123,12 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
         format,
         sourceUrl: url.trim() || undefined,
         sourcePortalName: portal.trim(),
+        sourcePortalId: prefillData?.sourcePortalId,
+        sourceRecordId: prefillData?.sourceRecordId,
+        sourceRecordUrl: prefillData?.sourceRecordUrl || url.trim() || undefined,
+        sourceMethod: prefillData?.sourceMethod || 'MANUAL_VERIFIED_CATALOG',
+        sourceRetrievedAt: prefillData?.sourceRetrievedAt || new Date().toISOString(),
+        verificationStatus: prefillData?.verificationStatus || 'VERIFIED',
         summary: summary.trim(),
         studentId: currentUser.id,
         studentName: currentUser.name || 'طالب',

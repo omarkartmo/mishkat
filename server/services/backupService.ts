@@ -96,11 +96,15 @@ export const TABLE_COLUMNS_ALLOWLIST: Record<BackupTableName, string[]> = {
     'source_url', 'source_portal_name', 'summary', 'student_id',
     'student_name', 'student_reg_number', 'submitted_at', 'status',
     'admin_feedback', 'reviewed_at', 'reviewed_by', 'temp_file_url',
-    'pages_estimated', 'created_at',
+    'pages_estimated', 'source_portal_id', 'source_record_id',
+    'source_record_url', 'source_method', 'source_retrieved_at',
+    'verification_status', 'created_at',
   ],
   whitelisted_portals: [
     'id', 'name', 'description', 'url', 'category', 'icon',
-    'is_featured', 'notes', 'allowed_domains', 'created_at',
+    'is_featured', 'notes', 'allowed_domains', 'status',
+    'integration_method', 'capabilities', 'last_verified_at',
+    'health_status', 'discovery_details', 'created_at',
   ],
   notifications: [
     'id', 'recipient_id', 'recipient_role', 'title', 'message',

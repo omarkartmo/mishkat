@@ -116,6 +116,60 @@ export class PortalRepository {
       isFeatured: !portal.isFeatured,
     });
   }
+
+  /**
+   * Technical preview discovery for an external portal URL before adding
+   */
+  public async discoverPreview(url: string, allowedDomains?: string[]): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post('/portals/discover-preview', { url, allowedDomains });
+    return res;
+  }
+
+  /**
+   * Run the 12-test technical onboarding suite for a portal
+   */
+  public async runTests(id: string): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post(`/portals/${id}/run-tests`, {});
+    return res;
+  }
+
+  /**
+   * Live record verification
+   */
+  public async verifyRecord(payload: {
+    portalId?: string;
+    recordUrl: string;
+    title?: string;
+    author?: string;
+    recordId?: string;
+  }): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post('/portals/verify-record', payload);
+    return res;
+  }
+
+  /**
+   * Strictly source-bound portal search
+   */
+  public async searchPortal(id: string, query: string, category?: string): Promise<{
+    success: boolean;
+    data?: any[];
+    error?: ApiError;
+  }> {
+    const res = await apiClient.get<any[]>(`/portals/${id}/search?q=${encodeURIComponent(query)}&category=${encodeURIComponent(category || 'all')}`);
+    return res;
+  }
 }
 
 export const portalRepository = new PortalRepository();

@@ -118,6 +118,35 @@ export interface LoanRecord {
 
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected';
 
+export type PortalStatus =
+  | 'DRAFT'
+  | 'DISCOVERING'
+  | 'ANALYZING'
+  | 'TESTING'
+  | 'VERIFIED'
+  | 'UNSUPPORTED'
+  | 'FAILED'
+  | 'NEEDS_REVIEW'
+  | 'BLOCKED';
+
+export type IntegrationMethod =
+  | 'OFFICIAL_API'
+  | 'OAI_PMH'
+  | 'OFFICIAL_SEARCH_ENDPOINT'
+  | 'STRUCTURED_METADATA'
+  | 'VERIFIED_WEB_SEARCH'
+  | 'MANUAL_VERIFIED_CATALOG'
+  | 'NONE';
+
+export interface PortalCapabilities {
+  searchSupported: boolean;
+  recordLookupSupported: boolean;
+  canonicalUrlsSupported: boolean;
+  metadataSupported: boolean;
+  fullTextSupported: boolean;
+  verificationSupported: boolean;
+}
+
 export interface PendingBookSubmission {
   id: string;
   title: string;
@@ -126,6 +155,12 @@ export interface PendingBookSubmission {
   format: BookFormat;
   sourceUrl?: string;
   sourcePortalName: string;
+  sourcePortalId?: string;
+  sourceRecordId?: string;
+  sourceRecordUrl?: string;
+  sourceMethod?: string;
+  sourceRetrievedAt?: string;
+  verificationStatus?: string;
   summary: string;
   studentId: string;
   studentName: string;
@@ -149,6 +184,12 @@ export interface WhitelistedPortal {
   isFeatured: boolean;
   notes?: string;
   allowedDomains: string[];
+  status?: PortalStatus;
+  integrationMethod?: IntegrationMethod;
+  capabilities?: PortalCapabilities;
+  lastVerifiedAt?: string;
+  healthStatus?: string;
+  discoveryDetails?: any;
 }
 
 export type BookMedium = 'physical' | 'digital';

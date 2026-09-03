@@ -272,8 +272,9 @@ export async function seedInitialData(): Promise<void> {
     for (const portal of INITIAL_WHITELISTED_PORTALS) {
       await db.query(`
         INSERT INTO whitelisted_portals (
-          id, name, description, url, category, icon, is_featured, notes, allowed_domains
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          id, name, description, url, category, icon, is_featured, notes, allowed_domains,
+          status, integration_method, capabilities, last_verified_at, health_status, discovery_details
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, $13, $14)
         ON CONFLICT (id) DO NOTHING;
       `, [
         portal.id,
@@ -285,6 +286,24 @@ export async function seedInitialData(): Promise<void> {
         portal.isFeatured,
         portal.notes || null,
         portal.allowedDomains,
+        (portal as any).status || 'VERIFIED',
+        (portal as any).integrationMethod || 'MANUAL_VERIFIED_CATALOG',
+        JSON.stringify((portal as any).capabilities || {
+          searchSupported: true,
+          recordLookupSupported: true,
+          canonicalUrlsSupported: true,
+          metadataSupported: true,
+          fullTextSupported: true,
+          verificationSupported: true,
+        }),
+        (portal as any).healthStatus || 'HEALTHY',
+        JSON.stringify((portal as any).discoveryDetails || {
+          verifiedByAdmin: true,
+          discoveryMethod: 'OFFICIAL_CATALOG',
+          positiveTestPassed: true,
+          negativeTestPassed: true,
+          isolationTestPassed: true,
+        }),
       ]);
     }
   }

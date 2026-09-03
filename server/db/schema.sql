@@ -315,6 +315,12 @@ CREATE TABLE IF NOT EXISTS pending_submissions (
     reviewed_by VARCHAR(50) REFERENCES users(id) ON DELETE SET NULL,
     temp_file_url TEXT,
     pages_estimated INT,
+    source_portal_id VARCHAR(50),
+    source_record_id VARCHAR(100),
+    source_record_url TEXT,
+    source_method VARCHAR(50) DEFAULT 'OFFICIAL_CATALOG',
+    source_retrieved_at TIMESTAMP WITH TIME ZONE,
+    verification_status VARCHAR(50) DEFAULT 'UNVERIFIED',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -332,6 +338,12 @@ CREATE TABLE IF NOT EXISTS whitelisted_portals (
     is_featured BOOLEAN DEFAULT TRUE,
     notes TEXT,
     allowed_domains TEXT[] NOT NULL,
+    status VARCHAR(50) DEFAULT 'DRAFT',
+    integration_method VARCHAR(50) DEFAULT 'NONE',
+    capabilities JSONB DEFAULT '{"searchSupported":false,"recordLookupSupported":false,"canonicalUrlsSupported":false,"metadataSupported":false,"fullTextSupported":false,"verificationSupported":false}'::jsonb,
+    last_verified_at TIMESTAMP WITH TIME ZONE,
+    health_status VARCHAR(50) DEFAULT 'UNKNOWN',
+    discovery_details JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

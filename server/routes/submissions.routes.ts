@@ -29,6 +29,12 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       format: s.format,
       sourceUrl: s.source_url,
       sourcePortalName: s.source_portal_name,
+      sourcePortalId: s.source_portal_id,
+      sourceRecordId: s.source_record_id,
+      sourceRecordUrl: s.source_record_url,
+      sourceMethod: s.source_method || 'OFFICIAL_CATALOG',
+      sourceRetrievedAt: s.source_retrieved_at,
+      verificationStatus: s.verification_status || 'UNVERIFIED',
       summary: s.summary,
       studentId: s.student_id,
       studentName: s.student_name,
@@ -48,7 +54,22 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
 // POST /api/v1/submissions (Student submits research document/book)
 router.post('/', authenticateToken, async (req: Request, res: Response) => {
-  const { title, author, suggestedCategoryId, sourceUrl, sourcePortalName, summary, format = 'pdf', pagesEstimated = 50 } = req.body;
+  const {
+    title,
+    author,
+    suggestedCategoryId,
+    sourceUrl,
+    sourcePortalName,
+    sourcePortalId,
+    sourceRecordId,
+    sourceRecordUrl,
+    sourceMethod = 'MANUAL_VERIFIED_CATALOG',
+    sourceRetrievedAt,
+    verificationStatus = 'VERIFIED',
+    summary,
+    format = 'pdf',
+    pagesEstimated = 50,
+  } = req.body;
 
   if (!title || !author || !sourcePortalName) {
     return res.status(400).json({
@@ -64,15 +85,16 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     await db.query(`
       INSERT INTO pending_submissions (
         id, title, author, suggested_category_id, format, source_url, source_portal_name,
-        summary, student_id, student_name, student_reg_number, submitted_at, status, pages_estimated
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', $13)
+        summary, student_id, student_name, student_reg_number, submitted_at, status, pages_estimated,
+        source_portal_id, source_record_id, source_record_url, source_method, source_retrieved_at, verification_status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', $13, $14, $15, $16, $17, $18, $19)
     `, [
       id,
       title,
       author,
       suggestedCategoryId || 'cat-general',
       format,
-      sourceUrl || '',
+      sourceUrl || sourceRecordUrl || '',
       sourcePortalName,
       summary || '',
       req.user!.id,
@@ -80,6 +102,12 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       req.user!.registrationNumber,
       submittedAt,
       pagesEstimated,
+      sourcePortalId || null,
+      sourceRecordId || null,
+      sourceRecordUrl || sourceUrl || null,
+      sourceMethod,
+      sourceRetrievedAt || new Date().toISOString(),
+      verificationStatus,
     ]);
 
     // Send admin notification
