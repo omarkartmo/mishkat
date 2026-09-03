@@ -178,9 +178,16 @@ export class DigitalDownloadService {
             fileWriteStream.write(chunk);
           });
 
+          fileWriteStream.on('finish', () => {
+            resolve();
+          });
+
+          fileWriteStream.on('error', (err) => {
+            reject(err);
+          });
+
           response.stream.on('end', () => {
             fileWriteStream.end();
-            resolve();
           });
 
           response.stream.on('error', (err) => {
@@ -189,7 +196,9 @@ export class DigitalDownloadService {
           });
         });
       } catch (streamErr: any) {
-        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        if (fs.existsSync(tempFilePath)) {
+          try { fs.unlinkSync(tempFilePath); } catch {}
+        }
         throw streamErr;
       }
 
@@ -211,10 +220,18 @@ export class DigitalDownloadService {
       }
 
       // 8. Move temp file to final destination
-      if (fs.existsSync(targetFilePath)) {
-        fs.unlinkSync(targetFilePath);
+      if (!fs.existsSync(serverConfig.dirs.digital)) {
+        fs.mkdirSync(serverConfig.dirs.digital, { recursive: true });
       }
-      fs.renameSync(tempFilePath, targetFilePath);
+      if (fs.existsSync(targetFilePath)) {
+        try { fs.unlinkSync(targetFilePath); } catch {}
+      }
+      try {
+        fs.renameSync(tempFilePath, targetFilePath);
+      } catch {
+        fs.copyFileSync(tempFilePath, targetFilePath);
+        try { fs.unlinkSync(tempFilePath); } catch {}
+      }
 
       const fileHash = hash.digest('hex');
       const fileSizeStr =

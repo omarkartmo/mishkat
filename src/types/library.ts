@@ -119,13 +119,15 @@ export interface LoanRecord {
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected';
 
 export type PortalStatus =
+  | 'APPROVED_BROWSABLE'
+  | 'BROWSE_ONLY'
+  | 'DISABLED'
   | 'DRAFT'
   | 'DISCOVERING'
   | 'ANALYZING'
   | 'TESTING'
   | 'VERIFIED'
   | 'STATIC_SNAPSHOT'
-  | 'BROWSE_ONLY'
   | 'UNSUPPORTED'
   | 'FAILED'
   | 'NEEDS_REVIEW'

@@ -4,13 +4,15 @@
  */
 
 export type PortalStatus =
+  | 'APPROVED_BROWSABLE'
+  | 'BROWSE_ONLY'
+  | 'DISABLED'
   | 'DRAFT'
   | 'DISCOVERING'
   | 'ANALYZING'
   | 'TESTING'
   | 'VERIFIED'
   | 'STATIC_SNAPSHOT'
-  | 'BROWSE_ONLY'
   | 'UNSUPPORTED'
   | 'FAILED'
   | 'NEEDS_REVIEW'
@@ -46,7 +48,9 @@ export type VerificationStatus =
   | 'NOT_FOUND'
   | 'UNAVAILABLE'
   | 'BLOCKED'
-  | 'ERROR';
+  | 'ERROR'
+  | 'INCOMPLETE_PROVENANCE'
+  | 'USER_SUGGESTED';
 
 export type PortalHealthStatus = 'HEALTHY' | 'DEGRADED' | 'DOWN' | 'UNKNOWN';
 

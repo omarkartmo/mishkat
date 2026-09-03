@@ -3,6 +3,7 @@ import { db } from '../db/pool';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
+import fs from 'fs';
 import { DigitalDownloadService } from '../services/portals/digitalDownloadService';
 
 const router = Router();
@@ -84,6 +85,11 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     });
   }
 
+  const effectivePageUrl = (sourceRecordUrl || sourceUrl || '').trim();
+  const effectiveVerificationStatus = !effectivePageUrl
+    ? 'INCOMPLETE_PROVENANCE'
+    : (verificationStatus || 'USER_SUGGESTED');
+
   try {
     const id = `sub-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
     const submittedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
@@ -101,20 +107,20 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       author,
       suggestedCategoryId || 'cat-general',
       format,
-      sourceUrl || sourceRecordUrl || '',
+      effectivePageUrl,
       sourcePortalName,
       summary || '',
       req.user!.id,
       req.user!.name,
       req.user!.registrationNumber,
       submittedAt,
-      pagesEstimated,
+      Number(pagesEstimated) || 50,
       sourcePortalId || null,
       sourceRecordId || null,
-      sourceRecordUrl || sourceUrl || null,
+      effectivePageUrl || null,
       sourceMethod,
       sourceRetrievedAt || new Date().toISOString(),
-      verificationStatus,
+      effectiveVerificationStatus,
       downloadUrl || null,
     ]);
 
@@ -185,6 +191,29 @@ router.post('/:id/review', authenticateToken, requireRole('admin', 'librarian'),
 
       // If approved, create Digital Book entry in master catalog
       if (status === 'approved') {
+        // Phase 15.4-G Mandate: Digital Book Duplicate Prevention (Section 16)
+        // Check 1: Same source portal + source record ID
+        if (sub.source_portal_id && sub.source_record_id) {
+          const { rows: dupRecRows } = await client.query(
+            'SELECT id, title FROM books WHERE source_portal_id = $1 AND source_record_id = $2 LIMIT 1',
+            [sub.source_portal_id, sub.source_record_id]
+          );
+          if (dupRecRows.length > 0) {
+            throw new Error(`الكتاب موجود مسبقاً في المستودع الرقمي برقم المعرّف (${dupRecRows[0].id} - ${dupRecRows[0].title}). لا يمكن تكرار استيراده.`);
+          }
+        }
+
+        // Check 2: Same canonical source page URL
+        if (sub.source_record_url) {
+          const { rows: dupUrlRows } = await client.query(
+            'SELECT id, title FROM books WHERE source_record_url = $1 LIMIT 1',
+            [sub.source_record_url]
+          );
+          if (dupUrlRows.length > 0) {
+            throw new Error(`الكتاب مضاف مسبقاً من نفس الرابط المصدري (${dupUrlRows[0].id} - ${dupUrlRows[0].title}).`);
+          }
+        }
+
         const bookId = `dig-sub-${Date.now()}`;
         let finalFilePath = null;
         let finalFileSize = '2.1 MB';
@@ -203,6 +232,20 @@ router.post('/:id/review', authenticateToken, requireRole('admin', 'librarian'),
             finalFileSize = downloadRes.fileSizeStr;
             finalFileUrl = `/api/v1/books/${bookId}/file`;
             finalFileHash = downloadRes.fileHash;
+
+            // Check 3: Same SHA-256 hash
+            if (finalFileHash) {
+              const { rows: dupHashRows } = await client.query(
+                'SELECT id, title FROM books WHERE file_hash = $1 LIMIT 1',
+                [finalFileHash]
+              );
+              if (dupHashRows.length > 0) {
+                if (finalFilePath && fs.existsSync(finalFilePath)) {
+                  try { fs.unlinkSync(finalFilePath); } catch {}
+                }
+                throw new Error(`تم العثور على نفس ملف الكتاب مسبقاً في المستودع الرقمي بتطابق البصمة الرقمية SHA-256 (${dupHashRows[0].id} - ${dupHashRows[0].title}).`);
+              }
+            }
 
             // Record server storage metadata in submission
             await client.query(`

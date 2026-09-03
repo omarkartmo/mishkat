@@ -110,6 +110,11 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
       return;
     }
 
+    if (!url.trim()) {
+      setErrorMessage('رابط صفحة الكتاب في الموقع المعتمد مطلوب لضمان توثيق المصدر الأصلي.');
+      return;
+    }
+
     if (!currentUser?.id) {
       setErrorMessage('تعذر تحديد حساب المستخدم الحالي. يرجى إعادة تسجيل الدخول.');
       return;
@@ -124,14 +129,14 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
         author: author.trim(),
         suggestedCategoryId,
         format,
-        sourceUrl: url.trim() || undefined,
+        sourceUrl: url.trim(),
         sourcePortalName: portal.trim(),
         sourcePortalId: prefillData?.sourcePortalId,
         sourceRecordId: prefillData?.sourceRecordId,
-        sourceRecordUrl: prefillData?.sourceRecordUrl || url.trim() || undefined,
-        sourceMethod: prefillData?.sourceMethod || 'MANUAL_VERIFIED_CATALOG',
+        sourceRecordUrl: url.trim(),
+        sourceMethod: prefillData?.sourceMethod || 'USER_ASSISTED_CAPTURE',
         sourceRetrievedAt: prefillData?.sourceRetrievedAt || new Date().toISOString(),
-        verificationStatus: prefillData?.verificationStatus || 'VERIFIED',
+        verificationStatus: prefillData?.verificationStatus || 'USER_SUGGESTED',
         downloadUrl: downloadUrl.trim() || undefined,
         summary: summary.trim(),
         studentId: currentUser.id,
@@ -208,7 +213,7 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
             )}
 
             {/* Info notice / Auto-filled banner */}
-            {prefillData?.title ? (
+            {prefillData?.title && (
               <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl text-emerald-200 flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] leading-relaxed">
@@ -216,14 +221,16 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
                   تم ملء العنوان والمؤلف والتوصيف والتصنيف ورابط المصدر مباشرة وبدقة تامة. يمكنك مراجعة البيانات قبل إرسالها.
                 </div>
               </div>
-            ) : (
-              <div className="p-3 bg-sky-950/40 border border-sky-800/60 rounded-xl text-sky-200 flex items-start gap-2.5">
-                <HelpCircle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-                <p className="leading-relaxed text-[11px]">
-                  أدخل بيانات الكتاب والمصدر المعتمد. سيقوم أمين المكتبة بمطابقة الوثيقة واعتمادها لتكون متاحة لجميع الطلبة.
-                </p>
-              </div>
             )}
+
+            {/* Info notice: Phase 15.4-G Mandate */}
+            <div className="p-3 bg-sky-950/40 border border-sky-800/60 rounded-xl text-sky-200 flex items-start gap-2.5">
+              <HelpCircle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+              <div className="text-[11px] leading-relaxed">
+                <strong className="block text-sky-300 font-semibold mb-0.5">ضوابط اقتراح الكتب من المواقع الخارجية</strong>
+                سيتم إرسال الاقتراح إلى إدارة المكتبة للمراجعة والتدقيق. لن يتم تنزيل الملف إلى جهازك أو هاتفك، بل سيتولى الخادم المركزي تنزيل الملف وفحصه أمنياً وتخزينه بعد اعتماد المشرف.
+              </div>
+            </div>
 
             {/* Title & Author */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -284,10 +291,10 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
               </div>
             </div>
 
-            {/* Source & URL */}
+            {/* Source Portal & Source Page URL (Mandatory Source Provenance) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">اسم البوابة / المصدر *</label>
+                <label className="block text-slate-300 font-medium mb-1">اسم البوابة / الموقع المعتمد *</label>
                 <input
                   type="text"
                   required
@@ -299,34 +306,39 @@ export const BookIngestionModal: React.FC<BookIngestionModalProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-slate-300 font-medium mb-1">رابط المصدر الأصلي (للتوثيق)</label>
+                <label className="block text-slate-300 font-medium mb-1">
+                  رابط صفحة الكتاب في الموقع * <span className="text-[10px] text-amber-400 font-normal">(إلزامي للتوثيق)</span>
+                </label>
                 <input
-                  type="text"
+                  type="url"
+                  required
                   disabled={isSubmitting}
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://al-maktaba.net/book/..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] disabled:opacity-50"
+                  placeholder="https://portal.example/book/..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] outline-none focus:border-sky-500 disabled:opacity-50"
                 />
               </div>
             </div>
 
-            {/* Direct Download URL (For Central Server Ingestion) */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-slate-300 font-medium">رابط تحميل الملف المباشر (PDF / EPUB)</label>
-                <span className="text-[10px] text-sky-400">تحميل خادم مركزي آمن وموثق</span>
+            {/* Direct Download URL — Method C (User-Assisted URL Capture) */}
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-slate-300 font-medium text-[11px]">
+                  رابط تحميل الملف المباشر (PDF / EPUB) <span className="text-slate-500 font-normal">(اختياري)</span>
+                </label>
+                <span className="text-[10px] text-sky-400 font-mono">طريقة C: إدخال مباشر</span>
               </div>
               <input
                 type="url"
                 disabled={isSubmitting}
                 value={downloadUrl}
                 onChange={(e) => setDownloadUrl(e.target.value)}
-                placeholder="مثال: https://al-maktaba.org/download/book-full.pdf"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] outline-none focus:border-sky-500 disabled:opacity-50"
+                placeholder="https://portal.example/files/book.pdf"
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] outline-none focus:border-sky-500 disabled:opacity-50"
               />
-              <p className="text-[10px] text-slate-400 mt-1">
-                عند اعتماد المشرف، يقوم الخادم المركزي بتحميل الملف والتحقق من سلامته وتخزينه في مستودع المكتبة الرقمي.
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                تعذر استخراج رابط التحميل تلقائياً من هذا الموقع. يرجى نسخ رابط التحميل الحقيقي ولصقه هنا إن وجد، أو اتركه فارغاً ليتولى أمين المكتبة استخراجه أثناء المراجعة.
               </p>
             </div>
 

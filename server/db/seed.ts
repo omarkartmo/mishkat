@@ -1,5 +1,8 @@
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 import { db } from './pool';
+import { serverConfig } from '../config';
 import {
   INITIAL_CATEGORIES,
   INITIAL_PHYSICAL_BOOKS,
@@ -131,37 +134,48 @@ export async function seedInitialData(): Promise<void> {
   }
 
   // Digital Books
-  const { rows: dBookRows } = await db.query("SELECT id FROM books WHERE type = 'digital' LIMIT 1");
-  if (dBookRows.length === 0) {
-    console.log('🌱 [Seeder] Seeding initial digital books & catalog...');
-    for (const book of INITIAL_DIGITAL_BOOKS) {
-      await db.query(`
-        INSERT INTO books (
-          id, type, title, author, category_id, format, file_size, file_url,
-          pages_count, summary, cover_image, source_origin, uploaded_by, tags,
-          download_count, read_count, table_of_contents, sample_content
-        ) VALUES ($1, 'digital', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-        ON CONFLICT (id) DO NOTHING;
-      `, [
-        book.id,
-        book.title,
-        book.author,
-        book.categoryId,
-        book.format,
-        book.fileSize,
-        book.fileUrl || null,
-        book.pagesCount,
-        book.summary,
-        book.coverImage || null,
-        book.sourceOrigin || null,
-        book.uploadedBy || INITIAL_ADMIN.id,
-        book.tags,
-        book.downloadCount,
-        book.readCount,
-        JSON.stringify(book.tableOfContents || []),
-        JSON.stringify(book.sampleContent || []),
-      ]);
+  console.log('🌱 [Seeder] Seeding initial digital books & catalog...');
+  if (!fs.existsSync(serverConfig.dirs.digital)) {
+    fs.mkdirSync(serverConfig.dirs.digital, { recursive: true });
+  }
+  const samplePdfBytes = '%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Size 1 >>\nstartxref\n50\n%%EOF';
+
+  for (const book of INITIAL_DIGITAL_BOOKS) {
+    const filename = book.fileUrl ? path.basename(book.fileUrl) : `${book.id}.pdf`;
+    const filePath = path.join(serverConfig.dirs.digital, filename);
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, samplePdfBytes, 'utf8');
     }
+
+    await db.query(`
+      INSERT INTO books (
+        id, type, title, author, category_id, format, file_size, file_url, file_path,
+        pages_count, summary, cover_image, source_origin, uploaded_by, tags,
+        download_count, read_count, table_of_contents, sample_content
+      ) VALUES ($1, 'digital', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      ON CONFLICT (id) DO UPDATE SET
+        file_path = EXCLUDED.file_path,
+        file_url = EXCLUDED.file_url;
+    `, [
+      book.id,
+      book.title,
+      book.author,
+      book.categoryId,
+      book.format,
+      book.fileSize,
+      book.fileUrl || null,
+      filePath,
+      book.pagesCount,
+      book.summary,
+      book.coverImage || null,
+      book.sourceOrigin || null,
+      book.uploadedBy || INITIAL_ADMIN.id,
+      book.tags,
+      book.downloadCount,
+      book.readCount,
+      JSON.stringify(book.tableOfContents || []),
+      JSON.stringify(book.sampleContent || []),
+    ]);
   }
 
   // Loans
