@@ -644,26 +644,96 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
             </div>
           </div>
 
-          {/* Mode 1: Comprehensive Interactive Portal Explorer (Never Fails, Rich Ingestion & Direct Reading) */}
+          {/* Mode 1: Comprehensive Interactive Portal Explorer */}
           {viewMode === 'explorer' && (
             <div className={`flex-1 flex flex-col p-4 sm:p-6 space-y-5 overflow-y-auto ${isFullscreen ? 'h-[calc(100vh-4rem)]' : 'min-h-[580px]'}`}>
-              {/* Snapshot Notice Banner for Curated Catalogs */}
-              {(selectedPortal.integrationMethod === 'STATIC_VERIFIED_SNAPSHOT' || selectedPortal.integrationMethod === 'MANUAL_VERIFIED_CATALOG') && (
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 px-4 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200">
-                  <div className="flex items-center gap-2.5">
-                    <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                    <div>
-                      <span className="font-bold">نسخة فهرس موثقة مسبقاً (غير متزامن حياً)</span>
-                      <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80 mt-0.5">
-                        هذا الفهرس يمثل نسخة موثقة مسبقاً من متون ومخطوطات البوابة مع معاينة الأبواب والتحقيق. للتصفح الحي للموقع، انتقل إلى "إطار الويب المباشر".
-                      </p>
-                    </div>
+              {/* BROWSE_ONLY State: Explorer is Disabled per Non-Negotiable Principle */}
+              {(selectedPortal.status === 'BROWSE_ONLY' || selectedPortal.integrationMethod === 'BROWSE_ONLY' || selectedPortal.capabilities?.isBrowseOnly) ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4 max-w-lg mx-auto my-auto animate-in fade-in">
+                  <div className="w-16 h-16 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center border border-sky-500/20">
+                    <Globe2 className="w-8 h-8" />
                   </div>
-                  <span className="px-2.5 py-1 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-lg text-[10px] font-bold shrink-0 font-mono">
-                    STATIC_VERIFIED_SNAPSHOT
-                  </span>
+                  <div className="space-y-2">
+                    <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">
+                      هذا الموقع متاح للتصفح المباشر فقط
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      لا تتوفر طريقة تقنية موثوقة للبحث داخل فهرسه من خلال منصة مشكاة. يمكنك تصفح الموقع مباشرة في إطار الويب واقتراح أي كتاب تجده هناك للمكتبة المركزية بعد تدقيق المشرف.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                    <button
+                      onClick={() => setViewMode('browser')}
+                      className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all"
+                    >
+                      <Monitor className="w-4 h-4" />
+                      <span>فتح في إطار الويب</span>
+                    </button>
+                    <a
+                      href={selectedPortal.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>فتح الموقع الخارجي</span>
+                    </a>
+                    <button
+                      onClick={() => {
+                        setIngestionModalData({
+                          portalName: selectedPortal.name,
+                          url: selectedPortal.url,
+                          prefill: {
+                            sourcePortalId: selectedPortal.id,
+                            sourcePortalName: selectedPortal.name,
+                            sourceUrl: selectedPortal.url,
+                          },
+                        });
+                      }}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>اقتراح كتاب من هذا الموقع للمكتبة</span>
+                    </button>
+                  </div>
                 </div>
-              )}
+              ) : (
+                <>
+                  {/* LIVE SOURCE Banner */}
+                  {(selectedPortal.integrationMethod === 'LIVE_OFFICIAL_API' || selectedPortal.integrationMethod === 'OFFICIAL_API' || selectedPortal.capabilities?.isLiveSearchSupported) && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 px-4 flex items-center justify-between gap-3 text-xs text-emerald-800 dark:text-emerald-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                        <div>
+                          <span className="font-bold">المستكشف المباشر (LIVE SOURCE SEARCH)</span>
+                          <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">
+                            المصدر: {selectedPortal.name} • بحث مباشر في المصدر • متصل الآن
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-[10px] font-bold shrink-0 font-mono">
+                        LIVE_SOURCE
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Snapshot Notice Banner for Curated Catalogs */}
+                  {(selectedPortal.integrationMethod === 'STATIC_VERIFIED_SNAPSHOT' || selectedPortal.integrationMethod === 'MANUAL_VERIFIED_CATALOG') && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 px-4 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200">
+                      <div className="flex items-center gap-2.5">
+                        <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <div>
+                          <span className="font-bold">نسخة فهرس موثقة مسبقاً (غير متزامن حياً)</span>
+                          <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80 mt-0.5">
+                            هذا الفهرس يمثل نسخة موثقة مسبقاً من متون ومخطوطات البوابة مع معاينة الأبواب والتحقيق. للتصفح الحي للموقع، انتقل إلى "إطار الويب المباشر".
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-lg text-[10px] font-bold shrink-0 font-mono">
+                        STATIC_VERIFIED_SNAPSHOT
+                      </span>
+                    </div>
+                  )}
               {/* Search & Filter Header inside portal */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-2 w-full md:w-auto">
@@ -944,6 +1014,8 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                     </div>
                   )}
                 </div>
+              )}
+                </>
               )}
             </div>
           )}

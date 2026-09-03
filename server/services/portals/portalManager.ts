@@ -47,18 +47,28 @@ export class PortalManager {
     const allowedDomains = Array.isArray(portal.allowed_domains) ? portal.allowed_domains : [];
     const integrationMethod = portal.integration_method || 'NONE';
 
+    // BROWSE_ONLY portals do NOT have automated explorer adapters
+    if (
+      portal.status === 'BROWSE_ONLY' ||
+      integrationMethod === 'BROWSE_ONLY' ||
+      portal.capabilities?.isBrowseOnly
+    ) {
+      return null;
+    }
+
     let adapter: ExternalPortalAdapter;
 
     if (
       integrationMethod === 'MANUAL_VERIFIED_CATALOG' ||
-      ['portal-ibadi', 'portal-shamela', 'portal-arabic-academy', 'portal-school-research'].includes(portal.id)
+      integrationMethod === 'STATIC_VERIFIED_SNAPSHOT' ||
+      portal.id === 'portal-school-research'
     ) {
       adapter = new VerifiedCatalogAdapter({
         portalId: portal.id,
         portalName: portal.name,
         baseUrl: portal.url,
         allowedDomains,
-        integrationMethod: 'MANUAL_VERIFIED_CATALOG',
+        integrationMethod: 'STATIC_VERIFIED_SNAPSHOT',
         capabilities: portal.capabilities,
       });
     } else if (integrationMethod === 'OAI_PMH' || integrationMethod === 'LIVE_OAI_PMH') {
@@ -67,7 +77,7 @@ export class PortalManager {
         portalName: portal.name,
         baseUrl: portal.url,
         allowedDomains,
-        integrationMethod: 'OAI_PMH',
+        integrationMethod: 'LIVE_OAI_PMH',
         capabilities: portal.capabilities,
       });
     } else if (integrationMethod === 'OFFICIAL_API' || integrationMethod === 'LIVE_OFFICIAL_API') {
@@ -76,8 +86,9 @@ export class PortalManager {
         portalName: portal.name,
         baseUrl: portal.url,
         allowedDomains,
-        integrationMethod: 'OFFICIAL_API',
+        integrationMethod: 'LIVE_OFFICIAL_API',
         capabilities: portal.capabilities,
+        searchEndpoint: portal.discovery_details?.searchEndpoint,
       });
     } else if (integrationMethod === 'OFFICIAL_SEARCH_ENDPOINT' || integrationMethod === 'LIVE_OFFICIAL_SEARCH') {
       const template = portal.discovery_details?.searchEndpoint || `${portal.url}/search?q={query}`;
@@ -86,22 +97,13 @@ export class PortalManager {
         portalName: portal.name,
         baseUrl: portal.url,
         allowedDomains,
-        integrationMethod: 'OFFICIAL_SEARCH_ENDPOINT',
+        integrationMethod: 'LIVE_OFFICIAL_SEARCH',
         capabilities: portal.capabilities,
         searchUrlTemplate: template,
       });
-    } else if (integrationMethod === 'BROWSE_ONLY') {
-      // Browse-only portals do not have automated search adapters
-      return null;
     } else {
-      // Default to VerifiedCatalogAdapter (STATIC_VERIFIED_SNAPSHOT)
-      adapter = new VerifiedCatalogAdapter({
-        portalId: portal.id,
-        portalName: portal.name,
-        baseUrl: portal.url,
-        allowedDomains,
-        integrationMethod: 'STATIC_VERIFIED_SNAPSHOT',
-      });
+      // Default fallback for unconfigured portals is BROWSE_ONLY (null adapter)
+      return null;
     }
 
     this.adapterCache.set(portalId, adapter);

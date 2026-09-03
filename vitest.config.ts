@@ -9,7 +9,7 @@ export default defineConfig({
     globals: true,
     fileParallelism: false,
     maxWorkers: 1,
-    isolate: false,
+    isolate: true,
     include: ['tests/**/*.test.ts'],
     env: {
       JWT_SECRET: 'mishkat_jwt_secret_test_key_at_least_32_characters_123456',

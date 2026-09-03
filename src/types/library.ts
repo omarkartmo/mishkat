@@ -165,6 +165,7 @@ export interface PortalCapabilities {
   isLiveSearchSupported?: boolean;
   isStaticSnapshot?: boolean;
   isBrowseOnly?: boolean;
+  operationalMode?: 'LIVE_SOURCE' | 'BROWSE_ONLY' | 'STATIC_SNAPSHOT';
 }
 
 export interface PendingBookSubmission {

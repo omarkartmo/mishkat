@@ -154,28 +154,37 @@ export class OfficialApiAdapter extends ExternalPortalAdapter {
       if (!res.ok) return [];
 
       const data = JSON.parse(res.body);
-      const items = Array.isArray(data) ? data : (data.items || data.records || data.data || []);
+      const items = Array.isArray(data)
+        ? data
+        : (data.items || data.records || data.data || data.docs || (data.response && data.response.docs) || []);
 
-      return items.map((item: any) =>
-        this.stampProvenance({
-          id: item.id || `rec-${Date.now()}`,
+      return items.map((item: any) => {
+        const recId = String(item.key || item.id || item.identifier || `rec-${Date.now()}`);
+        const recUrl = item.url || (item.key ? `${this.baseUrl}${item.key}` : `${this.baseUrl}/record/${recId}`);
+        const author = Array.isArray(item.author_name)
+          ? item.author_name.join('، ')
+          : (item.author || item.creator || 'مؤلف غير معروف');
+
+        return this.stampProvenance({
+          id: recId,
           portalId: this.portalId,
           title: item.title || 'عنوان غير معروف',
-          author: item.author || item.creator || 'مؤلف غير معروف',
+          author,
           categoryName: item.category || 'عام',
           categorySuggestion: 'cat-general',
-          pagesCount: item.pages || 100,
-          publishYear: item.year || item.publishYear,
-          summary: item.summary || item.description || '',
-          tags: Array.isArray(item.tags) ? item.tags : [],
-          canonicalUrl: item.url || `${this.baseUrl}/record/${item.id}`,
-          sourceRecordId: String(item.id),
-          sourceRecordUrl: item.url || `${this.baseUrl}/record/${item.id}`,
+          pagesCount: item.pages || item.number_of_pages_median || 100,
+          publishYear: String(item.year || item.first_publish_year || item.publishYear || ''),
+          summary: item.summary || item.description || (Array.isArray(item.first_sentence) ? item.first_sentence[0] : ''),
+          tags: Array.isArray(item.tags) ? item.tags : (Array.isArray(item.subject) ? item.subject.slice(0, 5) : []),
+          canonicalUrl: recUrl,
+          sourceEndpoint: this.searchEndpoint,
+          sourceRecordId: recId,
+          sourceRecordUrl: recUrl,
           sourceRetrievedAt: new Date().toISOString(),
           verificationStatus: 'VERIFIED',
           isDirectExtraction: true,
-        })
-      );
+        });
+      });
     } catch {
       return [];
     }

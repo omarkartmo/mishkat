@@ -60,12 +60,14 @@ export interface PortalCapabilities {
   isLiveSearchSupported?: boolean;
   isStaticSnapshot?: boolean;
   isBrowseOnly?: boolean;
+  operationalMode?: 'LIVE_SOURCE' | 'BROWSE_ONLY' | 'STATIC_SNAPSHOT';
 }
 
 export interface ImmutableProvenance {
   sourcePortalId: string;
   sourcePortalName: string;
   sourceBaseUrl: string;
+  sourceEndpoint?: string;
   sourceRecordUrl: string;
   sourceRecordId: string;
   sourceRetrievedAt: string;
