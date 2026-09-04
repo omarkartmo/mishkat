@@ -227,6 +227,45 @@ class ApiClient {
     }
   }
 
+  public async uploadFormData<T = any>(
+    endpoint: string,
+    formData: FormData
+  ): Promise<ApiResponse<T>> {
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        return {
+          success: false,
+          error: {
+            code: json?.error?.code || `HTTP_${response.status}`,
+            message: json?.error?.message || 'فشلت العملية على الخادم.',
+            status: response.status,
+          },
+        };
+      }
+      return json;
+    } catch (err: any) {
+      return {
+        success: false,
+        error: {
+          code: 'UPLOAD_FAILED',
+          message: 'تعذر رفع البيانات إلى الخادم المركزي.',
+          status: 0,
+        },
+      };
+    }
+  }
+
   public async getBlob(endpoint: string): Promise<ApiResponse<Blob>> {
     const headers = this.getAuthHeaders();
 

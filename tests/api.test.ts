@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { Express } from 'express';
+import path from 'path';
+import fs from 'fs';
 import { createExpressApp } from '../server/index';
 
 let app: Express;
@@ -375,11 +377,18 @@ describe('6. Book Submissions & Digital Ingestion Workflow', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.status).toBe('pending');
+    expect(['pending', 'PENDING_REVIEW']).toContain(res.body.data.status);
     submissionId = res.body.data.id;
   });
 
   it('should allow admin to review and approve submission, adding it to master catalog', async () => {
+    // In Phase 15.4-G, real physical file must exist (manualFilePath or downloadUrl)
+    const testPdfPath = path.resolve('LibraryData/books/digital/test-reader-sample.pdf');
+    if (!fs.existsSync(testPdfPath)) {
+      fs.mkdirSync(path.dirname(testPdfPath), { recursive: true });
+      fs.writeFileSync(testPdfPath, '%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF');
+    }
+
     const res = await request(app)
       .post(`/api/v1/submissions/${submissionId}/review`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -387,6 +396,7 @@ describe('6. Book Submissions & Digital Ingestion Workflow', () => {
         status: 'approved',
         adminFeedback: 'تم اعتماد الكتاب وإضافته إلى المستودع الرقمي بالمكتبة',
         categoryId: 'cat-education',
+        manualFilePath: testPdfPath,
       });
 
     expect(res.status).toBe(200);

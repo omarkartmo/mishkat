@@ -15,29 +15,38 @@ import {
   FolderOpen,
   ArrowRight,
   UploadCloud,
+  Check,
+  Search,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { Category, DigitalBook } from '../../types/library';
+import { bookRepository } from '../../services/bookRepository';
 
 interface BulkDigitalImportModalProps {
   categories: Category[];
   isOpen: boolean;
   onClose: () => void;
-  onImportSuccess: (books: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => void;
+  onImportSuccess: (importedCount: number) => void;
 }
 
-interface StagedBook {
+export interface StagedBookItem {
   tempId: string;
   originalFileName: string;
-  relativePath: string;
+  stagedFilePath: string;
+  format: 'pdf' | 'epub';
+  fileSizeMb: number;
+  fileHash: string;
   title: string;
   author: string;
   categoryId: string;
-  format: 'pdf' | 'epub';
-  fileSizeMb: number;
-  pages: number;
-  tags: string[];
-  summary: string;
-  matchedBy: 'folder' | 'ai_smart' | 'manual';
+  categoryName?: string;
+  confidence: number;
+  status: 'ready' | 'needs_review' | 'duplicate' | 'imported' | 'failed';
+  isDuplicate?: boolean;
+  duplicateReason?: string | null;
+  pages?: number;
+  summary?: string;
 }
 
 export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
@@ -46,308 +55,118 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
   onClose,
   onImportSuccess,
 }) => {
-  const [folderPathInput, setFolderPathInput] = useState('D:/Library/School_Digital_Books');
-  const [stagedBooks, setStagedBooks] = useState<StagedBook[]>([]);
+  const [folderPathInput, setFolderPathInput] = useState('');
+  const [stagedBooks, setStagedBooks] = useState<StagedBookItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [bulkCategoryOverride, setBulkCategoryOverride] = useState<string>('');
-  const [selectedBooksCount, setSelectedBooksCount] = useState<number>(0);
   const [showGuide, setShowGuide] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<{
+    total: number;
+    imported: number;
+    skipped: number;
+    failed: number;
+    message: string;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
-  // Smart heuristic classifier for Arabic book titles & filenames
-  const classifyBookSmartly = (
-    fileName: string,
-    relativePath: string
-  ): { categoryId: string; title: string; author: string; matchedBy: 'folder' | 'ai_smart' } => {
-    // 1. Check if relative path contains a subfolder matching an existing category name
-    const pathParts = relativePath.split(/[/\\]/);
-    if (pathParts.length > 1) {
-      const folderName = pathParts[pathParts.length - 2].toLowerCase().trim();
-      const matchedCat = categories.find(
-        (c) =>
-          c.name.toLowerCase().includes(folderName) ||
-          folderName.includes(c.name.toLowerCase()) ||
-          (folderName.includes('دين') || folderName.includes('شرع') || folderName.includes('فقه') || folderName.includes('عقيد')
-            ? c.id === 'cat-islamic'
-            : false) ||
-          (folderName.includes('تاريخ') || folderName.includes('حضار') || folderName.includes('سير')
-            ? c.id === 'cat-history'
-            : false) ||
-          (folderName.includes('لغ') || folderName.includes('أدب') || folderName.includes('شعر') || folderName.includes('نحو')
-            ? c.id === 'cat-arabic'
-            : false) ||
-          (folderName.includes('علوم') || folderName.includes('فيزياء') || folderName.includes('حاسوب') || folderName.includes('تقني')
-            ? c.id === 'cat-science'
-            : false) ||
-          (folderName.includes('روايات') || folderName.includes('قصص') || folderName.includes('ناشئ')
-            ? c.id === 'cat-literature'
-            : false)
-      );
-
-      if (matchedCat) {
-        const { title, author } = cleanTitleAndAuthor(fileName);
-        return {
-          categoryId: matchedCat.id,
-          title,
-          author,
-          matchedBy: 'folder',
-        };
-      }
-    }
-
-    // 2. Smart auto-classification based on filename keywords
-    const { title, author } = cleanTitleAndAuthor(fileName);
-    const cleanLower = fileName.toLowerCase();
-
-    let categoryId = categories[0]?.id || 'cat-islamic';
-
-    if (
-      cleanLower.includes('فقه') ||
-      cleanLower.includes('عقيدة') ||
-      cleanLower.includes('تفسير') ||
-      cleanLower.includes('حديث') ||
-      cleanLower.includes('قرآن') ||
-      cleanLower.includes('إباضي') ||
-      cleanLower.includes('سالمي') ||
-      cleanLower.includes('جيطالي') ||
-      cleanLower.includes('بخاري') ||
-      cleanLower.includes('مسلم') ||
-      cleanLower.includes('أصول') ||
-      cleanLower.includes('شريعة')
-    ) {
-      const islamicCat = categories.find((c) => c.id === 'cat-islamic' || c.name.includes('إسلام') || c.name.includes('شرع'));
-      if (islamicCat) categoryId = islamicCat.id;
-    } else if (
-      cleanLower.includes('تاريخ') ||
-      cleanLower.includes('حضارة') ||
-      cleanLower.includes('عمان') ||
-      cleanLower.includes('أندلس') ||
-      cleanLower.includes('طبري') ||
-      cleanLower.includes('ابن الأثير') ||
-      cleanLower.includes('فتوح') ||
-      cleanLower.includes('سيرة')
-    ) {
-      const histCat = categories.find((c) => c.id === 'cat-history' || c.name.includes('تاريخ') || c.name.includes('حضار'));
-      if (histCat) categoryId = histCat.id;
-    } else if (
-      cleanLower.includes('نحو') ||
-      cleanLower.includes('إعراب') ||
-      cleanLower.includes('بلاغة') ||
-      cleanLower.includes('معجم') ||
-      cleanLower.includes('لسان العرب') ||
-      cleanLower.includes('ألفية') ||
-      cleanLower.includes('جرجاني') ||
-      cleanLower.includes('سيبويه') ||
-      cleanLower.includes('شعر')
-    ) {
-      const arabCat = categories.find((c) => c.id === 'cat-arabic' || c.name.includes('عرب') || c.name.includes('لغ'));
-      if (arabCat) categoryId = arabCat.id;
-    } else if (
-      cleanLower.includes('فيزياء') ||
-      cleanLower.includes('كيمياء') ||
-      cleanLower.includes('أحياء') ||
-      cleanLower.includes('رياضيات') ||
-      cleanLower.includes('ذكاء') ||
-      cleanLower.includes('برمجة') ||
-      cleanLower.includes('علوم') ||
-      cleanLower.includes('فلك')
-    ) {
-      const sciCat = categories.find((c) => c.id === 'cat-science' || c.name.includes('علوم') || c.name.includes('تقني'));
-      if (sciCat) categoryId = sciCat.id;
-    } else if (
-      cleanLower.includes('رواية') ||
-      cleanLower.includes('قصة') ||
-      cleanLower.includes('ديوان') ||
-      cleanLower.includes('أدب') ||
-      cleanLower.includes('مسرحية')
-    ) {
-      const litCat = categories.find((c) => c.id === 'cat-literature' || c.name.includes('أدب') || c.name.includes('قصص'));
-      if (litCat) categoryId = litCat.id;
-    }
-
-    return {
-      categoryId,
-      title,
-      author,
-      matchedBy: 'ai_smart',
-    };
-  };
-
-  // Helper to extract clean Title & Author from common filename patterns
-  const cleanTitleAndAuthor = (fileName: string): { title: string; author: string } => {
-    // remove extension
-    let clean = fileName.replace(/\.(pdf|epub|mobi)$/i, '');
-    clean = clean.replace(/_/g, ' ').replace(/-/g, ' - ').replace(/\s+/g, ' ').trim();
-
-    let title = clean;
-    let author = 'غير محدد';
-
-    // Pattern: "Title - Author" or "Author - Title"
-    if (clean.includes(' - ')) {
-      const parts = clean.split(' - ').map((p) => p.trim());
-      if (parts.length >= 2) {
-        if (
-          parts[0].startsWith('الشيخ') ||
-          parts[0].startsWith('الإمام') ||
-          parts[0].startsWith('ابن') ||
-          parts[0].startsWith('د.') ||
-          parts[0].startsWith('أ.')
-        ) {
-          author = parts[0];
-          title = parts.slice(1).join(' - ');
-        } else {
-          title = parts[0];
-          author = parts.slice(1).join(' - ');
-        }
-      }
-    } else if (clean.includes(' للشيخ ') || clean.includes(' للإمام ') || clean.includes(' تأليف ')) {
-      const splitKeywords = [' للشيخ ', ' للإمام ', ' تأليف '];
-      for (const kw of splitKeywords) {
-        if (clean.includes(kw)) {
-          const parts = clean.split(kw);
-          title = parts[0].trim();
-          author = parts[1].trim();
-          break;
-        }
-      }
-    }
-
-    return { title, author };
-  };
-
-  // Handle local files selected by user
-  const handleFilesSelected = (files: FileList | null) => {
+  // Handle local files selected by user -> upload to backend /bulk-stage for real staging & metadata extraction
+  const handleFilesSelected = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     setIsProcessing(true);
-    const newStaged: StagedBook[] = [];
+    setErrorMessage(null);
+    setImportResult(null);
 
-    Array.from(files).forEach((file, index) => {
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      if (ext !== 'pdf' && ext !== 'epub') return;
-
-      // Check if relative path was captured
-      const relPath = (file as any).webkitRelativePath || file.name;
-      const { categoryId, title, author, matchedBy } = classifyBookSmartly(file.name, relPath);
-
-      const estimatedPages = Math.max(45, Math.min(1200, Math.floor(file.size / (1024 * 60))));
-      const sizeMb = parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 2.5;
-
-      newStaged.push({
-        tempId: `staged-${Date.now()}-${index}`,
-        originalFileName: file.name,
-        relativePath: relPath,
-        title: title || file.name.replace(/\.[^/.]+$/, ''),
-        author: author || 'غير محدد',
-        categoryId,
-        format: ext === 'epub' ? 'epub' : 'pdf',
-        fileSizeMb: sizeMb,
-        pages: estimatedPages,
-        tags: ['استيراد جماعي', ext.toUpperCase()],
-        summary: `تم استيراد هذا الكتاب رقمياً من الملف المحلي: ${file.name}`,
-        matchedBy,
+    try {
+      const formData = new FormData();
+      let count = 0;
+      Array.from(files).forEach((file) => {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext === 'pdf' || ext === 'epub') {
+          formData.append('files', file);
+          count++;
+        }
       });
-    });
 
-    setStagedBooks((prev) => [...prev, ...newStaged]);
-    setSelectedBooksCount(newStaged.length);
-    setIsProcessing(false);
+      if (count === 0) {
+        setErrorMessage('لم يتم العثور على أي ملفات بصيغة PDF أو EPUB صالحة.');
+        setIsProcessing(false);
+        return;
+      }
+
+      const res = await bookRepository.bulkStageFiles(formData);
+      if (res.success && res.data) {
+        setStagedBooks((prev) => [...prev, ...res.data!.staged]);
+      } else {
+        setErrorMessage(res.error?.message || 'فشل إرسال الملفات للخادم المركزي للفرز والتجهيز.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'حدث خطأ أثناء رفع وتجهيز الملفات.');
+    } finally {
+      setIsProcessing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (directoryInputRef.current) directoryInputRef.current.value = '';
+    }
   };
 
-  // Simulate scanning a folder path if user pastes a path or clicks mock library scan
-  const handleSimulateFolderScan = () => {
+  // Scan server folder path (or configured digitalBookRootUrl)
+  const handleScanDirectory = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
-      const sampleScannedFiles = [
-        {
-          fileName: 'مقدمة_ابن_خلدون_في_التاريخ_والعمران.pdf',
-          relPath: 'التاريخ_والحضارة/مقدمة_ابن_خلدون_في_التاريخ_والعمران.pdf',
-          size: 4.8,
-          pages: 620,
-        },
-        {
-          fileName: 'طلعة_الشمس_شرح_شمس_الأصول_-_الشيخ_نور_الدين_السالمي.pdf',
-          relPath: 'العلوم_الشرعية/طلعة_الشمس_شرح_شمس_الأصول_-_الشيخ_نور_الدين_السالمي.pdf',
-          size: 6.2,
-          pages: 480,
-        },
-        {
-          fileName: 'شرح_ابن_عقيل_على_ألفية_ابن_مالك.pdf',
-          relPath: 'اللغة_العربية_وآدابها/شرح_ابن_عقيل_على_ألفية_ابن_مالك.pdf',
-          size: 3.5,
-          pages: 390,
-        },
-        {
-          fileName: 'تحفة_الأعيان_بسيرة_أهل_عمان_-_السالمي.pdf',
-          relPath: 'التاريخ_والحضارة/تحفة_الأعيان_بسيرة_أهل_عمان_-_السالمي.pdf',
-          size: 5.1,
-          pages: 510,
-        },
-        {
-          fileName: 'مبادئ_الفيزياء_الفلكية_واستكشاف_الفضاء.epub',
-          relPath: 'العلوم_الطبيعية/مبادئ_الفيزياء_الفلكية_واستكشاف_الفضاء.epub',
-          size: 2.1,
-          pages: 280,
-        },
-        {
-          fileName: 'كتاب_الإيضاح_في_الفقه_الإباضي_-_الشيخ_عامر_بن_علي_الشماخي.pdf',
-          relPath: 'العلوم_الشرعية/كتاب_الإيضاح_في_الفقه_الإباضي_-_الشيخ_عامر_بن_علي_الشماخي.pdf',
-          size: 7.9,
-          pages: 740,
-        },
-        {
-          fileName: 'البيان_والتبيين_-_الجاحظ.pdf',
-          relPath: 'اللغة_العربية_وآدابها/البيان_والتبيين_-_الجاحظ.pdf',
-          size: 4.2,
-          pages: 430,
-        },
-      ];
+    setErrorMessage(null);
+    setImportResult(null);
 
-      const newStaged: StagedBook[] = sampleScannedFiles.map((item, idx) => {
-        const ext = item.fileName.endsWith('.epub') ? 'epub' : 'pdf';
-        const { categoryId, title, author, matchedBy } = classifyBookSmartly(item.fileName, item.relPath);
-        return {
-          tempId: `mock-${Date.now()}-${idx}`,
-          originalFileName: item.fileName,
-          relativePath: `${folderPathInput}/${item.relPath}`,
-          title,
-          author,
-          categoryId,
-          format: ext,
-          fileSizeMb: item.size,
-          pages: item.pages,
-          tags: ['استيراد جماعي', ext.toUpperCase(), 'مجلد محلي'],
-          summary: `كتاب رقمي معتمد تم استيراده تلقائياً من المسار المحلي: ${item.relPath}`,
-          matchedBy,
-        };
-      });
-
-      setStagedBooks(newStaged);
-      setSelectedBooksCount(newStaged.length);
+    try {
+      const res = await bookRepository.bulkScanDirectory(folderPathInput.trim() || undefined);
+      if (res.success && res.data) {
+        if (res.data.items.length === 0) {
+          setErrorMessage(`لم يتم العثور على أي ملفات PDF أو EPUB في المسار: ${res.data.rootScanned}`);
+        } else {
+          setStagedBooks(res.data.items);
+        }
+      } else {
+        setErrorMessage(res.error?.message || 'فشل فحص المجلد المركزي.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'حدث خطأ أثناء فحص المجلد.');
+    } finally {
       setIsProcessing(false);
-    }, 600);
+    }
   };
 
   // Apply a category override to all staged books
   const handleApplyCategoryToAll = (catId: string) => {
     if (!catId) return;
+    const catName = categories.find((c) => c.id === catId)?.name || '';
     setStagedBooks((prev) =>
       prev.map((b) => ({
         ...b,
         categoryId: catId,
-        matchedBy: 'manual',
+        categoryName: catName,
+        confidence: 100,
+        status: b.status === 'needs_review' ? 'ready' : b.status,
       }))
     );
   };
 
-  // Update specific book category or title
-  const handleUpdateBook = (tempId: string, updates: Partial<StagedBook>) => {
+  // Update specific book field
+  const handleUpdateBook = (tempId: string, updates: Partial<StagedBookItem>) => {
     setStagedBooks((prev) =>
-      prev.map((b) => (b.tempId === tempId ? { ...b, ...updates, matchedBy: 'manual' } : b))
+      prev.map((b) => {
+        if (b.tempId !== tempId) return b;
+        const updated = { ...b, ...updates };
+        if (updates.categoryId) {
+          updated.categoryName = categories.find((c) => c.id === updates.categoryId)?.name || b.categoryName;
+          updated.confidence = 100;
+          if (updated.status === 'needs_review') updated.status = 'ready';
+        }
+        return updated;
+      })
     );
   };
 
@@ -355,30 +174,43 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
     setStagedBooks((prev) => prev.filter((b) => b.tempId !== tempId));
   };
 
-  const handleConfirmImport = () => {
-    if (stagedBooks.length === 0) return;
+  // Execute actual import to library (calls /api/v1/books/bulk-import in safe chunks)
+  const handleConfirmImport = async () => {
+    const validBooks = stagedBooks.filter((b) => !b.isDuplicate && b.status !== 'duplicate');
+    if (validBooks.length === 0) {
+      setErrorMessage('لا توجد كتب صالحة للاستيراد (قد تكون جميع الملفات مكررة مسبقاً).');
+      return;
+    }
 
-    const booksToImport: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[] = stagedBooks.map((b) => ({
-      title: b.title,
-      author: b.author,
-      categoryId: b.categoryId,
-      format: b.format,
-      fileSizeMb: b.fileSizeMb,
-      pages: b.pages,
-      tags: b.tags,
-      summary: b.summary,
-      filePath: b.relativePath,
-      isLocalHosted: true,
-      sourceOrigin: 'استيراد محلي جماعي (Bulk Directory)',
-    }));
+    setIsImporting(true);
+    setErrorMessage(null);
 
-    onImportSuccess(booksToImport);
-    onClose();
+    try {
+      const res = await bookRepository.bulkImportStagedItems(validBooks);
+      if (res.success && res.data) {
+        setImportResult(res.data);
+        onImportSuccess(res.data.imported);
+        // Clear staged books if all imported or show remaining
+        if (res.data.imported > 0) {
+          setStagedBooks([]);
+        }
+      } else {
+        setErrorMessage(res.error?.message || 'تعذر استيراد الكتب إلى المستودع المركزي.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'حدث خطأ غير متوقع أثناء الاستيراد.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
+  const readyCount = stagedBooks.filter((b) => b.status === 'ready').length;
+  const reviewCount = stagedBooks.filter((b) => b.status === 'needs_review').length;
+  const duplicateCount = stagedBooks.filter((b) => b.isDuplicate || b.status === 'duplicate').length;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 dark:bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100">
         {/* Header */}
         <div className="p-5 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -387,13 +219,13 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                الاستيراد الجماعي للكتب الرقمية (Bulk Importer)
+                الاستيراد والتصنيف الجماعي للكتب الرقمية (Server-Authoritative Bulk Importer)
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono">
-                  فرز ذكي وتلقائي
+                  فرز وتخزين مركزي حقيقي
                 </span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                أدخل مسار المجلد أو اختر الملفات مباشرة ليقوم النظام باستخراج العناوين والتصنيفات بدقة عالية
+                فحص الخادم أو رفع الملفات، استخراج البصمات والعناوين والتصنيف التلقائي قبل الاستيراد لمنع التكرار
               </p>
             </div>
           </div>
@@ -415,36 +247,41 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
           </div>
         </div>
 
-        {/* Informative Guidance Panel (Answers user's question directly in the UI) */}
+        {/* Guide Panel */}
         {showGuide && (
           <div className="p-4 bg-sky-950/40 border-b border-sky-800/40 text-xs text-slate-300 space-y-2">
             <div className="flex items-start gap-2">
               <Sparkles className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-bold text-sky-200 text-sm mb-1">
-                  كيف يتعامل النظام مع ملفات الكتب الرقمية؟ هل يتعين عليك فرزها يدوياً؟
+                  آلية المعالجة والتصنيف التلقائي في مشكاة:
                 </h4>
-                <p className="text-slate-300 leading-relaxed">
-                  <strong>لا يشترط فرزها مسبقاً!</strong> يوفر النظام خيارين مرنين لتوفير الجهد والوقت:
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2.5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2.5">
                   <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
                     <span className="font-bold text-emerald-400 flex items-center gap-1 mb-1">
                       <FolderTree className="w-3.5 h-3.5" />
-                      1. طريقة المجلدات المصنفة (Folder Hierarchy)
+                      1. الفحص من المسار المعتمد
                     </span>
                     <p className="text-[11px] text-slate-400">
-                      إذا وضعت الكتب داخل مجلدات فرعية بأسمائها (مثلاً: <code className="text-amber-300">مجلد_الكتب/التاريخ/كتاب1.pdf</code>)، سيعتمد البرنامج اسم المجلد كتصنيف للكتاب مباشرة.
+                      يمكن فحص المجلد المخصص في إعدادات النظام مباشرة على الخادم مع استيراد المجلدات الفرعية.
                     </p>
                   </div>
-
                   <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
                     <span className="font-bold text-sky-400 flex items-center gap-1 mb-1">
                       <Sparkles className="w-3.5 h-3.5" />
-                      2. الفرز الذكي التلقائي (Smart Keywords Detection)
+                      2. الفرز الذكي والتصنيف
                     </span>
                     <p className="text-[11px] text-slate-400">
-                      إذا كانت الكتب مجمعة في مجلد واحد، يحلل النظام أسماء الملفات ويطابق الكلمات المفتاحية التراثية والعلمية ليقترح التصنيف واسم المؤلف تلقائياً، مع إمكانية تعديلها بنقرة زر في الجدول أدناه!
+                      يحلل النظام الكلمات المفتاحية التراثية والعلمية ويعين التصنيف المقترح ونسبة الثقة قبل الحفظ.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+                    <span className="font-bold text-amber-400 flex items-center gap-1 mb-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      3. فحص البصمة والتكرار (SHA-256)
+                    </span>
+                    <p className="text-[11px] text-slate-400">
+                      يتم احتساب بصمة كل ملف لمنع تكرار تخزين الكتب في المستودع المركزي.
                     </p>
                   </div>
                 </div>
@@ -453,39 +290,58 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
           </div>
         )}
 
+        {/* Error or Result Message Banner */}
+        {errorMessage && (
+          <div className="p-3 bg-rose-950/60 border-b border-rose-800/60 flex items-center gap-2 text-xs text-rose-300">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {importResult && (
+          <div className="p-3 bg-emerald-950/60 border-b border-emerald-800/60 flex items-center justify-between text-xs text-emerald-300">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>{importResult.message}</span>
+            </div>
+            <span className="font-mono text-[11px] bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-700/50">
+              ناجح: {importResult.imported} | متخطى (مكرر): {importResult.skipped} | فاشل: {importResult.failed}
+            </span>
+          </div>
+        )}
+
         {/* Source Picker Section */}
         <div className="p-5 border-b border-slate-800 bg-slate-950/30 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
             {/* Direct Folder Path Input */}
-            <div className="md:col-span-8 flex items-center gap-2 bg-slate-900 border border-slate-800 focus-within:border-emerald-500 rounded-2xl px-3.5 py-2">
+            <div className="md:col-span-7 flex items-center gap-2 bg-slate-900 border border-slate-800 focus-within:border-emerald-500 rounded-2xl px-3.5 py-2">
               <FolderOpen className="w-4 h-4 text-emerald-400 shrink-0" />
               <div className="flex-1">
-                <label className="text-[10px] text-slate-400 block">مسار المجلد المحلي على الخادم أو القرص الصلب:</label>
+                <label className="text-[10px] text-slate-400 block">مسار المجلد على الخادم أو اترك فارغاً لاستخدام مسار الإعدادات المعتمد:</label>
                 <input
                   type="text"
                   value={folderPathInput}
                   onChange={(e) => setFolderPathInput(e.target.value)}
-                  placeholder="مثال: D:/Library/Islamic_Books/ أو /var/www/school-library/digital/"
+                  placeholder="المسار المعتمد في إعدادات النظام (Digital Book Root URL)"
                   className="w-full bg-transparent text-xs text-slate-200 outline-none font-mono"
                 />
               </div>
               <button
-                onClick={handleSimulateFolderScan}
-                disabled={isProcessing}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50 shrink-0"
+                onClick={handleScanDirectory}
+                disabled={isProcessing || isImporting}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50 shrink-0"
               >
                 {isProcessing ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <Sparkles className="w-3.5 h-3.5" />
                 )}
-                <span>فحص وتصنيف المحتوى</span>
+                <span>فحص وتصنيف الخادم</span>
               </button>
             </div>
 
             {/* Direct Multi-file Browse buttons */}
-            <div className="md:col-span-4 flex items-center gap-2">
-              {/* Directory Browser using webkitdirectory */}
+            <div className="md:col-span-5 flex items-center gap-2">
               <input
                 ref={directoryInputRef}
                 type="file"
@@ -498,13 +354,13 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
               />
               <button
                 onClick={() => directoryInputRef.current?.click()}
-                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                disabled={isProcessing || isImporting}
+                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
               >
                 <FolderUp className="w-4 h-4 text-amber-400" />
-                <span>اختيار مجلد كامل</span>
+                <span>رفع مجلد محلي كامل</span>
               </button>
 
-              {/* Multiple files picker */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -515,7 +371,8 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                disabled={isProcessing || isImporting}
+                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
               >
                 <FileUp className="w-4 h-4 text-sky-400" />
                 <span>تحديد ملفات PDF/ePub</span>
@@ -538,11 +395,11 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                 اسحب وأفلت مجلد الكتب أو مجموعة ملفات هنا
               </h4>
               <p className="text-xs text-slate-400 mt-1 max-w-md">
-                يدعم صيغ PDF و ePub. سيقوم البرنامج بفحص العناوين، إزالة الرموز الزائدة، وتحديد التصنيف المناسب والمؤلف تلقائياً
+                يدعم صيغ PDF و ePub. سيتم نقل الملفات إلى بيئة التجهيز المركزية (Staging Area)، فحص البصمة، واستخراج العناوين والتصنيفات المقترحة بدقة.
               </p>
               <div className="mt-4 flex items-center gap-2">
                 <span className="text-[11px] px-3 py-1 bg-slate-800 text-slate-300 rounded-lg border border-slate-700">
-                  أو اضغط زر "فحص وتصنيف المحتوى" لتجربة الفحص الذكي الفوري
+                  أو اضغط زر "فحص وتصنيف الخادم" للبحث في المجلد المعين في الإعدادات
                 </span>
               </div>
             </div>
@@ -550,16 +407,23 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
             <div className="space-y-3">
               {/* Batch Tools Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/70 p-3 rounded-2xl border border-slate-800">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-slate-200">
-                    الكتب الجاهزة للاستيراد ({stagedBooks.length}):
+                    الكتب المجهزة للاستيراد ({stagedBooks.length}):
                   </span>
-                  <span className="text-[11px] text-slate-400">
-                    (
-                    {stagedBooks.filter((b) => b.matchedBy === 'folder').length} عبر المجلدات،{' '}
-                    {stagedBooks.filter((b) => b.matchedBy === 'ai_smart').length} فرز ذكي
-                    )
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    جاهز: {readyCount}
                   </span>
+                  {reviewCount > 0 && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      يحتاج مراجعة: {reviewCount}
+                    </span>
+                  )}
+                  {duplicateCount > 0 && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                      مكرر مسبقاً: {duplicateCount}
+                    </span>
+                  )}
                 </div>
 
                 {/* Bulk override dropdown */}
@@ -591,24 +455,29 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                 </div>
               </div>
 
-              {/* Table */}
+              {/* Table (Section 25 Preview Requirement) */}
               <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/40">
                 <table className="w-full text-right text-xs">
                   <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800">
                     <tr>
-                      <th className="p-3 font-semibold">اسم الملف الأصلي</th>
+                      <th className="p-3 font-semibold">الملف الأصلي</th>
                       <th className="p-3 font-semibold">العنوان المستخرج</th>
                       <th className="p-3 font-semibold">المؤلف</th>
                       <th className="p-3 font-semibold">التصنيف المعتمد</th>
-                      <th className="p-3 font-semibold text-center">الصيغة / الحجم</th>
-                      <th className="p-3 font-semibold text-center">طريقة الفرز</th>
+                      <th className="p-3 font-semibold text-center">النوع / الحجم</th>
+                      <th className="p-3 font-semibold text-center">الحالة / الدقة</th>
                       <th className="p-3 font-semibold text-center">إجراء</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {stagedBooks.map((book) => {
                       return (
-                        <tr key={book.tempId} className="hover:bg-slate-900/60 transition-colors">
+                        <tr
+                          key={book.tempId}
+                          className={`hover:bg-slate-900/60 transition-colors ${
+                            book.isDuplicate ? 'opacity-60 bg-rose-950/10' : ''
+                          }`}
+                        >
                           <td className="p-3 font-mono text-[11px] text-slate-400 max-w-[160px] truncate" title={book.originalFileName}>
                             {book.originalFileName}
                           </td>
@@ -616,23 +485,26 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                             <input
                               type="text"
                               value={book.title}
+                              disabled={book.isDuplicate}
                               onChange={(e) => handleUpdateBook(book.tempId, { title: e.target.value })}
-                              className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-2 py-1 text-slate-100 font-semibold outline-none"
+                              className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-2 py-1 text-slate-100 font-semibold outline-none disabled:opacity-50"
                             />
                           </td>
                           <td className="p-3">
                             <input
                               type="text"
                               value={book.author}
+                              disabled={book.isDuplicate}
                               onChange={(e) => handleUpdateBook(book.tempId, { author: e.target.value })}
-                              className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-2 py-1 text-slate-300 outline-none"
+                              className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-2 py-1 text-slate-300 outline-none disabled:opacity-50"
                             />
                           </td>
                           <td className="p-3">
                             <select
                               value={book.categoryId}
+                              disabled={book.isDuplicate}
                               onChange={(e) => handleUpdateBook(book.tempId, { categoryId: e.target.value })}
-                              className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-2 py-1 text-slate-200 text-xs outline-none"
+                              className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-2 py-1 text-slate-200 text-xs outline-none disabled:opacity-50"
                             >
                               {categories.map((c) => (
                                 <option key={c.id} value={c.id}>
@@ -641,7 +513,7 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                               ))}
                             </select>
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="p-3 text-center whitespace-nowrap">
                             <span className="uppercase font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                               {book.format}
                             </span>
@@ -649,28 +521,28 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                               {book.fileSizeMb} MB
                             </span>
                           </td>
-                          <td className="p-3 text-center">
-                            {book.matchedBy === 'folder' ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                <FolderTree className="w-3 h-3" />
-                                مجلد فرعي
+                          <td className="p-3 text-center whitespace-nowrap">
+                            {book.isDuplicate ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20" title={book.duplicateReason || ''}>
+                                <AlertTriangle className="w-3 h-3" />
+                                مكرر
                               </span>
-                            ) : book.matchedBy === 'ai_smart' ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                                <Sparkles className="w-3 h-3" />
-                                فرز ذكي
+                            ) : book.status === 'needs_review' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20" title={`نسبة الدقة: ${book.confidence}%`}>
+                                يحتاج مراجعة ({book.confidence}%)
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                                يدوي
+                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title={`نسبة الدقة: ${book.confidence}%`}>
+                                <Check className="w-3 h-3" />
+                                جاهز ({book.confidence}%)
                               </span>
                             )}
                           </td>
                           <td className="p-3 text-center">
                             <button
                               onClick={() => handleRemoveBook(book.tempId)}
-                              className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                              title="حذف من الاستيراد"
+                              className="p-1 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                              title="استبعاد من الاستيراد"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -690,8 +562,9 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
           <div className="text-xs text-slate-400">
             {stagedBooks.length > 0 && (
               <span>
-                الإجمالي:{' '}
-                <strong className="text-slate-200 font-mono">{stagedBooks.length}</strong> كتاب رقمي جاهز للإضافة إلى المستودع المركزي.
+                إجمالي المعروض:{' '}
+                <strong className="text-slate-200 font-mono">{stagedBooks.length}</strong> | صالح للاستيراد:{' '}
+                <strong className="text-emerald-400 font-mono">{stagedBooks.filter((b) => !b.isDuplicate).length}</strong>
               </span>
             )}
           </div>
@@ -699,17 +572,26 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              disabled={isImporting}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
             >
-              إلغاء
+              إغلاق
             </button>
             <button
               onClick={handleConfirmImport}
-              disabled={stagedBooks.length === 0}
+              disabled={stagedBooks.length === 0 || stagedBooks.every((b) => b.isDuplicate) || isImporting}
               className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>استيراد جميع الكتب ({stagedBooks.length}) للمكتبة</span>
+              {isImporting ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              <span>
+                {isImporting
+                  ? 'جاري الاستيراد والتخزين المركزي...'
+                  : `استيراد الكتب الصالحة (${stagedBooks.filter((b) => !b.isDuplicate).length}) للمكتبة`}
+              </span>
             </button>
           </div>
         </div>
@@ -717,3 +599,4 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
     </div>
   );
 };
+

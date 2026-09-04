@@ -582,6 +582,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   allowStudentIngestion: true,
   serverPort: 3000,
   serverHost: '0.0.0.0 (Localhost LAN Server)',
+  digitalBookRootUrl: 'LibraryData/books/digital',
   predefinedLoanReasons: [
     'بحث أكاديمي وتكليف دراسي',
     'مطالعة ذاتية وثقافة عامة',

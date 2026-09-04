@@ -354,6 +354,48 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
         </div>
 
+        {/* Digital Book Storage & Root URL Configuration Card (Section 19 Requirement) */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-sky-400" />
+                مسار وجذر ملفات الكتب الرقمية (Digital Books Root Path / Base URL)
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                المسار المعتمد على الخادم لتخزين ملفات الكتب الرقمية (PDF / ePub)، وفحص المجلدات، والاستيراد الجماعي التلقائي
+              </p>
+            </div>
+            <span className="text-[10px] font-mono text-sky-300 bg-sky-500/10 px-2.5 py-1 rounded-lg border border-sky-500/20">
+              إعداد مستمر وموثوق
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-medium mb-1">
+              المسار أو الرابط الأساسي للملفات الرقمية (Root URL / Local Folder Path) *
+            </label>
+            <input
+              type="text"
+              required
+              value={form.digitalBookRootUrl || ''}
+              onChange={(e) => setForm({ ...form, digitalBookRootUrl: e.target.value })}
+              placeholder="LibraryData/books/digital"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-indigo-500 text-xs"
+            />
+            <span className="text-[11px] text-slate-500 mt-1 block leading-relaxed">
+              يُستخدم هذا المسار مباشرة في عمليات الاستكشاف الجماعي (Bulk Scan)، الفرز التلقائي قبل الاستيراد، وحل مسارات الكتب الرقمية. يتم حفظ القيمة واسترجاعها تلقائياً عند إعادة تشغيل الخادم.
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1 font-mono text-[11px] text-slate-400">
+            <div className="flex justify-between">
+              <span>القيمة المحفوظة حالياً:</span>
+              <span className="text-emerald-400 font-bold">{config.digitalBookRootUrl || 'LibraryData/books/digital'}</span>
+            </div>
+          </div>
+        </div>
+
         {/* Save Button */}
         <div className="flex justify-end">
           <button

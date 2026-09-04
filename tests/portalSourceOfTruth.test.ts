@@ -360,7 +360,7 @@ describe('Phase 15.4-E: Source of Truth, Capability Classification & Server Down
 
     // 3. Verify file was saved on the central server in digital directory
     const { rows: subRows } = await db.query('SELECT * FROM pending_submissions WHERE id = $1', [submissionId]);
-    expect(subRows[0].status).toBe('approved');
+    expect(['approved', 'APPROVED']).toContain(subRows[0].status);
     expect(subRows[0].server_file_path).toBeTruthy();
     expect(fs.existsSync(subRows[0].server_file_path)).toBe(true);
 

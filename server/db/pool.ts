@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { PGlite } from '@electric-sql/pglite';
 import { serverConfig } from '../config';
@@ -65,17 +67,61 @@ class PostgresDatabaseEngine implements IDatabase {
       }
     }
 
+    // Helper to safely initialize and test embedded PGlite instance
+    const initAndTestPgLite = async (dataDir: string): Promise<PGlite> => {
+      // 1. Remove stale postmaster.pid lock file if leftover from previous crash/hard kill
+      const pidFile = path.join(dataDir, 'postmaster.pid');
+      if (fs.existsSync(pidFile)) {
+        try {
+          fs.unlinkSync(pidFile);
+          console.log('🧹 [Database] Cleaned up stale postmaster.pid lock file.');
+        } catch (e: any) {
+          console.warn('⚠️ [Database] Could not remove stale postmaster.pid:', e.message);
+        }
+      }
+
+      const instance = new PGlite(dataDir);
+      try {
+        // Run sanity test query to ensure WAL is healthy and not aborted
+        await instance.query('SELECT 1');
+        return instance;
+      } catch (testErr) {
+        await instance.close().catch(() => {});
+        throw testErr;
+      }
+    };
+
     // Initialize embedded central PostgreSQL engine (PGlite)
     try {
-      this.pgliteInstance = new PGlite(serverConfig.dirs.pgdata);
+      this.pgliteInstance = await initAndTestPgLite(serverConfig.dirs.pgdata);
       this.isConnected = true;
       this.engineType = 'embedded_pg';
       console.log(`✅ [Database] Embedded Central PostgreSQL Engine (PGlite) Connected. Storage: ${serverConfig.dirs.pgdata}`);
     } catch (pgliteErr: any) {
-      this.isConnected = false;
-      this.engineType = null;
-      console.error('❌ [Database] Failed to initialize embedded PostgreSQL engine:', pgliteErr.message);
-      throw new DatabaseUnavailableError();
+      console.warn('⚠️ [Database] Embedded PostgreSQL engine encountered corrupted storage or unrecoverable WAL:', pgliteErr.message);
+      console.log('🔄 [Database] Attempting automatic self-healing recovery: backing up corrupted store and re-initializing clean database...');
+      try {
+        if (this.pgliteInstance) {
+          await this.pgliteInstance.close().catch(() => {});
+          this.pgliteInstance = null;
+        }
+        const corruptBackup = `${serverConfig.dirs.pgdata}_corrupt_${Date.now()}`;
+        if (fs.existsSync(serverConfig.dirs.pgdata)) {
+          fs.renameSync(serverConfig.dirs.pgdata, corruptBackup);
+          console.log(`📦 [Database] Preserved corrupted storage at: ${corruptBackup}`);
+        }
+        fs.mkdirSync(serverConfig.dirs.pgdata, { recursive: true });
+
+        this.pgliteInstance = await initAndTestPgLite(serverConfig.dirs.pgdata);
+        this.isConnected = true;
+        this.engineType = 'embedded_pg';
+        console.log(`✅ [Database] Clean Embedded PostgreSQL Engine initialized successfully.`);
+      } catch (recoveryErr: any) {
+        this.isConnected = false;
+        this.engineType = null;
+        console.error('❌ [Database] Failed to recover embedded PostgreSQL engine:', recoveryErr.message);
+        throw new DatabaseUnavailableError();
+      }
     }
   }
 

@@ -28,6 +28,7 @@ interface DigitalLibraryViewProps {
   onOpenReader: (book: DigitalBook) => void;
   onAddDigitalBook: (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => void;
   onBulkAddDigitalBooks?: (books: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => void;
+  onRefreshBooks?: () => void;
 }
 
 export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
@@ -39,6 +40,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   onOpenReader,
   onAddDigitalBook,
   onBulkAddDigitalBooks,
+  onRefreshBooks,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -61,11 +63,9 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
 
   const getCategory = (catId: string) => (categories || []).find((c) => c.id === catId);
 
-  const handleBulkImportSuccess = (importedList: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => {
-    if (onBulkAddDigitalBooks) {
-      onBulkAddDigitalBooks(importedList);
-    } else {
-      importedList.forEach((b) => onAddDigitalBook(b));
+  const handleBulkImportSuccess = (_importedCount: number) => {
+    if (onRefreshBooks) {
+      onRefreshBooks();
     }
   };
 

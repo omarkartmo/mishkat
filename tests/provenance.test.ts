@@ -230,7 +230,7 @@ describe('Phase 15.4-C: Digital Reader Streaming & Central Approval Flow', () =>
     expect(submitRes.status).toBe(201);
     expect(submitRes.body.success).toBe(true);
     expect(submitRes.body.data.id).toBeDefined();
-    expect(submitRes.body.data.status).toBe('pending');
+    expect(['pending', 'PENDING_REVIEW']).toContain(submitRes.body.data.status);
     expect(submitRes.body.data.studentName).toBe(studentUser.name);
   });
 });

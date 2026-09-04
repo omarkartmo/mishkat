@@ -378,6 +378,34 @@ export class BookRepository {
   }
 
   /**
+   * Stage uploaded files on server with auto-extraction and auto-classification (POST /api/v1/books/bulk-stage)
+   */
+  public async bulkStageFiles(formData: FormData): Promise<ApiResponse<{ totalDiscovered: number; staged: any[] }>> {
+    return apiClient.uploadFormData<{ totalDiscovered: number; staged: any[] }>('/books/bulk-stage', formData);
+  }
+
+  /**
+   * Scan server directory (or configured root URL) for PDF/EPUB books (POST /api/v1/books/bulk-scan)
+   */
+  public async bulkScanDirectory(folderPath?: string): Promise<ApiResponse<{ rootScanned: string; totalDiscovered: number; items: any[] }>> {
+    return apiClient.post<{ rootScanned: string; totalDiscovered: number; items: any[] }>('/books/bulk-scan', { folderPath });
+  }
+
+  /**
+   * Safely import staged digital books into central library (POST /api/v1/books/bulk-import)
+   */
+  public async bulkImportStagedItems(items: any[]): Promise<ApiResponse<{
+    total: number;
+    imported: number;
+    skipped: number;
+    failed: number;
+    details: any[];
+    message: string;
+  }>> {
+    return apiClient.post('/books/bulk-import', { items });
+  }
+
+  /**
    * Fetch digital book file as authorized Blob (passes JWT Authorization header via apiClient)
    */
   public async fetchBookFileBlob(bookId: string): Promise<ApiResponse<Blob>> {

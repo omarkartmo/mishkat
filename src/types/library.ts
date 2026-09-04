@@ -116,7 +116,15 @@ export interface LoanRecord {
   overrideReason?: string;
 }
 
-export type SubmissionStatus = 'pending' | 'approved' | 'rejected';
+export type SubmissionStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'PENDING_REVIEW'
+  | 'NEEDS_MANUAL_ACQUISITION'
+  | 'READY_FOR_FINAL_APPROVAL'
+  | 'APPROVED'
+  | 'REJECTED';
 
 export type PortalStatus =
   | 'APPROVED_BROWSABLE'
@@ -197,7 +205,11 @@ export interface PendingBookSubmission {
   adminFeedback?: string;
   reviewedAt?: string;
   reviewedBy?: string;
-  tempFileUrl?: string;
+  isbn?: string;
+  language?: string;
+  coverImage?: string;
+  notes?: string;
+  category?: string;
   pagesEstimated?: number;
 }
 
@@ -315,6 +327,7 @@ export interface SystemConfig {
   allowStudentIngestion?: boolean;
   serverPort?: number;
   serverHost?: string;
+  digitalBookRootUrl?: string;
   predefinedLoanReasons?: string[];
 }
 
@@ -350,7 +363,13 @@ export type NotificationType =
   | 'loan_request_rejected'
   | 'loan_handed_over'
   | 'loan_overdue'
+  | 'book_submitted'
+  | 'new_book_suggestion'
+  | 'book_needs_manual_acquisition'
+  | 'book_waiting_final_approval'
+  | 'book_approved'
   | 'book_submission_approved'
+  | 'book_rejected'
   | 'book_submission_rejected'
   | 'system';
 

@@ -110,10 +110,10 @@ describe('MISHKAT — Phase 15.4-G: Retire Quick Explorer & Trusted Browsing/Sug
       expect(viewCode).not.toContain("viewMode === 'explorer'");
       expect(viewCode).not.toContain('المستكشف التفاعلي');
 
-      // Must have clean direct website browsing & book suggestion
-      expect(viewCode).toContain('فتح الموقع في نافذة جديدة');
-      expect(viewCode).toContain('اقتراح كتاب وجدته في هذا الموقع');
-      expect(viewCode).toContain('متاح للتصفح المباشر');
+      // Must have in-platform website browsing & global book suggestion (Phase 15.4-G Repair Rules)
+      expect(viewCode).toContain('فتح الموقع');
+      expect(viewCode).toContain('اقتراح كتاب للمكتبة');
+      expect(viewCode).toContain('وضع التصفح بملء الشاشة');
     });
 
     it('verifies portal status model supports APPROVED_BROWSABLE, BROWSE_ONLY, and DISABLED', async () => {

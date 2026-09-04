@@ -4,7 +4,7 @@
  */
 
 import { apiClient, ApiError } from './apiClient';
-import { PendingBookSubmission } from '../types/library';
+import { PendingBookSubmission, SubmissionStatus } from '../types/library';
 
 export class SubmissionRepository {
   /**
@@ -61,9 +61,12 @@ export class SubmissionRepository {
   public async reviewSubmission(
     id: string,
     review: {
-      status: 'approved' | 'rejected';
+      status: SubmissionStatus | 'approved' | 'rejected' | 'pending';
       adminFeedback?: string;
       categoryId?: string;
+      title?: string;
+      author?: string;
+      manualFilePath?: string;
     }
   ): Promise<{
     success: boolean;
@@ -87,17 +90,60 @@ export class SubmissionRepository {
   }
 
   /**
-   * Approve a book submission (POST /api/v1/submissions/:id/review)
+   * Approve a book submission (Case A auto-download or Case B final approval)
    */
-  public async approveSubmission(id: string, options?: { categoryId?: string; adminFeedback?: string }): Promise<{
+  public async approveSubmission(
+    id: string,
+    options?: { categoryId?: string; adminFeedback?: string; title?: string; author?: string; manualFilePath?: string }
+  ): Promise<{
     success: boolean;
     data?: any;
     error?: ApiError;
   }> {
     return this.reviewSubmission(id, {
-      status: 'approved',
+      status: 'APPROVED',
       categoryId: options?.categoryId,
       adminFeedback: options?.adminFeedback,
+      title: options?.title,
+      author: options?.author,
+      manualFilePath: options?.manualFilePath,
+    });
+  }
+
+  /**
+   * Transition suggestion to NEEDS_MANUAL_ACQUISITION (Section 9 Requirement)
+   */
+  public async markManualAcquisition(
+    id: string,
+    options?: { adminFeedback?: string; title?: string; author?: string; categoryId?: string }
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    return this.reviewSubmission(id, {
+      status: 'NEEDS_MANUAL_ACQUISITION',
+      adminFeedback: options?.adminFeedback,
+      title: options?.title,
+      author: options?.author,
+      categoryId: options?.categoryId,
+    });
+  }
+
+  /**
+   * Transition suggestion to READY_FOR_FINAL_APPROVAL (Section 9 Requirement)
+   */
+  public async readyFinalApproval(
+    id: string,
+    manualFilePath?: string
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    return this.reviewSubmission(id, {
+      status: 'READY_FOR_FINAL_APPROVAL',
+      manualFilePath,
     });
   }
 
@@ -110,9 +156,27 @@ export class SubmissionRepository {
     error?: ApiError;
   }> {
     return this.reviewSubmission(id, {
-      status: 'rejected',
+      status: 'REJECTED',
       adminFeedback: reason,
     });
+  }
+
+  /**
+   * Edit suggestion metadata (PUT /api/v1/submissions/:id)
+   */
+  public async updateMetadata(id: string, updates: Partial<PendingBookSubmission>): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.put(`/submissions/${id}`, updates);
+    if (res.success) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || { code: 'UPDATE_FAILED', message: 'فشل تحديث بيانات الاقتراح.' },
+    };
   }
 }
 

@@ -1373,6 +1373,7 @@ export default function App() {
               onOpenReader={handleOpenDigitalReader}
               onAddDigitalBook={handleAddDigitalBook}
               onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
+              onRefreshBooks={loadBooks}
             />
           )}
 
@@ -1395,6 +1396,7 @@ export default function App() {
               categories={categories}
               onApprove={handleApproveSubmission}
               onReject={handleRejectSubmission}
+              onRefresh={refreshAllState}
             />
           )}
 
