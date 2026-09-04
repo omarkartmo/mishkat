@@ -15,14 +15,18 @@ import {
   Bookmark,
   FolderUp,
   Sparkles,
+  Activity,
 } from 'lucide-react';
 import { DigitalBook, Category, UserRole } from '../../types/library';
 import { BulkDigitalImportModal } from './BulkDigitalImportModal';
+import { AddDigitalBookModal } from './AddDigitalBookModal';
+import { IngestionObservabilityPanel } from '../admin/IngestionObservabilityPanel';
 
 interface DigitalLibraryViewProps {
   books: DigitalBook[];
   categories: Category[];
   userRole: UserRole;
+  adminUserId?: string;
   favorites: string[];
   onToggleFavorite: (bookId: string) => void;
   onOpenReader: (book: DigitalBook) => void;
@@ -35,6 +39,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   books = [],
   categories = [],
   userRole,
+  adminUserId = '',
   favorites = [],
   onToggleFavorite,
   onOpenReader,
@@ -47,6 +52,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   const [formatFilter, setFormatFilter] = useState<'all' | 'pdf' | 'epub'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [showObservability, setShowObservability] = useState(false);
 
   const filteredBooks = (books || []).filter((b) => {
     const matchesSearch =
@@ -100,11 +106,28 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
               className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-4 h-4 shrink-0" />
-              <span>إضافة كتاب فردي</span>
+              <span>إضافة كتاب رقمي</span>
+            </button>
+
+            {/* Ingestion Observability Toggle */}
+            <button
+              onClick={() => setShowObservability((p) => !p)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap border ${showObservability ? 'bg-sky-600 border-sky-500 text-white' : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+              title="مراقبة خط الاستيراد والطابور"
+            >
+              <Activity className="w-4 h-4 shrink-0" />
+              <span>مراقبة الاستيراد</span>
             </button>
           </div>
         )}
       </div>
+
+      {/* Ingestion Observability Panel (admin only) */}
+      {userRole === 'admin' && showObservability && (
+        <div className="bg-slate-900/80 border border-sky-900/50 rounded-2xl p-5 shadow-xl">
+          <IngestionObservabilityPanel categories={categories} />
+        </div>
+      )}
 
       {/* Search & Filter Bar */}
       <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3.5 shadow-sm">
@@ -290,14 +313,15 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
         </div>
       )}
 
-      {/* Single Add Digital Book Modal */}
+      {/* Single Add Digital Book Modal — real two-step upload modal */}
       {isAddModalOpen && (
         <AddDigitalBookModal
           categories={categories}
+          adminUserId={adminUserId}
           onClose={() => setIsAddModalOpen(false)}
-          onSave={(data) => {
-            onAddDigitalBook(data);
+          onSuccess={() => {
             setIsAddModalOpen(false);
+            if (onRefreshBooks) onRefreshBooks();
           }}
         />
       )}
@@ -315,178 +339,3 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   );
 };
 
-// Add Digital Book Modal Component
-interface AddDigitalBookModalProps {
-  categories: Category[];
-  onClose: () => void;
-  onSave: (data: any) => void;
-}
-
-const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
-  categories,
-  onClose,
-  onSave,
-}) => {
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
-  const [format, setFormat] = useState<'pdf' | 'epub'>('pdf');
-  const [fileSize, setFileSize] = useState('12.5 MB');
-  const [pagesCount, setPagesCount] = useState(300);
-  const [sourceOrigin, setSourceOrigin] = useState('المكتبة المركزية');
-  const [summary, setSummary] = useState('');
-  const [tags, setTags] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !author) {
-      alert('يرجى كتابة عنوان الكتاب والمؤلف');
-      return;
-    }
-
-    onSave({
-      title,
-      author,
-      categoryId,
-      format,
-      fileSize,
-      fileSizeMb: parseFloat(fileSize) || 4.2,
-      pages: Number(pagesCount),
-      pagesCount: Number(pagesCount),
-      sourceOrigin,
-      summary,
-      tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
-            <Library className="w-5 h-5 text-emerald-500" />
-            إضافة كتاب إلكتروني إلى الخادم المحلي
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">عنوان الكتاب *</label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="عنوان الكتاب الرقمي..."
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">المؤلف / المحقق *</label>
-              <input
-                type="text"
-                required
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                placeholder="اسم المؤلف..."
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">القسم / التصنيف *</label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
-              >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">صيغة الملف *</label>
-              <select
-                value={format}
-                onChange={(e) => setFormat(e.target.value as any)}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 font-mono"
-              >
-                <option value="pdf">PDF Document</option>
-                <option value="epub">ePub Book</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">عدد الصفحات التقديري</label>
-              <input
-                type="number"
-                min="1"
-                value={pagesCount}
-                onChange={(e) => setPagesCount(Number(e.target.value))}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 font-mono"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">المصدر المرجعي</label>
-              <input
-                type="text"
-                value={sourceOrigin}
-                onChange={(e) => setSourceOrigin(e.target.value)}
-                placeholder="مثال: المكتبة الإباضية الشاملة"
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">الكلمات الدلالية</label>
-              <input
-                type="text"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="فقه, مخطوطات, تاريخ"
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">نبذة موجزة عن الكتاب</label>
-            <textarea
-              rows={3}
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="وصف مختصر لمحتوى هذا المرجع الرقمي..."
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 resize-none"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold shadow-lg shadow-emerald-600/30"
-            >
-              حفظ ونشر في المستودع
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};

@@ -23,6 +23,7 @@ export const BACKUP_TABLES_ORDER = [
   'whitelisted_portals',
   'notifications',
   'system_settings',
+  'staging_queue',
 ] as const;
 
 export type BackupTableName = typeof BACKUP_TABLES_ORDER[number];
@@ -115,6 +116,12 @@ export const TABLE_COLUMNS_ALLOWLIST: Record<BackupTableName, string[]> = {
   ],
   system_settings: [
     'key', 'value', 'updated_at',
+  ],
+  staging_queue: [
+    'id', 'original_filename', 'staged_file_path', 'source', 'format',
+    'file_size_mb', 'file_hash', 'title', 'author', 'category_id',
+    'confidence', 'status', 'duplicate_reason', 'admin_notes',
+    'queued_at', 'reviewed_at', 'reviewed_by',
   ],
 };
 

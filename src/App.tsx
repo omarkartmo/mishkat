@@ -1368,6 +1368,7 @@ export default function App() {
               books={digitalBooks}
               categories={categories}
               userRole={currentUser.role}
+              adminUserId={currentUser.id}
               favorites={favorites}
               onToggleFavorite={handleToggleFavorite}
               onOpenReader={handleOpenDigitalReader}

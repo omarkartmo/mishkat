@@ -23,7 +23,8 @@ import portalsRoutes from './routes/portals.routes';
 import notificationsRoutes from './routes/notifications.routes';
 import submissionsRoutes from './routes/submissions.routes';
 import settingsRoutes from './routes/settings.routes';
-import { auditRouter, backupRouter, healthRouter, systemRouter } from './routes/system.routes';
+import { auditRouter, backupRouter, healthRouter, systemRouter, incomingRouter } from './routes/system.routes';
+import { startIncomingWatcher, stopIncomingWatcher } from './services/incomingWatcher';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 
@@ -92,6 +93,13 @@ export async function createExpressApp() {
     console.warn('⚠️ [Database Init] Database initial setup deferred:', dbInitErr.message);
   }
 
+  // Start incoming directory watcher (non-blocking, best-effort)
+  try {
+    startIncomingWatcher();
+  } catch (watchErr: any) {
+    logger.warn(`[IncomingWatcher] Could not start watcher: ${watchErr.message}`);
+  }
+
   // Mount API v1 Routes
   app.use('/api/v1/health', healthRouter);
   app.use('/api/v1/auth', authRoutes);
@@ -112,6 +120,7 @@ export async function createExpressApp() {
   app.use('/api/v1/audit-logs', auditRouter);
   app.use('/api/v1/backups', backupRouter);
   app.use('/api/v1/system', systemRouter);
+  app.use('/api/v1/system', incomingRouter);
 
   // Global Error Handler
   app.use(errorHandler);
@@ -129,6 +138,15 @@ export async function startServer() {
       server: {
         middlewareMode: true,
         hmr: process.env.DISABLE_HMR !== 'true',
+        watch: {
+          ignored: [
+            '**/LibraryData/**',
+            '**/dist/**',
+            '**/.git/**',
+            '**/*.pdf',
+            '**/*.epub',
+          ],
+        },
       },
       appType: 'spa',
     });
@@ -180,6 +198,7 @@ export async function startServer() {
       logger.info('[Server] HTTP listener closed.');
       console.log('[Server] HTTP listener closed.');
       try {
+        stopIncomingWatcher();
         await db.close();
         logger.info('[Database] Database pool and engine closed cleanly.');
         console.log('[Database] Database pool and engine closed cleanly.');

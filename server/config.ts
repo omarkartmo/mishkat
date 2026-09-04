@@ -9,6 +9,7 @@ const DIRS = {
   root: ROOT_DATA_DIR,
   books: path.join(ROOT_DATA_DIR, 'books'),
   digital: path.join(ROOT_DATA_DIR, 'books', 'digital'),
+  incoming: path.join(ROOT_DATA_DIR, 'books', 'incoming'),
   covers: path.join(ROOT_DATA_DIR, 'books', 'covers'),
   attachments: path.join(ROOT_DATA_DIR, 'books', 'attachments'),
   backups: path.join(ROOT_DATA_DIR, 'backups'),

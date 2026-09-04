@@ -687,7 +687,8 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3 & 15.3.1)', () => 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.fileName).toBeDefined();
-    expect(res.body.data.tablesCount).toBe(15);
+    const { BACKUP_TABLES_ORDER } = await import('../server/services/backupService');
+    expect(res.body.data.tablesCount).toBe(BACKUP_TABLES_ORDER.length);
     expect(res.body.data.backup).toBeDefined();
     expect(res.body.data.backup.meta.version).toBe('1.0.0');
     expect(res.body.data.backup.data.users).toBeInstanceOf(Array);

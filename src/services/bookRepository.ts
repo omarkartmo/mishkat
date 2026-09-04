@@ -23,6 +23,19 @@ export interface UploadFileResponse {
   fileSize?: string;
 }
 
+export interface SingleUploadResponse {
+  bookId: string;
+  fileUrl: string;
+  filePath: string;
+  coverUrl?: string;
+  fileSize: string;
+  fileSizeMb: number;
+  originalName: string;
+  fileHash: string;
+  sha256: string;
+  format: 'pdf' | 'epub';
+}
+
 export class BookRepository {
   /**
    * Retrieve all physical books from Central Server (GET /api/v1/books?type=physical)
@@ -343,6 +356,23 @@ export class BookRepository {
         message: 'فشل رفع الملف الرقمي إلى مساحة التخزين المركزية.',
       },
     };
+  }
+
+  /**
+   * Authoritative Single Digital Book Upload (POST /api/v1/books/upload)
+   * Realizes the pipeline: File -> FormData -> bookRepository.uploadSingleDigitalBook -> apiClient.uploadFormData()
+   */
+  public async uploadSingleDigitalBook(
+    file: File,
+    cover?: File | null
+  ): Promise<ApiResponse<SingleUploadResponse>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (cover) {
+      formData.append('cover', cover);
+    }
+
+    return apiClient.uploadFormData<SingleUploadResponse>('/books/upload', formData);
   }
 
   /**

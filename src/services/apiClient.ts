@@ -237,29 +237,50 @@ class ApiClient {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const url = endpoint.startsWith('/api/') ? endpoint : `${API_BASE_URL}${endpoint}`;
+      const response = await fetch(url, {
         method: 'POST',
         headers,
         body: formData,
       });
-      const json = await response.json();
+
+      if (response.status === 401) {
+        this.notifyUnauthorized();
+      }
+
+      const json = await response.json().catch(() => null);
       if (!response.ok) {
+        const errorMsg =
+          json?.error?.message ||
+          (response.status === 401
+            ? 'انتهت صلاحية الجلسة أو تعذر التحقق من الهوية.'
+            : response.status === 403
+            ? 'ليس لديك صلاحية لرفع الكتب الرقمية (للمشرفين فقط).'
+            : response.status === 404
+            ? 'نقطة نهاية رفع الملف غير متوفرة على الخادم.'
+            : response.status === 409
+            ? 'هذا الكتاب مسجل مسبقاً في النظام.'
+            : response.status === 413
+            ? 'حجم الملف يتجاوز الحد الأقصى المسموح به.'
+            : 'فشلت عملية رفع الملف على الخادم المركزي.');
+
         return {
           success: false,
           error: {
             code: json?.error?.code || `HTTP_${response.status}`,
-            message: json?.error?.message || 'فشلت العملية على الخادم.',
+            message: errorMsg,
             status: response.status,
           },
         };
       }
-      return json;
+      return json as ApiResponse<T>;
     } catch (err: any) {
+      console.warn(`[ApiClient] uploadFormData failed for ${endpoint}:`, err.message);
       return {
         success: false,
         error: {
-          code: 'UPLOAD_FAILED',
-          message: 'تعذر رفع البيانات إلى الخادم المركزي.',
+          code: 'NETWORK_ERROR',
+          message: 'تعذر الاتصال بالخادم المركزي لرفع الملف. يرجى التحقق من اتصال الشبكة.',
           status: 0,
         },
       };

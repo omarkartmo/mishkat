@@ -38,7 +38,7 @@ import {
 } from '../../types/library';
 import { matchesArabicQuery } from '../../utils/searchUtils';
 import { BulkDigitalImportModal } from '../digital/BulkDigitalImportModal';
-import { AddDigitalBookModal } from './AddDigitalBookModal';
+import { AddDigitalBookModal } from '../digital/AddDigitalBookModal';
 
 interface SearchResultsViewProps {
   initialQuery?: string;
@@ -1005,13 +1005,11 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
       {/* Admin Modals */}
       {isAddDigitalModalOpen && (
         <AddDigitalBookModal
-          isOpen={isAddDigitalModalOpen}
-          onClose={() => setIsAddDigitalModalOpen(false)}
           categories={categories}
-          onAddBook={(bookData) => {
-            if (onAddDigitalBook) {
-              onAddDigitalBook(bookData);
-            }
+          adminUserId={currentUser.id}
+          onClose={() => setIsAddDigitalModalOpen(false)}
+          onSuccess={() => {
+            setIsAddDigitalModalOpen(false);
           }}
         />
       )}

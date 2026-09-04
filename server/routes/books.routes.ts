@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -642,6 +642,38 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
   try {
     const id = book.id || `${isPhysical ? 'phys' : 'dig'}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
+    if (!isPhysical) {
+      // Digital Book - verify physical file exists
+      if (book.filePath && !fs.existsSync(book.filePath)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'FILE_NOT_FOUND', message: 'ملف الكتاب الرقمي غير موجود على مساحة التخزين المركزية.' }
+        });
+      }
+
+      // Check for duplicates before publishing
+      if (book.fileHash) {
+        const { rows: dupRows } = await db.query(
+          'SELECT id, title, author FROM books WHERE file_hash = $1 LIMIT 1',
+          [book.fileHash]
+        );
+        if (dupRows.length > 0) {
+          // Delete orphan uploaded file
+          if (book.filePath && fs.existsSync(book.filePath) && path.basename(book.filePath).startsWith('dig-upload-')) {
+            try { fs.unlinkSync(book.filePath); } catch {}
+          }
+          return res.status(409).json({
+            success: false,
+            error: {
+              code: 'UPLOAD_DUPLICATE',
+              message: `هذا الكتاب موجود مسبقاً بعنوان "${dupRows[0].title}".`,
+              data: { existingBookId: dupRows[0].id }
+            }
+          });
+        }
+      }
+    }
+
     await db.transaction(async (client) => {
       if (isPhysical) {
         await client.query(`
@@ -689,13 +721,12 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
           ]);
         }
       } else {
-        // Digital Book
         await client.query(`
           INSERT INTO books (
-            id, type, title, author, category_id, format, file_size, file_url, file_path,
+            id, type, title, author, category_id, format, file_size, file_url, file_path, file_hash,
             pages_count, summary, cover_image, source_origin, uploaded_by, tags,
             download_count, read_count, table_of_contents, sample_content
-          ) VALUES ($1, 'digital', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, 0, $15, $16)
+          ) VALUES ($1, 'digital', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, 0, $16, $17)
         `, [
           id,
           book.title,
@@ -705,6 +736,7 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
           book.fileSize || '1.5 MB',
           book.fileUrl || `/api/v1/books/${id}/file`,
           book.filePath || null,
+          book.fileHash || null,
           book.pagesCount || 0,
           book.summary || '',
           book.coverImage || null,
@@ -721,6 +753,10 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
 
     res.status(201).json({ success: true, data: { id, ...book } });
   } catch (err: any) {
+    // Rollback orphan file on failure
+    if (book.filePath && fs.existsSync(book.filePath) && path.basename(book.filePath).startsWith('dig-upload-')) {
+      try { fs.unlinkSync(book.filePath); } catch {}
+    }
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }
 });
@@ -811,20 +847,124 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req: Reque
   }
 });
 
-// POST /api/v1/books/upload (Multer Single Upload)
-router.post('/upload', authenticateToken, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req: Request, res: Response) => {
+// POST /api/v1/books/upload (Multer Single Upload with strict validation & duplicate safety)
+router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (req: Request, res: Response, next: NextFunction) => {
+  upload.fields([{ name: 'file', maxCount: 1 }, { name: 'cover', maxCount: 1 }])(req, res, (err: any) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({
+            success: false,
+            error: { code: 'UPLOAD_FILE_TOO_LARGE', message: 'حجم الملف يتجاوز الحد الأقصى المسموح به.' }
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          error: { code: 'UPLOAD_MULTIPART_INVALID', message: `خطأ في استقبال الملف: ${err.message}` }
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        error: { code: 'UPLOAD_INVALID_FILE', message: err.message || 'نوع الملف غير مدعوم.' }
+      });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    const uploadedFile = files['file'] ? files['file'][0] : null;
-    const uploadedCover = files['cover'] ? files['cover'][0] : null;
+    const uploadedFile = files && files['file'] ? files['file'][0] : null;
+    const uploadedCover = files && files['cover'] ? files['cover'][0] : null;
 
-    res.json({
+    if (!uploadedFile) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'UPLOAD_MISSING_FILE', message: 'لم يتم اختيار أي ملف للرفع. يرجى اختيار ملف PDF أو EPUB.' }
+      });
+    }
+
+    // Verify format
+    const ext = path.extname(uploadedFile.originalname).toLowerCase().replace('.', '');
+    if (!['pdf', 'epub'].includes(ext)) {
+      if (fs.existsSync(uploadedFile.path)) {
+        try { fs.unlinkSync(uploadedFile.path); } catch {}
+      }
+      return res.status(400).json({
+        success: false,
+        error: { code: 'UPLOAD_UNSUPPORTED_FORMAT', message: 'صيغة الملف غير مدعومة. يُسمح فقط بملفات PDF و EPUB.' }
+      });
+    }
+
+    // Verify file exists on disk and is non-empty
+    if (!fs.existsSync(uploadedFile.path) || fs.statSync(uploadedFile.path).size === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'UPLOAD_EMPTY_FILE', message: 'الملف المرفوع فارغ أو تعذر حفظه على الخادم.' }
+      });
+    }
+
+    // Compute SHA-256 of uploaded digital file for integrity and duplicate detection
+    const buffer = fs.readFileSync(uploadedFile.path);
+    const fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
+
+    // Duplicate Check: check if identical digital book already exists in catalog
+    const { rows: existing } = await db.query(
+      'SELECT id, title, author FROM books WHERE file_hash = $1 LIMIT 1',
+      [fileHash]
+    );
+
+    if (existing.length > 0) {
+      // Clean up uploaded temp file to prevent orphan storage
+      if (fs.existsSync(uploadedFile.path)) {
+        try { fs.unlinkSync(uploadedFile.path); } catch {}
+      }
+      if (uploadedCover && fs.existsSync(uploadedCover.path)) {
+        try { fs.unlinkSync(uploadedCover.path); } catch {}
+      }
+
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'UPLOAD_DUPLICATE',
+          message: `هذا الكتاب موجود مسبقاً في المكتبة الرقمية بعنوان: "${existing[0].title}" للمؤلف ${existing[0].author}.`,
+          data: {
+            existingBookId: existing[0].id,
+            title: existing[0].title,
+            author: existing[0].author,
+          },
+        },
+      });
+    }
+
+    // Generate a stable canonical book ID and move to canonical digital storage
+    const uploadBookId = `dig-upload-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const canonicalName = `${uploadBookId}.${ext}`;
+    const canonicalPath = path.join(serverConfig.dirs.digital, canonicalName);
+
+    fs.renameSync(uploadedFile.path, canonicalPath);
+
+    // Physically verify file was stored at canonical location
+    if (!fs.existsSync(canonicalPath)) {
+      return res.status(500).json({
+        success: false,
+        error: { code: 'UPLOAD_STORAGE_UNAVAILABLE', message: 'تعذر تأكيد حفظ الملف في مستودع التخزين المركزي.' }
+      });
+    }
+
+    res.status(201).json({
       success: true,
       data: {
-        fileUrl: uploadedFile ? `/api/v1/books/files/digital/${uploadedFile.filename}` : null,
-        filePath: uploadedFile ? uploadedFile.path : null,
+        bookId: uploadBookId,
+        fileUrl: `/api/v1/books/${uploadBookId}/file`,
+        filePath: canonicalPath,
         coverUrl: uploadedCover ? `/api/v1/books/files/covers/${uploadedCover.filename}` : null,
-        fileSize: uploadedFile ? `${(uploadedFile.size / (1024 * 1024)).toFixed(1)} MB` : null,
+        coverPath: uploadedCover ? uploadedCover.path : null,
+        fileSize: `${(uploadedFile.size / (1024 * 1024)).toFixed(1)} MB`,
+        fileSizeMb: Number((uploadedFile.size / (1024 * 1024)).toFixed(2)),
+        originalName: uploadedFile.originalname,
+        fileHash,
+        sha256: fileHash,
+        format: ext,
       },
     });
   } catch (err: any) {
