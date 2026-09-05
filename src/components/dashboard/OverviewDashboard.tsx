@@ -17,7 +17,9 @@ import {
   MapPin,
   FileText,
   Play,
+  FolderUp,
 } from 'lucide-react';
+import { BulkDigitalImportModal } from '../digital/BulkDigitalImportModal';
 import {
   PhysicalBook,
   DigitalBook,
@@ -46,6 +48,8 @@ interface OverviewDashboardProps {
   onOpenBookReader?: (book: DigitalBook) => void;
   onOpenPhysicalBookmark?: (bookmark?: PhysicalBookmark, loan?: LoanRecord) => void;
   onOpenNewPhysicalBookmark?: () => void;
+  onBulkAddDigitalBooks?: (books: DigitalBook[]) => void;
+  onRefreshBooks?: () => void;
 }
 
 export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
@@ -71,7 +75,10 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   onOpenBookReader,
   onOpenPhysicalBookmark,
   onOpenNewPhysicalBookmark,
+  onBulkAddDigitalBooks,
+  onRefreshBooks,
 }) => {
+  const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
   const allSubmissions = submissions.length > 0 ? submissions : pendingSubmissions;
   const activeLoans = (loans || []).filter((l) => l.status !== 'returned');
   const overdueLoans = (loans || []).filter((l) => l.status === 'overdue');
@@ -118,13 +125,24 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 pt-2 lg:pt-0">
             {currentUser.role === 'admin' && (
-              <button
-                onClick={handleLoanAction}
-                className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap"
-              >
-                <PlusCircle className="w-4 h-4 shrink-0" />
-                <span>تسجيل إعارة جديدة</span>
-              </button>
+              <>
+                <button
+                  onClick={handleLoanAction}
+                  className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <PlusCircle className="w-4 h-4 shrink-0" />
+                  <span>تسجيل إعارة جديدة</span>
+                </button>
+
+                <button
+                  onClick={() => setIsBulkImportModalOpen(true)}
+                  className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-emerald-600/30 transition-all cursor-pointer whitespace-nowrap"
+                  title="استيراد مجلد كتب رقمية بالكامل دفعة واحدة"
+                >
+                  <FolderUp className="w-4 h-4 shrink-0" />
+                  <span>استيراد مجلد كتب (Bulk)</span>
+                </button>
+              </>
             )}
             <button
               onClick={() => onNavigate('reading_workspace')}
@@ -161,7 +179,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           value={digitalBooks.length}
           subtext="كتب PDF & ePub"
           icon={<Library className="w-5 h-5 text-emerald-400" />}
-          onClick={() => onNavigate('search_results')}
+          onClick={() => onNavigate('digital')}
         />
         <MetricCard
           title="فواصل ورقية جارية"
@@ -620,52 +638,25 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               <span>دخول بوابة المكتبة الشاملة</span>
             </button>
           </div>
-
-          {/* Digital Reader Spotlight */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
-                <Library className="w-4 h-4 text-emerald-400" />
-                كتب المستودع الرقمي
-              </h3>
-              <button
-                onClick={() => onNavigate('digital')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer"
-              >
-                المزيد
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {digitalBooks.slice(0, 3).map((book) => (
-                <div
-                  key={book.id}
-                  className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl flex flex-col justify-between gap-2.5"
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        {book.format}
-                      </span>
-                      <span className="text-[11px] text-slate-400">{book.pagesCount} صفحة</span>
-                    </div>
-                    <h5 className="font-semibold text-slate-100 text-sm mt-1 line-clamp-1">{book.title}</h5>
-                    <p className="text-xs text-slate-400 line-clamp-1">{book.author}</p>
-                  </div>
-
-                  <button
-                    onClick={() => onOpenBookReader && onOpenBookReader(book)}
-                    className="w-full py-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 text-xs rounded-lg font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>فتح في القارئ المدمج</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
+
+      {/* Bulk Digital Books Import Modal */}
+      {isBulkImportModalOpen && (
+        <BulkDigitalImportModal
+          isOpen={isBulkImportModalOpen}
+          onClose={() => setIsBulkImportModalOpen(false)}
+          categories={categories}
+          onSuccess={(books) => {
+            if (onBulkAddDigitalBooks) {
+              onBulkAddDigitalBooks(books);
+            } else if (onRefreshBooks) {
+              onRefreshBooks();
+            }
+            setIsBulkImportModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

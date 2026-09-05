@@ -118,6 +118,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 isCollapsed={isCollapsed}
               />
               <NavItem
+                icon={<Library className="w-4 h-4 text-emerald-500" />}
+                label="المستودع الرقمي"
+                active={activeTab === 'digital'}
+                onClick={() => onSelectTab('digital')}
+                isCollapsed={isCollapsed}
+              />
+              <NavItem
                 icon={<Search className="w-4 h-4 text-indigo-500" />}
                 label="البحث الشامل"
                 active={activeTab === 'search_results'}
@@ -172,6 +179,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   label="لوحة التحكم العامة"
                   active={activeTab === 'overview'}
                   onClick={() => onSelectTab('overview')}
+                  isCollapsed={isCollapsed}
+                />
+                <NavItem
+                  icon={<Library className="w-4 h-4 text-emerald-500" />}
+                  label="المستودع الرقمي"
+                  active={activeTab === 'digital'}
+                  onClick={() => onSelectTab('digital')}
                   isCollapsed={isCollapsed}
                 />
                 <NavItem

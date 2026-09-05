@@ -1335,6 +1335,8 @@ export default function App() {
                   bookmark: null,
                 });
               }}
+              onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
+              onRefreshBooks={loadBooks}
             />
           )}
 
