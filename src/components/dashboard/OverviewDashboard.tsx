@@ -166,7 +166,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       </div>
 
       {/* KPI Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="الكتب الورقية"
           value={physicalBooks.length}
@@ -180,20 +180,6 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           subtext="كتب PDF & ePub"
           icon={<Library className="w-5 h-5 text-emerald-400" />}
           onClick={() => onNavigate('digital')}
-        />
-        <MetricCard
-          title="فواصل ورقية جارية"
-          value={activePhysicalBookmarks.length}
-          subtext="مطالعة بقاعة المكتبة"
-          icon={<Bookmark className="w-5 h-5 text-amber-400" />}
-          onClick={() => onNavigate('reading_workspace')}
-        />
-        <MetricCard
-          title="مطالعة رقمية جارية"
-          value={inProgressDigitalBooks.length}
-          subtext="كتب قيد القراءة"
-          icon={<Play className="w-5 h-5 text-emerald-400" />}
-          onClick={() => onNavigate('search_results')}
         />
         <MetricCard
           title="الإعارات النشطة"
@@ -452,192 +438,124 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         </div>
       </div>
 
-      {/* Two Column Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Real-Time Circulation & Urgent Overdues */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Urgent Overdue Alert Banner if exists */}
-          {overdueLoans.length > 0 && (
-            <div className="bg-rose-950/40 border border-rose-800/60 rounded-2xl p-5 shadow-lg">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-rose-300 font-bold text-sm">
-                  <AlertTriangle className="w-5 h-5 text-rose-400 animate-bounce" />
-                  <span>تنبيه إعارات ورقية متجاوزة لموعد الإرجاع ({overdueLoans.length})</span>
-                </div>
-                <button
-                  onClick={() => onNavigate('loans')}
-                  className="text-xs text-rose-400 hover:text-rose-200 underline font-medium cursor-pointer"
-                >
-                  إدارة كافة الإعارات
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {overdueLoans.slice(0, 3).map((loan) => (
-                  <div
-                    key={loan.id}
-                    className="flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-rose-900/40"
-                  >
-                    <div>
-                      <div className="font-semibold text-slate-100 text-sm">{loan.bookTitle}</div>
-                      <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                        <span className="text-rose-400 font-medium">الطالب: {loan.studentName}</span>
-                        <span>•</span>
-                        <span className="font-mono text-slate-400">{loan.studentRegNumber}</span>
-                        <span>•</span>
-                        <span className="text-rose-400/80">استحقاق: {loan.dueDate}</span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => onNavigate('loans')}
-                      className="px-3 py-1.5 bg-rose-600/30 hover:bg-rose-600 text-rose-200 text-xs rounded-lg font-medium transition-colors cursor-pointer"
-                    >
-                      متابعة / إرجاع
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Active Loans Table Snapshot */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
-                  <ArrowLeftRight className="w-4 h-4 text-sky-400" />
-                  أحدث عمليات الإعارة الورقية الجارية
-                </h3>
-                <p className="text-xs text-slate-400">متابعة الكتب المستعارة وفترات الاستحقاق والتمديد</p>
+      {/* Active Loans & Urgent Overdues */}
+      <div className="space-y-6">
+        {/* Urgent Overdue Alert Banner if exists */}
+        {overdueLoans.length > 0 && (
+          <div className="bg-rose-950/40 border border-rose-800/60 rounded-2xl p-5 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-rose-300 font-bold text-sm">
+                <AlertTriangle className="w-5 h-5 text-rose-400 animate-bounce" />
+                <span>تنبيه إعارات ورقية متجاوزة لموعد الإرجاع ({overdueLoans.length})</span>
               </div>
               <button
                 onClick={() => onNavigate('loans')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 cursor-pointer"
+                className="text-xs text-rose-400 hover:text-rose-200 underline font-medium cursor-pointer"
               >
-                <span>عرض الكل ({activeLoans.length})</span>
-                <ChevronLeft className="w-3.5 h-3.5" />
+                إدارة كافة الإعارات
               </button>
             </div>
 
-            {activeLoans.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 text-sm">
-                لا توجد إعارات نشطة حالياً. جميع النسخ متوفرة على الرفوف.
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {activeLoans.slice(0, 4).map((loan) => (
-                  <div
-                    key={loan.id}
-                    className="flex items-center justify-between p-3 bg-slate-950/60 hover:bg-slate-950 border border-slate-800/80 rounded-xl transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold ${
-                          loan.purpose === 'academic_research'
-                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                            : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                        }`}
-                        title={loan.purpose === 'academic_research' ? 'إعارة لأجل بحث' : 'إعارة للمطالعة'}
-                      >
-                        {loan.purpose === 'academic_research' ? 'بحث' : 'مطالعة'}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-slate-200 text-sm">{loan.bookTitle}</div>
-                        <div className="text-xs text-slate-400 flex items-center gap-2">
-                          <span className="text-slate-300">{loan.studentName}</span>
-                          <span>•</span>
-                          <span>تاريخ الإرجاع: <strong className="text-slate-200">{loan.dueDate}</strong></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {loan.status === 'extended' && (
-                        <span className="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">
-                          ممددة ({loan.extensionCount})
-                        </span>
-                      )}
-                      <span
-                        className={`text-xs px-2.5 py-1 rounded-lg font-medium ${
-                          loan.status === 'overdue'
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                        }`}
-                      >
-                        {loan.status === 'overdue' ? 'متأخر' : 'نشطة'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Quick Access to Categories */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
-                <FolderTree className="w-4 h-4 text-purple-400" />
-                تصفح حسب المواد والتصنيفات المدرسية
-              </h3>
-              <button
-                onClick={() => onNavigate('physical')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer"
-              >
-                تصفح الفهرس الكامل
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {categories.slice(0, 6).map((cat) => (
+            <div className="space-y-2">
+              {overdueLoans.slice(0, 3).map((loan) => (
                 <div
-                  key={cat.id}
-                  onClick={() => onNavigate('physical')}
-                  className="p-3.5 bg-slate-950/60 hover:bg-slate-950 border border-slate-800 rounded-xl cursor-pointer transition-all group"
+                  key={loan.id}
+                  className="flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-rose-900/40"
                 >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    <span className="text-[11px] text-slate-400 group-hover:text-slate-200">
-                      {cat.booksCount || 0} كتب
-                    </span>
+                  <div>
+                    <div className="font-semibold text-slate-100 text-sm">{loan.bookTitle}</div>
+                    <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                      <span className="text-rose-400 font-medium">الطالب: {loan.studentName}</span>
+                      <span>•</span>
+                      <span className="font-mono text-slate-400">{loan.studentRegNumber}</span>
+                      <span>•</span>
+                      <span className="text-rose-400/80">استحقاق: {loan.dueDate}</span>
+                    </div>
                   </div>
-                  <div className="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition-colors truncate">
-                    {cat.name}
-                  </div>
+
+                  <button
+                    onClick={() => onNavigate('loans')}
+                    className="px-3 py-1.5 bg-rose-600/30 hover:bg-rose-600 text-rose-200 text-xs rounded-lg font-medium transition-colors cursor-pointer"
+                  >
+                    متابعة / إرجاع
+                  </button>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Right 1 Col: Featured Digital Books & Whitelisted Gateway banner */}
-        <div className="space-y-6">
-          {/* Whitelisted Portal Shortcut Card */}
-          <div className="bg-gradient-to-br from-sky-950/60 to-slate-900 border border-sky-800/40 rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400">
-                <Globe2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="font-bold text-white text-sm">بوابة المكتبات العالمية المعتمدة</h4>
-                <p className="text-xs text-sky-200/70">المكتبة الإباضية الشاملة والمصادر الرقمية</p>
-              </div>
+        {/* Active Loans Table Snapshot */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
+                <ArrowLeftRight className="w-4 h-4 text-sky-400" />
+                أحدث عمليات الإعارة الورقية الجارية
+              </h3>
+              <p className="text-xs text-slate-400">متابعة الكتب المستعارة وفترات الاستحقاق والتمديد</p>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed mb-4">
-              يمكن للطالب تصفح مصادر التراث والأبحاث بأمان، واستيراد أي كتاب بضغطة زر مع بيانات الفهرسة الكاملة.
-            </p>
             <button
-              onClick={() => onNavigate('portals')}
-              className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-sky-600/30 flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => onNavigate('loans')}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 cursor-pointer"
             >
-              <Globe2 className="w-4 h-4" />
-              <span>دخول بوابة المكتبة الشاملة</span>
+              <span>عرض الكل ({activeLoans.length})</span>
+              <ChevronLeft className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {activeLoans.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              لا توجد إعارات نشطة حالياً. جميع النسخ متوفرة على الرفوف.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {activeLoans.slice(0, 4).map((loan) => (
+                <div
+                  key={loan.id}
+                  className="flex items-center justify-between p-3 bg-slate-950/60 hover:bg-slate-950 border border-slate-800/80 rounded-xl transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold ${
+                        loan.purpose === 'academic_research'
+                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                          : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                      }`}
+                      title={loan.purpose === 'academic_research' ? 'إعارة لأجل بحث' : 'إعارة للمطالعة'}
+                    >
+                      {loan.purpose === 'academic_research' ? 'بحث' : 'مطالعة'}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-200 text-sm">{loan.bookTitle}</div>
+                      <div className="text-xs text-slate-400 flex items-center gap-2">
+                        <span className="text-slate-300">{loan.studentName}</span>
+                        <span>•</span>
+                        <span>تاريخ الإرجاع: <strong className="text-slate-200">{loan.dueDate}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {loan.status === 'extended' && (
+                      <span className="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">
+                        ممددة ({loan.extensionCount})
+                      </span>
+                    )}
+                    <span
+                      className={`text-xs px-2.5 py-1 rounded-lg font-medium ${
+                        loan.status === 'overdue'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      {loan.status === 'overdue' ? 'متأخر' : 'نشطة'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
