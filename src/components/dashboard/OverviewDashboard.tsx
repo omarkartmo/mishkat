@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BookOpen,
   Library,
@@ -647,10 +647,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           isOpen={isBulkImportModalOpen}
           onClose={() => setIsBulkImportModalOpen(false)}
           categories={categories}
-          onSuccess={(books) => {
-            if (onBulkAddDigitalBooks) {
-              onBulkAddDigitalBooks(books);
-            } else if (onRefreshBooks) {
+          onImportSuccess={(importedCount) => {
+            if (onRefreshBooks) {
               onRefreshBooks();
             }
             setIsBulkImportModalOpen(false);

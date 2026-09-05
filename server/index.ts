@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { createServer as createViteServer } from 'vite';
 import { serverConfig } from './config';
 import { db } from './db/pool';
@@ -167,16 +168,32 @@ export async function startServer() {
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`🚀 Mishkat Library Central Server running on http://0.0.0.0:${PORT}`, {
+    let lanIp = '127.0.0.1';
+    try {
+      const ifaces = os.networkInterfaces();
+      for (const name of Object.keys(ifaces)) {
+        for (const iface of ifaces[name] || []) {
+          if (iface.family === 'IPv4' && !iface.internal) {
+            lanIp = iface.address;
+            break;
+          }
+        }
+      }
+    } catch {}
+
+    logger.info(`🚀 Mishkat Central Server running on http://localhost:${PORT}`, {
       port: PORT,
       host: '0.0.0.0',
+      lanIp,
       dataDir: serverConfig.dirs.root,
       mode: process.env.NODE_ENV || 'development',
     });
     console.log(`\n======================================================`);
-    console.log(`🚀 Mishkat Library Central Server running on http://0.0.0.0:${PORT}`);
-    console.log(`📚 Central Data Directory: ${serverConfig.dirs.root}`);
-    console.log(`✨ Mode: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🚀 Mishkat Library Central Server Ready`);
+    console.log(`💻 Local Computer:       http://localhost:${PORT}`);
+    console.log(`📱 Phone / Local LAN:    http://${lanIp}:${PORT}`);
+    console.log(`📚 Central Data Dir:     ${serverConfig.dirs.root}`);
+    console.log(`✨ Mode:                 ${process.env.NODE_ENV || 'development'}`);
     console.log(`======================================================\n`);
   });
 
