@@ -90,6 +90,15 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const epubRenditionRef = useRef<Rendition | null>(null);
   const pageCacheRef = useRef<Map<number, any>>(new Map());
 
+  // Prevent reloading document on page turns by locking initialPage to ref
+  const initialPageRef = useRef<number>(initialPage || 1);
+  const isRenderingRef = useRef<boolean>(false);
+  const pendingPageRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    initialPageRef.current = initialPage || 1;
+  }, [book.id]);
+
   // Note creation form state
   const [newNoteContent, setNewNoteContent] = useState('');
   const [selectedQuote, setSelectedQuote] = useState('');
@@ -192,7 +201,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         const loadedPdf = await loadingTask.promise;
         setPdfDoc(loadedPdf);
         setNumPages(loadedPdf.numPages);
-        const startPage = Math.min(Math.max(1, initialPage || 1), loadedPdf.numPages);
+        const startPage = Math.min(Math.max(1, initialPageRef.current || 1), loadedPdf.numPages);
         setCurrentPage(startPage);
         setIsLoading(false);
       } else {
@@ -218,7 +227,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       setErrorCode('DOCUMENT_LOAD_FAILED');
       setIsLoading(false);
     }
-  }, [book.id, isEpub, initialPage]);
+  }, [book.id, isEpub]);
 
   useEffect(() => {
     loadBook();
@@ -315,26 +324,34 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     }
   }, [epubTheme, epubFontSize]);
 
-  // Render current PDF page onto HTML5 Canvas
-  const renderCurrentPage = useCallback(async () => {
+  // Render current PDF page onto HTML5 Canvas with concurrency lock & pending queue
+  const executeRenderPage = useCallback(async (targetPage: number) => {
     if (!pdfDoc || !canvasRef.current) return;
 
-    if (renderTaskRef.current) {
-      try {
-        renderTaskRef.current.cancel();
-      } catch {}
+    if (isRenderingRef.current) {
+      // Fast page flipping: queue the target page and cancel currently running render
+      pendingPageRef.current = targetPage;
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch {}
+      }
+      return;
     }
 
+    isRenderingRef.current = true;
     setIsRenderingPage(true);
+
     try {
       // Instant cache retrieval: avoid re-parsing cross-references
-      let page = pageCacheRef.current.get(currentPage);
+      let page = pageCacheRef.current.get(targetPage);
       if (!page) {
-        page = await pdfDoc.getPage(currentPage);
-        pageCacheRef.current.set(currentPage, page);
+        page = await pdfDoc.getPage(targetPage);
+        pageCacheRef.current.set(targetPage, page);
       }
 
       const canvas = canvasRef.current;
+      if (!canvas) return;
       const context = canvas.getContext('2d', { alpha: false });
       if (!context) return;
 
@@ -350,37 +367,49 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       const renderTask = page.render(renderContext);
       renderTaskRef.current = renderTask;
       await renderTask.promise;
-      setIsRenderingPage(false);
 
       // Background pre-fetching of adjacent pages (next and previous) for instant page flipping
-      if (currentPage + 1 <= numPages && !pageCacheRef.current.has(currentPage + 1)) {
-        pdfDoc.getPage(currentPage + 1).then((nextP: any) => {
-          pageCacheRef.current.set(currentPage + 1, nextP);
+      if (targetPage + 1 <= numPages && !pageCacheRef.current.has(targetPage + 1)) {
+        pdfDoc.getPage(targetPage + 1).then((nextP: any) => {
+          pageCacheRef.current.set(targetPage + 1, nextP);
         }).catch(() => {});
       }
-      if (currentPage - 1 >= 1 && !pageCacheRef.current.has(currentPage - 1)) {
-        pdfDoc.getPage(currentPage - 1).then((prevP: any) => {
-          pageCacheRef.current.set(currentPage - 1, prevP);
+      if (targetPage - 1 >= 1 && !pageCacheRef.current.has(targetPage - 1)) {
+        pdfDoc.getPage(targetPage - 1).then((prevP: any) => {
+          pageCacheRef.current.set(targetPage - 1, prevP);
         }).catch(() => {});
       }
     } catch (err: any) {
       if (err?.name !== 'RenderingCancelledException') {
         console.warn('[BookReaderModal] Page render error:', err);
       }
+    } finally {
+      renderTaskRef.current = null;
+      isRenderingRef.current = false;
       setIsRenderingPage(false);
+
+      // Process any page that was requested while this render was running
+      if (pendingPageRef.current !== null) {
+        const nextTarget = pendingPageRef.current;
+        pendingPageRef.current = null;
+        executeRenderPage(nextTarget);
+      }
     }
-  }, [pdfDoc, currentPage, scale, numPages]);
+  }, [pdfDoc, scale, numPages]);
 
   useEffect(() => {
     if (pdfDoc && !isEpub) {
-      renderCurrentPage();
+      executeRenderPage(currentPage);
     }
-  }, [pdfDoc, currentPage, scale, isEpub, renderCurrentPage]);
+  }, [pdfDoc, currentPage, scale, isEpub, executeRenderPage]);
 
-  // Save Progress
+  // Save Progress (debounced to avoid server thrashing during rapid clicks)
   useEffect(() => {
-    if (!isEpub) {
-      onSaveProgress(currentPage, numPages);
+    if (!isEpub && numPages > 0) {
+      const timer = setTimeout(() => {
+        onSaveProgress(currentPage, numPages);
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [currentPage, numPages, isEpub, onSaveProgress]);
 
@@ -772,8 +801,9 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             /* Real PDF.js HTML5 Canvas Renderer (Section 12) */
             <div className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white max-w-full my-auto">
               {isRenderingPage && (
-                <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px] flex items-center justify-center z-10">
-                  <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                <div className="absolute top-3 right-3 bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700/60 flex items-center gap-2 z-10 shadow-xl text-slate-300 text-xs animate-in fade-in duration-150">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                  <span className="text-[11px] font-medium">جاري معالجة الصفحة...</span>
                 </div>
               )}
               <canvas ref={canvasRef} className="block max-w-full h-auto" />

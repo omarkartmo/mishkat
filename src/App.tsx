@@ -866,7 +866,16 @@ export default function App() {
         totalPages,
       });
       if (res.success) {
-        await loadReadingProgress();
+        setReadingProgress((prev) => ({
+          ...prev,
+          [activeReadingBook.id]: {
+            currentPage: page,
+            totalPages,
+            percentage: Math.min(100, Math.round((page / (totalPages || 1)) * 100)),
+            lastReadAt: new Date().toISOString(),
+            isCompleted: page >= totalPages && totalPages > 0,
+          },
+        }));
       }
     } catch (err) {
       console.error('Error saving reading progress:', err);
