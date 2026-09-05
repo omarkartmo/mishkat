@@ -95,9 +95,33 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const isRenderingRef = useRef<boolean>(false);
   const pendingPageRef = useRef<number | null>(null);
 
+  // Offscreen pre-rendered canvas cache for instantaneous (0ms) page flipping
+  const renderedCanvasCacheRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  const [showRenderSpinner, setShowRenderSpinner] = useState(false);
+
+  // Touch navigation refs for mobile
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+
   useEffect(() => {
     initialPageRef.current = initialPage || 1;
+    renderedCanvasCacheRef.current.clear();
   }, [book.id]);
+
+  useEffect(() => {
+    renderedCanvasCacheRef.current.clear();
+  }, [scale]);
+
+  // Debounce spinner so that rapid / pre-rendered flips (<400ms) NEVER show any loading indicator
+  useEffect(() => {
+    let timer: any = null;
+    if (isRenderingPage) {
+      timer = setTimeout(() => setShowRenderSpinner(true), 400);
+    } else {
+      setShowRenderSpinner(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isRenderingPage]);
 
   // Note creation form state
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -324,12 +348,67 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     }
   }, [epubTheme, epubFontSize]);
 
-  // Render current PDF page onto HTML5 Canvas with concurrency lock & pending queue
+  // Asynchronous background pre-rendering of adjacent pages onto offscreen canvases
+  const prefetchRenderPage = useCallback(async (targetPage: number) => {
+    if (!pdfDoc || targetPage < 1 || targetPage > numPages) return;
+    const cacheKey = `${targetPage}_${scale}`;
+    if (renderedCanvasCacheRef.current.has(cacheKey)) return;
+
+    try {
+      let page = pageCacheRef.current.get(targetPage);
+      if (!page) {
+        page = await pdfDoc.getPage(targetPage);
+        pageCacheRef.current.set(targetPage, page);
+      }
+
+      const viewport = page.getViewport({ scale });
+      const offscreen = document.createElement('canvas');
+      offscreen.width = viewport.width;
+      offscreen.height = viewport.height;
+      const offCtx = offscreen.getContext('2d', { alpha: false });
+      if (!offCtx) return;
+
+      await page.render({
+        canvasContext: offCtx,
+        viewport: viewport,
+      }).promise;
+
+      // LRU cache eviction: keep up to 12 rendered pages in memory to protect mobile RAM
+      if (renderedCanvasCacheRef.current.size >= 12) {
+        const oldestKey = renderedCanvasCacheRef.current.keys().next().value;
+        if (oldestKey) renderedCanvasCacheRef.current.delete(oldestKey);
+      }
+      renderedCanvasCacheRef.current.set(cacheKey, offscreen);
+    } catch {
+      // Non-critical background task
+    }
+  }, [pdfDoc, scale, numPages]);
+
+  // Render current PDF page onto HTML5 Canvas with pre-render cache & concurrency queue
   const executeRenderPage = useCallback(async (targetPage: number) => {
     if (!pdfDoc || !canvasRef.current) return;
 
+    const cacheKey = `${targetPage}_${scale}`;
+
+    // 1. Instant Cache Hit: Blit pre-rendered canvas in 1-2ms without any spinner!
+    if (renderedCanvasCacheRef.current.has(cacheKey)) {
+      const cached = renderedCanvasCacheRef.current.get(cacheKey)!;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d', { alpha: false });
+      if (context) {
+        canvas.width = cached.width;
+        canvas.height = cached.height;
+        context.drawImage(cached, 0, 0);
+      }
+
+      // Pre-fetch adjacent pages in background while user reads
+      if (targetPage + 1 <= numPages) prefetchRenderPage(targetPage + 1);
+      if (targetPage - 1 >= 1) prefetchRenderPage(targetPage - 1);
+      return;
+    }
+
+    // 2. Concurrency Lock & Pending Queue
     if (isRenderingRef.current) {
-      // Fast page flipping: queue the target page and cancel currently running render
       pendingPageRef.current = targetPage;
       if (renderTaskRef.current) {
         try {
@@ -343,7 +422,6 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     setIsRenderingPage(true);
 
     try {
-      // Instant cache retrieval: avoid re-parsing cross-references
       let page = pageCacheRef.current.get(targetPage);
       if (!page) {
         page = await pdfDoc.getPage(targetPage);
@@ -368,17 +446,25 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       renderTaskRef.current = renderTask;
       await renderTask.promise;
 
-      // Background pre-fetching of adjacent pages (next and previous) for instant page flipping
-      if (targetPage + 1 <= numPages && !pageCacheRef.current.has(targetPage + 1)) {
-        pdfDoc.getPage(targetPage + 1).then((nextP: any) => {
-          pageCacheRef.current.set(targetPage + 1, nextP);
-        }).catch(() => {});
-      }
-      if (targetPage - 1 >= 1 && !pageCacheRef.current.has(targetPage - 1)) {
-        pdfDoc.getPage(targetPage - 1).then((prevP: any) => {
-          pageCacheRef.current.set(targetPage - 1, prevP);
-        }).catch(() => {});
-      }
+      // Save rendered canvas copy to cache for instant backward/forward re-visitation
+      try {
+        const offscreen = document.createElement('canvas');
+        offscreen.width = canvas.width;
+        offscreen.height = canvas.height;
+        const offCtx = offscreen.getContext('2d', { alpha: false });
+        if (offCtx) {
+          offCtx.drawImage(canvas, 0, 0);
+          if (renderedCanvasCacheRef.current.size >= 12) {
+            const oldestKey = renderedCanvasCacheRef.current.keys().next().value;
+            if (oldestKey) renderedCanvasCacheRef.current.delete(oldestKey);
+          }
+          renderedCanvasCacheRef.current.set(cacheKey, offscreen);
+        }
+      } catch {}
+
+      // Pre-fetch adjacent pages in background
+      if (targetPage + 1 <= numPages) prefetchRenderPage(targetPage + 1);
+      if (targetPage - 1 >= 1) prefetchRenderPage(targetPage - 1);
     } catch (err: any) {
       if (err?.name !== 'RenderingCancelledException') {
         console.warn('[BookReaderModal] Page render error:', err);
@@ -388,14 +474,47 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       isRenderingRef.current = false;
       setIsRenderingPage(false);
 
-      // Process any page that was requested while this render was running
       if (pendingPageRef.current !== null) {
         const nextTarget = pendingPageRef.current;
         pendingPageRef.current = null;
         executeRenderPage(nextTarget);
       }
     }
-  }, [pdfDoc, scale, numPages]);
+  }, [pdfDoc, scale, numPages, prefetchRenderPage]);
+
+  // Touch navigation handlers for phones (RTL horizontal swipe)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+
+    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX < 0) {
+        // Swiped Left -> Next page in RTL
+        if (!isEpub) {
+          setCurrentPage((p) => Math.min(numPages, p + 1));
+        } else if (epubRenditionRef.current) {
+          epubRenditionRef.current.next();
+        }
+      } else {
+        // Swiped Right -> Previous page in RTL
+        if (!isEpub) {
+          setCurrentPage((p) => Math.max(1, p - 1));
+        } else if (epubRenditionRef.current) {
+          epubRenditionRef.current.prev();
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     if (pdfDoc && !isEpub) {
@@ -758,7 +877,11 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         )}
 
         {/* Central Presentation Canvas Area */}
-        <div className="flex-1 overflow-auto flex flex-col items-center justify-start p-2 sm:p-6 bg-slate-950 select-text">
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="flex-1 overflow-auto flex flex-col items-center justify-start p-2 sm:p-6 bg-slate-950 select-text relative touch-pan-y"
+        >
           {isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400 py-20">
               <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
@@ -799,8 +922,8 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             </div>
           ) : (
             /* Real PDF.js HTML5 Canvas Renderer (Section 12) */
-            <div className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white max-w-full my-auto">
-              {isRenderingPage && (
+            <div className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white max-w-full my-auto select-none">
+              {showRenderSpinner && (
                 <div className="absolute top-3 right-3 bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700/60 flex items-center gap-2 z-10 shadow-xl text-slate-300 text-xs animate-in fade-in duration-150">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
                   <span className="text-[11px] font-medium">جاري معالجة الصفحة...</span>
