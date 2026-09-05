@@ -12,6 +12,7 @@ import {
   X,
   Lock,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { User, StudentRosterRow } from '../../types/library';
 
@@ -26,6 +27,7 @@ interface StudentManagerViewProps {
     generatedCredentials: { name: string; regNumber: string; tempPass: string }[];
   };
   onResetStudentPassword: (studentId: string, newPassword?: string) => Promise<string | void> | string | void;
+  onDeleteStudent?: (studentId: string) => Promise<{ success: boolean; error?: string } | void> | void;
 }
 
 export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
@@ -33,6 +35,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
   onAddStudent,
   onBulkImportStudents,
   onResetStudentPassword,
+  onDeleteStudent,
 }) => {
   const [search, setSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState('all');
@@ -40,6 +43,11 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
   const [resetModalStudent, setResetModalStudent] = useState<User | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
+
+  // Delete modal state
+  const [deleteModalStudent, setDeleteModalStudent] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -78,6 +86,25 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
       setResetModalStudent(null);
       setNewPasswordInput('');
     }, 2000);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModalStudent || !onDeleteStudent) return;
+    setIsDeleting(true);
+    setDeleteErrorMessage(null);
+    try {
+      const result = await onDeleteStudent(deleteModalStudent.id);
+      if (result && typeof result === 'object' && result.success === false) {
+        setDeleteErrorMessage(result.error || 'تعذر حذف حساب الطالب.');
+        setIsDeleting(false);
+        return;
+      }
+      setDeleteModalStudent(null);
+    } catch (err: any) {
+      setDeleteErrorMessage(err.message || 'حدث خطأ غير متوقع أثناء حذف الطالب.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -243,17 +270,33 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-center">
-                      <button
-                        onClick={() => {
-                          setResetModalStudent(student);
-                          setNewPasswordInput('');
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
-                        title="إعادة تعيين كلمة المرور"
-                      >
-                        <KeyRound className="w-3 h-3" />
-                        <span>إعادة تعيين كلمة السر</span>
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => {
+                            setResetModalStudent(student);
+                            setNewPasswordInput('');
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                          title="إعادة تعيين كلمة المرور"
+                        >
+                          <KeyRound className="w-3 h-3" />
+                          <span>إعادة تعيين كلمة السر</span>
+                        </button>
+
+                        {onDeleteStudent && (
+                          <button
+                            onClick={() => {
+                              setDeleteModalStudent(student);
+                              setDeleteErrorMessage(null);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/20 hover:border-rose-600 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                            title="حذف حساب الطالب"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>حذف الحساب</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -316,6 +359,92 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Student Confirmation Modal */}
+      {deleteModalStudent && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-rose-400 text-sm flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span>تأكيد حذف حساب الطالب</span>
+              </h3>
+              <button
+                onClick={() => {
+                  if (!isDeleting) {
+                    setDeleteModalStudent(null);
+                    setDeleteErrorMessage(null);
+                  }
+                }}
+                disabled={isDeleting}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">اسم الطالب:</span>
+                <span className="font-bold text-slate-100">{deleteModalStudent.name}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">رقم القيد / التسجيل:</span>
+                <span className="font-mono text-sky-400 font-semibold">{deleteModalStudent.registrationNumber}</span>
+              </div>
+              {deleteModalStudent.grade && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">القسم / الصف:</span>
+                  <span className="text-slate-300">{deleteModalStudent.grade}</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف حساب هذا الطالب من الخادم المركزي؟ سيتم إلغاء وصول الطالب للنظام فوراً.
+            </p>
+
+            {deleteErrorMessage && (
+              <div className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{deleteErrorMessage}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteModalStudent(null);
+                  setDeleteErrorMessage(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold transition-colors shadow-lg shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                    <span>جارٍ الحذف...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>تأكيد الحذف</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

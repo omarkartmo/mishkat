@@ -1138,6 +1138,22 @@ export default function App() {
     }
   };
 
+  const handleDeleteStudent = async (studentId: string) => {
+    try {
+      const res = await userRepository.deleteUser(studentId);
+      if (res.success) {
+        await Promise.all([loadUsers(), loadLoans()]);
+        return { success: true };
+      } else {
+        const errorMsg = res.error?.message || 'تعذر حذف حساب الطالب من الخادم المركزي.';
+        return { success: false, error: errorMsg };
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || 'حدث خطأ أثناء حذف الطالب.';
+      return { success: false, error: errorMsg };
+    }
+  };
+
   // Export Server Database Backup (Phase 6.3 - Backup Migration)
   const handleExportData = async () => {
     try {
@@ -1435,6 +1451,7 @@ export default function App() {
               onAddStudent={handleAddStudent}
               onBulkImportStudents={handleBulkImportStudents}
               onResetStudentPassword={handleResetStudentPassword}
+              onDeleteStudent={handleDeleteStudent}
             />
           )}
 

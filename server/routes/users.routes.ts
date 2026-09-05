@@ -139,9 +139,43 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req: Request,
 router.delete('/:id', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    await db.query('UPDATE users SET is_active = false WHERE id = $1', [id]);
+    if (req.user?.id === id) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'CANNOT_DELETE_SELF', message: 'لا يمكنك حذف الحساب الحالي المسجل به.' },
+      });
+    }
+
+    // Check if student has active or overdue loans
+    const activeLoans = await db.query(
+      "SELECT id, book_title FROM loans WHERE student_id = $1 AND status IN ('active', 'extended', 'overdue')",
+      [id]
+    );
+    if (activeLoans.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'HAS_ACTIVE_LOANS',
+          message: `لا يمكن حذف حساب الطالب لوجود ${activeLoans.rows.length} إعارة نشطة أو متأخرة لم يتم إرجاعها بعد.`
+        }
+      });
+    }
+
+    // Check if user has past loans
+    const pastLoans = await db.query('SELECT id FROM loans WHERE student_id = $1', [id]);
+    if (pastLoans.rows.length === 0) {
+      // Hard delete cleanly
+      await db.query('DELETE FROM users WHERE id = $1', [id]);
+    } else {
+      // Soft delete to maintain loan history while releasing registration number
+      await db.query(
+        "UPDATE users SET is_active = false, registration_number = registration_number || '__del_' || SUBSTRING(id FROM 1 FOR 8) WHERE id = $1",
+        [id]
+      );
+    }
+
     await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'DELETE_USER', 'user', id, null, req);
-    res.json({ success: true, data: { message: 'تم حذف المستخدم من النظام المركزي بنجاح.' } });
+    res.json({ success: true, data: { message: 'تم حذف حساب الطالب من النظام المركزي بنجاح.' } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }
