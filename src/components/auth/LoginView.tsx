@@ -9,6 +9,8 @@ import {
   Clock,
   ChevronLeft,
   LogIn,
+  Shield,
+  GraduationCap,
 } from 'lucide-react';
 import { User as LibraryUser, SystemConfig } from '../../types/library';
 
@@ -218,6 +220,48 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
                 </>
               )}
             </button>
+
+            {/* Quick Demo Credentials Access */}
+            <div className="pt-3 border-t border-slate-800/80">
+              <p className="text-[11px] font-semibold text-slate-400 mb-2 text-center">
+                بيانات الدخول التجريبية (اضغط للتعبئة السريعة)
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifier('ADM-001');
+                    setPassword('admin123');
+                    setErrorMsg(null);
+                  }}
+                  className="p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 transition-all text-right group cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5 text-indigo-400 font-bold text-xs mb-1">
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>أمين المكتبة</span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 font-mono">ADM-001</div>
+                  <div className="text-[10px] text-slate-400">المرور: <span className="font-mono text-slate-300">admin123</span></div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifier('STU-2026-101');
+                    setPassword('123456');
+                    setErrorMsg(null);
+                  }}
+                  className="p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-emerald-500/50 transition-all text-right group cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs mb-1">
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    <span>طالب / باحث</span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 font-mono">STU-2026-101</div>
+                  <div className="text-[10px] text-slate-400">المرور: <span className="font-mono text-slate-300">123456</span></div>
+                </button>
+              </div>
+            </div>
           </form>
         </div>
       </main>

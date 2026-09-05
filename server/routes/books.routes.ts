@@ -993,11 +993,30 @@ router.get('/files/digital/:filename', authenticateToken, (req: Request, res: Re
     return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'الملف الرقمي غير موجود.' } });
   }
 
+  const isViewer =
+    req.query.viewer === 'true' ||
+    req.headers['x-mishkat-viewer'] === 'true' ||
+    req.headers['x-requested-with'] === 'XMLHttpRequest';
+
+  if (isViewer) {
+    const stat = fs.statSync(targetPath);
+    res.writeHead(200, {
+      'Content-Length': stat.size,
+      'Accept-Ranges': 'bytes',
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': 'inline',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+    });
+    return fs.createReadStream(targetPath).pipe(res);
+  }
+
   res.sendFile(path.resolve(targetPath));
 });
 
-// GET /api/v1/books/:id/file (Canonical Authenticated Central Reader Stream - Section 17)
-router.get('/:id/file', authenticateToken, async (req: Request, res: Response) => {
+// Stream Digital Book Handler (Supports both GET and POST /:id/stream)
+// POST streaming completely eliminates browser download extension (IDM) interception.
+async function streamDigitalBook(req: Request, res: Response) {
   const { id } = req.params;
   try {
     const { rows } = await db.query('SELECT * FROM books WHERE id = $1 LIMIT 1', [id]);
@@ -1032,7 +1051,20 @@ router.get('/:id/file', authenticateToken, async (req: Request, res: Response) =
     const stat = fs.statSync(resolvedPath);
     const fileSize = stat.size;
     const range = req.headers.range;
-    const contentType = (book.format || 'pdf').toLowerCase() === 'epub' ? 'application/epub+zip' : 'application/pdf';
+
+    const isViewer =
+      req.method === 'POST' ||
+      req.query.viewer === 'true' ||
+      req.headers['x-mishkat-viewer'] === 'true' ||
+      req.headers['x-requested-with'] === 'XMLHttpRequest';
+
+    // When requested by the integrated reader, serve as binary stream without attachment filename
+    // to prevent browser extensions like Internet Download Manager (IDM) from hijacking the in-app document stream.
+    const contentType = isViewer
+      ? 'application/octet-stream'
+      : (book.format || 'pdf').toLowerCase() === 'epub'
+      ? 'application/epub+zip'
+      : 'application/pdf';
 
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
@@ -1047,29 +1079,109 @@ router.get('/:id/file', authenticateToken, async (req: Request, res: Response) =
       const chunkSize = end - start + 1;
       const fileStream = fs.createReadStream(resolvedPath, { start, end });
 
-      res.writeHead(206, {
+      const responseHeaders: Record<string, string | number> = {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': contentType,
-        'Content-Disposition': `inline; filename="${encodeURIComponent(book.title)}.${book.format || 'pdf'}"`,
-      });
+        'X-Content-Type-Options': 'nosniff',
+      };
 
+      if (!isViewer) {
+        responseHeaders['Content-Disposition'] = `inline; filename="${encodeURIComponent(book.title)}.${book.format || 'pdf'}"`;
+      } else {
+        responseHeaders['Content-Disposition'] = 'inline';
+        responseHeaders['Cache-Control'] = 'private, no-cache, no-store, must-revalidate';
+      }
+
+      res.writeHead(206, responseHeaders);
       fileStream.pipe(res);
     } else {
-      res.writeHead(200, {
+      const responseHeaders: Record<string, string | number> = {
         'Content-Length': fileSize,
         'Accept-Ranges': 'bytes',
         'Content-Type': contentType,
-        'Content-Disposition': `inline; filename="${encodeURIComponent(book.title)}.${book.format || 'pdf'}"`,
-      });
+        'X-Content-Type-Options': 'nosniff',
+      };
 
+      if (!isViewer) {
+        responseHeaders['Content-Disposition'] = `inline; filename="${encodeURIComponent(book.title)}.${book.format || 'pdf'}"`;
+      } else {
+        responseHeaders['Content-Disposition'] = 'inline';
+        responseHeaders['Cache-Control'] = 'private, no-cache, no-store, must-revalidate';
+      }
+
+      res.writeHead(200, responseHeaders);
       fs.createReadStream(resolvedPath).pipe(res);
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }
-});
+}
+
+// GET /api/v1/books/:id/file (Canonical Authenticated Central Reader Stream - Section 17)
+router.get('/:id/file', authenticateToken, streamDigitalBook);
+
+// POST /api/v1/books/:id/file & POST /api/v1/books/:id/stream (Immune to IDM / Download Extensions)
+router.post('/:id/file', authenticateToken, streamDigitalBook);
+router.post('/:id/stream', authenticateToken, streamDigitalBook);
+
+// GET & POST /api/v1/books/:id/content
+// Delivers document as JSON Base64 data payload.
+// Browser extensions (like IDM) NEVER intercept application/json responses.
+async function getDigitalBookContent(req: Request, res: Response) {
+  const { id } = req.params;
+  try {
+    const { rows } = await db.query('SELECT * FROM books WHERE id = $1 LIMIT 1', [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'سجل الكتاب غير موجود.' } });
+    }
+
+    const book = rows[0];
+    const resolvedPath = await resolveDigitalBookFilePath(book);
+
+    if (resolvedPath === '__FORBIDDEN_PATH__') {
+      return res.status(403).json({ success: false, error: { code: 'ACCESS_DENIED', message: 'مسار الملف غير مصرح به خارج مستودع الكتب الرقمية.' } });
+    }
+
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'FILE_NOT_FOUND',
+          message: 'تعذر العثور على ملف الكتاب الرقمي على الخادم المركزي.',
+        },
+      });
+    }
+
+    // Path traversal check
+    const projectRoot = path.resolve(process.cwd());
+    const relative = path.relative(projectRoot, resolvedPath);
+    if (relative.startsWith('..') && !isWithinDirectory(resolvedPath, serverConfig.dirs.root)) {
+      return res.status(403).json({ success: false, error: { code: 'ACCESS_DENIED', message: 'مسار الملف غير مصرح به.' } });
+    }
+
+    const buffer = fs.readFileSync(resolvedPath);
+    const base64 = buffer.toString('base64');
+    const format = (book.format || 'pdf').toLowerCase();
+
+    res.json({
+      success: true,
+      data: {
+        id: book.id,
+        title: book.title,
+        format,
+        sizeBytes: buffer.length,
+        base64,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+}
+
+router.get('/:id/content', authenticateToken, getDigitalBookContent);
+router.post('/:id/content', authenticateToken, getDigitalBookContent);
 
 // POST /api/v1/books/:id/increment-read
 router.post('/:id/increment-read', optionalAuth, async (req: Request, res: Response) => {

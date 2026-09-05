@@ -88,6 +88,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const currentBlobUrlRef = useRef<string | null>(null);
   const epubBookRef = useRef<Book | null>(null);
   const epubRenditionRef = useRef<Rendition | null>(null);
+  const pageCacheRef = useRef<Map<number, any>>(new Map());
 
   // Note creation form state
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -98,6 +99,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     setIsLoading(true);
     setError(null);
     setErrorCode(null);
+    pageCacheRef.current.clear();
 
     // Clean up previous blob URL
     if (currentBlobUrlRef.current) {
@@ -116,35 +118,75 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     }
 
     try {
-      const res = await bookRepository.fetchBookFileBlob(book.id);
-      if (!res.success || !res.data) {
-        const status = res.error?.status;
-        if (status === 401 || status === 403) {
-          setError('ليس لديك صلاحية لقراءة هذا الكتاب.');
-          setErrorCode('UNAUTHORIZED');
-        } else if (status === 404) {
-          setError('ملف الكتاب غير موجود على الخادم المركزي.');
-          setErrorCode('FILE_NOT_FOUND');
-        } else {
-          setError(res.error?.message || 'تعذر تحميل الكتاب من الخادم المركزي.');
-          setErrorCode('SERVER_ERROR');
+      let fileBlob: Blob | null = null;
+      const cacheKey = `/mishkat-book-cache/${book.id}`;
+      let cacheObj: Cache | null = null;
+
+      // Check client-side CacheStorage for instant offline/multi-student cached load
+      try {
+        if (typeof window !== 'undefined' && 'caches' in window) {
+          cacheObj = await caches.open('mishkat-books-cache-v1');
+          const matched = await cacheObj.match(cacheKey);
+          if (matched) {
+            fileBlob = await matched.blob();
+          }
         }
-        setIsLoading(false);
-        return;
+      } catch {}
+
+      if (!fileBlob) {
+        // Fetch via application/json Base64 envelope (100% immune to IDM and all browser download extensions)
+        const res = await bookRepository.fetchBookContent(book.id);
+        if (!res.success || !res.data?.base64) {
+          const status = res.error?.status;
+          if (status === 401 || status === 403) {
+            setError('ليس لديك صلاحية لقراءة هذا الكتاب.');
+            setErrorCode('UNAUTHORIZED');
+          } else if (status === 404) {
+            setError('ملف الكتاب غير موجود على الخادم المركزي.');
+            setErrorCode('FILE_NOT_FOUND');
+          } else {
+            setError(res.error?.message || 'تعذر تحميل الكتاب من الخادم المركزي.');
+            setErrorCode('SERVER_ERROR');
+          }
+          setIsLoading(false);
+          return;
+        }
+
+        // Fast native binary decoding from Base64 to Uint8Array
+        const base64Str = res.data.base64;
+        const binaryStr = atob(base64Str);
+        const len = binaryStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+
+        const mime = isEpub ? 'application/epub+zip' : 'application/pdf';
+        fileBlob = new Blob([bytes.buffer], { type: mime });
+
+        // Asynchronously save to client CacheStorage for instant subsequent loads
+        if (cacheObj && fileBlob) {
+          try {
+            const respToCache = new Response(fileBlob, {
+              headers: { 'Content-Type': mime },
+            });
+            cacheObj.put(cacheKey, respToCache).catch(() => {});
+          } catch {}
+        }
       }
 
-      const fileBlob = res.data;
       const objectUrl = URL.createObjectURL(fileBlob);
       currentBlobUrlRef.current = objectUrl;
       setBlobUrl(objectUrl);
 
       if (!isEpub) {
-        // PDF Loading
+        // PDF Loading with 100% LOCAL CMaps for instant Arabic glyph parsing without internet
         const arrayBuffer = await fileBlob.arrayBuffer();
         const loadingTask = pdfjsLib.getDocument({
           data: arrayBuffer,
-          cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.38/cmaps/',
+          cMapUrl: '/cmaps/',
           cMapPacked: true,
+          enableXfa: false,
         });
 
         const loadedPdf = await loadingTask.promise;
@@ -285,9 +327,15 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
     setIsRenderingPage(true);
     try {
-      const page = await pdfDoc.getPage(currentPage);
+      // Instant cache retrieval: avoid re-parsing cross-references
+      let page = pageCacheRef.current.get(currentPage);
+      if (!page) {
+        page = await pdfDoc.getPage(currentPage);
+        pageCacheRef.current.set(currentPage, page);
+      }
+
       const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
+      const context = canvas.getContext('2d', { alpha: false });
       if (!context) return;
 
       const viewport = page.getViewport({ scale });
@@ -303,13 +351,25 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       renderTaskRef.current = renderTask;
       await renderTask.promise;
       setIsRenderingPage(false);
+
+      // Background pre-fetching of adjacent pages (next and previous) for instant page flipping
+      if (currentPage + 1 <= numPages && !pageCacheRef.current.has(currentPage + 1)) {
+        pdfDoc.getPage(currentPage + 1).then((nextP: any) => {
+          pageCacheRef.current.set(currentPage + 1, nextP);
+        }).catch(() => {});
+      }
+      if (currentPage - 1 >= 1 && !pageCacheRef.current.has(currentPage - 1)) {
+        pdfDoc.getPage(currentPage - 1).then((prevP: any) => {
+          pageCacheRef.current.set(currentPage - 1, prevP);
+        }).catch(() => {});
+      }
     } catch (err: any) {
       if (err?.name !== 'RenderingCancelledException') {
         console.warn('[BookReaderModal] Page render error:', err);
       }
       setIsRenderingPage(false);
     }
-  }, [pdfDoc, currentPage, scale]);
+  }, [pdfDoc, currentPage, scale, numPages]);
 
   useEffect(() => {
     if (pdfDoc && !isEpub) {

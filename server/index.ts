@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { serverConfig } from './config';
 import { db } from './db/pool';
@@ -75,6 +76,12 @@ export async function createExpressApp() {
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  // Serve local CMap font tables for 100% offline, zero-latency local LAN PDF rendering
+  const cmapsLocalPath = path.join(process.cwd(), 'public', 'cmaps');
+  if (fs.existsSync(cmapsLocalPath)) {
+    app.use('/cmaps', express.static(cmapsLocalPath, { maxAge: '30d', immutable: true }));
+  }
 
   // NOTE: Private digital files and covers are NOT served via express.static.
   // All digital file access goes through the authenticated GET /api/v1/books/:id/file

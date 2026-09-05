@@ -106,16 +106,25 @@ class PostgresDatabaseEngine implements IDatabase {
           this.pgliteInstance = null;
         }
         const corruptBackup = `${serverConfig.dirs.pgdata}_corrupt_${Date.now()}`;
+        let activeDir = serverConfig.dirs.pgdata;
         if (fs.existsSync(serverConfig.dirs.pgdata)) {
-          fs.renameSync(serverConfig.dirs.pgdata, corruptBackup);
-          console.log(`📦 [Database] Preserved corrupted storage at: ${corruptBackup}`);
+          try {
+            fs.renameSync(serverConfig.dirs.pgdata, corruptBackup);
+            console.log(`📦 [Database] Preserved corrupted storage at: ${corruptBackup}`);
+            fs.mkdirSync(serverConfig.dirs.pgdata, { recursive: true });
+          } catch (renameErr: any) {
+            console.warn(`⚠️ [Database] Could not rename locked storage directory (${renameErr.message}). Using fallback recovery directory.`);
+            activeDir = `${serverConfig.dirs.pgdata}_recovered_${Date.now()}`;
+            fs.mkdirSync(activeDir, { recursive: true });
+          }
+        } else {
+          fs.mkdirSync(activeDir, { recursive: true });
         }
-        fs.mkdirSync(serverConfig.dirs.pgdata, { recursive: true });
 
-        this.pgliteInstance = await initAndTestPgLite(serverConfig.dirs.pgdata);
+        this.pgliteInstance = await initAndTestPgLite(activeDir);
         this.isConnected = true;
         this.engineType = 'embedded_pg';
-        console.log(`✅ [Database] Clean Embedded PostgreSQL Engine initialized successfully.`);
+        console.log(`✅ [Database] Clean Embedded PostgreSQL Engine initialized successfully at: ${activeDir}`);
       } catch (recoveryErr: any) {
         this.isConnected = false;
         this.engineType = null;

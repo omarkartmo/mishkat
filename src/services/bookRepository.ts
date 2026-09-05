@@ -436,10 +436,20 @@ export class BookRepository {
   }
 
   /**
+   * Fetch digital book content as Base64 JSON (immune to all browser download managers like IDM)
+   */
+  public async fetchBookContent(bookId: string): Promise<ApiResponse<{ id: string; title: string; format: string; sizeBytes: number; base64: string }>> {
+    return apiClient.get(`/books/${encodeURIComponent(bookId)}/content`);
+  }
+
+  /**
    * Fetch digital book file as authorized Blob (passes JWT Authorization header via apiClient)
    */
   public async fetchBookFileBlob(bookId: string): Promise<ApiResponse<Blob>> {
-    return apiClient.getBlob(`/books/${bookId}/file`);
+    return apiClient.postBlob(`/books/${encodeURIComponent(bookId)}/stream`, {}, {
+      'X-Mishkat-Viewer': 'true',
+      'X-Requested-With': 'XMLHttpRequest',
+    });
   }
 }
 

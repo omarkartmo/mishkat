@@ -134,28 +134,35 @@ export async function seedInitialData(): Promise<void> {
   }
 
   // Digital Books
-  console.log('🌱 [Seeder] Seeding initial digital books & catalog...');
+  console.log('🌱 [Seeder] Checking digital books catalog...');
   if (!fs.existsSync(serverConfig.dirs.digital)) {
     fs.mkdirSync(serverConfig.dirs.digital, { recursive: true });
   }
-  const samplePdfBytes = '%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Size 1 >>\nstartxref\n50\n%%EOF';
 
   for (const book of INITIAL_DIGITAL_BOOKS) {
-    const filename = book.fileUrl ? path.basename(book.fileUrl) : `${book.id}.pdf`;
+    const filename = book.fileUrl ? path.basename(decodeURIComponent(book.fileUrl)) : `${book.id}.pdf`;
     const filePath = path.join(serverConfig.dirs.digital, filename);
     if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, samplePdfBytes, 'utf8');
+      continue; // Skip if physical file does not exist - never generate fake dummy bytes
     }
 
     await db.query(`
       INSERT INTO books (
         id, type, title, author, category_id, format, file_size, file_url, file_path,
         pages_count, summary, cover_image, source_origin, uploaded_by, tags,
-        download_count, read_count, table_of_contents, sample_content
-      ) VALUES ($1, 'digital', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        download_count, read_count, table_of_contents, sample_content,
+        total_copies, available_copies
+      ) VALUES ($1, 'digital', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 0, 0)
       ON CONFLICT (id) DO UPDATE SET
+        title = EXCLUDED.title,
+        author = EXCLUDED.author,
+        summary = EXCLUDED.summary,
+        category_id = EXCLUDED.category_id,
+        file_size = EXCLUDED.file_size,
         file_path = EXCLUDED.file_path,
-        file_url = EXCLUDED.file_url;
+        file_url = EXCLUDED.file_url,
+        total_copies = 0,
+        available_copies = 0;
     `, [
       book.id,
       book.title,
@@ -177,6 +184,15 @@ export async function seedInitialData(): Promise<void> {
       JSON.stringify(book.sampleContent || []),
     ]);
   }
+
+  // Strictly remove all obsolete dummy digital books and any inventory copies mistakenly attached to digital books
+  const validDigitalIds = INITIAL_DIGITAL_BOOKS.map((b) => b.id);
+  await db.query(`
+    DELETE FROM physical_copies WHERE book_id IN (SELECT id FROM books WHERE type = 'digital');
+  `);
+  await db.query(`
+    DELETE FROM books WHERE type = 'digital' AND id != ALL($1::text[]);
+  `, [validDigitalIds]);
 
   // Loans
   const { rows: loanRows } = await db.query('SELECT id FROM loans LIMIT 1');

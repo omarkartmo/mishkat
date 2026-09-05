@@ -287,8 +287,11 @@ class ApiClient {
     }
   }
 
-  public async getBlob(endpoint: string): Promise<ApiResponse<Blob>> {
-    const headers = this.getAuthHeaders();
+  public async getBlob(endpoint: string, extraHeaders?: Record<string, string>): Promise<ApiResponse<Blob>> {
+    const headers = {
+      ...this.getAuthHeaders(),
+      ...(extraHeaders || {}),
+    };
 
     try {
       const url = endpoint.startsWith('/api/') ? endpoint : `${API_BASE_URL}${endpoint}`;
@@ -336,6 +339,64 @@ class ApiClient {
           code: 'NETWORK_ERROR',
           message:
             'تعذر الاتصال بالخادم المركزي. يرجى التحقق من اتصال الشبكة والمحاولة مرة أخرى.',
+          status: 0,
+        },
+      };
+    }
+  }
+
+  public async postBlob(
+    endpoint: string,
+    body?: any,
+    extraHeaders?: Record<string, string>
+  ): Promise<ApiResponse<Blob>> {
+    const headers: Record<string, string> = {
+      ...this.getAuthHeaders(),
+      ...(extraHeaders || {}),
+    };
+
+    if (body) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    try {
+      const url = endpoint.startsWith('/api/') ? endpoint : `${API_BASE_URL}${endpoint}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (response.status === 401) {
+        this.notifyUnauthorized();
+      }
+
+      if (!response.ok) {
+        const json = await response.json().catch(() => null);
+        const errorData: ApiError = {
+          code: json?.error?.code || `HTTP_${response.status}`,
+          message: json?.error?.message || 'تعذر تحميل الملف الرقمي من الخادم المركزي.',
+          status: response.status,
+        };
+
+        return {
+          success: false,
+          error: errorData,
+        };
+      }
+
+      const blob = await response.blob();
+      return {
+        success: true,
+        data: blob,
+      };
+    } catch (err: any) {
+      console.warn(`[ApiClient] postBlob request failed for ${endpoint}:`, err.message);
+      return {
+        success: false,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: 'تعذر الاتصال بالخادم المركزي. يرجى التحقق من اتصال الشبكة والمحاولة مرة أخرى.',
           status: 0,
         },
       };
