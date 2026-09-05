@@ -744,6 +744,19 @@ export default function App() {
     }
   };
 
+  const handleDeleteDigitalBook = async (id: string) => {
+    try {
+      const res = await bookRepository.deleteBook(id);
+      if (res.success) {
+        await Promise.all([loadBooks(), loadReadingProgress()]);
+      } else {
+        alert(res.error?.message || 'فشل حذف الكتاب الرقمي من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حذف الكتاب الرقمي.');
+    }
+  };
+
   const handleAddDigitalBook = async (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => {
     try {
       const res = await bookRepository.createDigitalBook(book);
@@ -1418,6 +1431,7 @@ export default function App() {
               onOpenReader={handleOpenDigitalReader}
               onAddDigitalBook={handleAddDigitalBook}
               onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
+              onDeleteBook={handleDeleteDigitalBook}
               onRefreshBooks={loadBooks}
             />
           )}

@@ -16,6 +16,7 @@ import {
   FolderUp,
   Sparkles,
   Activity,
+  Trash2,
 } from 'lucide-react';
 import { DigitalBook, Category, UserRole } from '../../types/library';
 import { BulkDigitalImportModal } from './BulkDigitalImportModal';
@@ -32,6 +33,7 @@ interface DigitalLibraryViewProps {
   onOpenReader: (book: DigitalBook) => void;
   onAddDigitalBook: (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => void;
   onBulkAddDigitalBooks?: (books: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => void;
+  onDeleteBook?: (bookId: string) => Promise<void> | void;
   onRefreshBooks?: () => void;
 }
 
@@ -45,6 +47,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   onOpenReader,
   onAddDigitalBook,
   onBulkAddDigitalBooks,
+  onDeleteBook,
   onRefreshBooks,
 }) => {
   const [search, setSearch] = useState('');
@@ -53,6 +56,8 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [showObservability, setShowObservability] = useState(false);
+  const [bookToDelete, setBookToDelete] = useState<DigitalBook | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const filteredBooks = (books || []).filter((b) => {
     const matchesSearch =
@@ -299,13 +304,24 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
                     {book.fileSize ? book.fileSize : (book.fileSizeMb ? `${book.fileSizeMb} MB` : 'غير متوفر')}
                   </span>
 
-                  <button
-                    onClick={() => onOpenReader(book)}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    <span>فتح في القارئ المدمج</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {userRole === 'admin' && onDeleteBook && (
+                      <button
+                        onClick={() => setBookToDelete(book)}
+                        className="p-2 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 rounded-xl transition-all cursor-pointer"
+                        title="حذف الكتاب الرقمي"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onOpenReader(book)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span>فتح في القارئ المدمج</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -334,6 +350,82 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
           onClose={() => setIsBulkModalOpen(false)}
           onImportSuccess={handleBulkImportSuccess}
         />
+      )}
+
+      {/* Delete Digital Book Confirmation Modal */}
+      {bookToDelete && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-rose-600 dark:text-rose-400 text-sm flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                <span>تأكيد حذف الكتاب الرقمي</span>
+              </h3>
+              <button
+                onClick={() => !isDeleting && setBookToDelete(null)}
+                disabled={isDeleting}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">عنوان الكتاب:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100 truncate max-w-[240px]">{bookToDelete.title}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">المؤلف:</span>
+                <span className="text-slate-700 dark:text-slate-300">{bookToDelete.author}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">الصيغة:</span>
+                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold uppercase">{bookToDelete.format}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف هذا الكتاب الرقمي من المستودع المركزي؟ سيتم إزالة ملف الكتاب وجميع سجلات القراءة المرتبطة به.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setBookToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onDeleteBook && bookToDelete) {
+                    setIsDeleting(true);
+                    try {
+                      await onDeleteBook(bookToDelete.id);
+                      setBookToDelete(null);
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                {isDeleting ? (
+                  <span>جارٍ الحذف...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>تأكيد الحذف</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

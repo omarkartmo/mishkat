@@ -1194,4 +1194,74 @@ router.post('/:id/increment-read', optionalAuth, async (req: Request, res: Respo
   }
 });
 
+// DELETE /api/v1/books/:id (Delete Physical or Digital Book - Admin & Librarian)
+router.delete('/:id', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await db.query('SELECT * FROM books WHERE id = $1 LIMIT 1', [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'BOOK_NOT_FOUND', message: 'الكتاب المطلوب حذفه غير موجود في الخادم المركزي.' }
+      });
+    }
+
+    const book = rows[0];
+
+    // If physical book, verify there are no active or overdue loans
+    if (book.type === 'physical') {
+      const activeLoans = await db.query(
+        "SELECT id FROM loans WHERE book_id = $1 AND status IN ('active', 'extended', 'overdue')",
+        [id]
+      );
+      if (activeLoans.rows.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'HAS_ACTIVE_LOANS',
+            message: `لا يمكن حذف هذا الكتاب لوجود ${activeLoans.rows.length} إعارة جارية أو متأخرة مرتبطة به.`
+          }
+        });
+      }
+    }
+
+    // If digital book, safely delete the physical file from disk if stored locally
+    if (book.type === 'digital' && book.file_path) {
+      try {
+        const resolved = path.resolve(book.file_path);
+        if (
+          fs.existsSync(resolved) &&
+          (isWithinDirectory(resolved, serverConfig.dirs.digital) || isWithinDirectory(resolved, serverConfig.dirs.root))
+        ) {
+          fs.unlinkSync(resolved);
+        }
+      } catch (fileErr) {
+        console.warn('Notice: could not unlink digital file on disk:', fileErr);
+      }
+    }
+
+    // Delete related records and book
+    await db.query('DELETE FROM loans WHERE book_id = $1', [id]);
+    await db.query('DELETE FROM books WHERE id = $1', [id]);
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'DELETE_BOOK',
+      'book',
+      id,
+      { title: book.title, type: book.type },
+      req
+    );
+
+    res.json({
+      success: true,
+      data: { message: `تم حذف الكتاب "${book.title}" بنجاح من الخادم المركزي.` }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 export default router;
