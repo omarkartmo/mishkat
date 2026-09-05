@@ -772,12 +772,29 @@ export default function App() {
   };
 
   const handleOpenDigitalReader = (book: DigitalBook) => {
+    localStorage.setItem('mishkat_active_reading_book_id', book.id);
     bookRepository.incrementReadCount(book.id).catch(() => {});
     setDigitalBooks((prev) =>
       prev.map((b) => (b.id === book.id ? { ...b, readCount: (b.readCount || 0) + 1 } : b))
     );
     setActiveReadingBook(book);
   };
+
+  const handleCloseDigitalReader = () => {
+    localStorage.removeItem('mishkat_active_reading_book_id');
+    setActiveReadingBook(null);
+  };
+
+  // Persistent Reader Session: Restore book if user reloads, wakes phone, or reconnects
+  useEffect(() => {
+    const savedBookId = localStorage.getItem('mishkat_active_reading_book_id');
+    if (savedBookId && digitalBooks.length > 0 && !activeReadingBook) {
+      const book = digitalBooks.find((b) => b.id === savedBookId);
+      if (book) {
+        setActiveReadingBook(book);
+      }
+    }
+  }, [digitalBooks, activeReadingBook]);
 
   // Admin Approval Queue Actions (Phase 1.7 - Submissions Migration)
   const handleApproveSubmission = async (submissionId: string, categoryId?: string) => {
@@ -1536,7 +1553,7 @@ export default function App() {
         <BookReaderModal
           book={activeReadingBook}
           initialPage={readingProgress[activeReadingBook.id]?.currentPage || 1}
-          onClose={() => setActiveReadingBook(null)}
+          onClose={handleCloseDigitalReader}
           onSaveProgress={handleSaveReaderProgress}
           notes={studentNotes}
           onAddNote={handleAddNote}

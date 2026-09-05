@@ -73,7 +73,8 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(initialPage || 1);
   const [numPages, setNumPages] = useState<number>(book.pagesCount || 1);
-  const [scale, setScale] = useState<number>(1.2);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const [scale, setScale] = useState<number>(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 1.0 : 1.2));
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   // EPUB State
@@ -102,6 +103,34 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   // Touch navigation refs for mobile
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+
+  // Prevent mobile screen from sleeping while reading
+  useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch {}
+    };
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, []);
 
   useEffect(() => {
     initialPageRef.current = initialPage || 1;
@@ -497,7 +526,9 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     touchStartXRef.current = null;
     touchStartYRef.current = null;
 
-    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
+    // Only trigger swipe page turn if not zoomed in (scale <= 1.05)
+    // so that when zoomed in, the student can pan across the text freely!
+    if (scale <= 1.05 && Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
       if (deltaX < 0) {
         // Swiped Left -> Next page in RTL
         if (!isEpub) {
@@ -634,7 +665,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => setScale(1.2)}
+                onClick={() => setScale(isMobile ? 1.0 : 1.2)}
                 className="p-1 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
                 title="إعادة ضبط الحجم"
               >
@@ -922,14 +953,27 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             </div>
           ) : (
             /* Real PDF.js HTML5 Canvas Renderer (Section 12) */
-            <div className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white max-w-full my-auto select-none">
+            <div
+              className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white my-auto select-none shrink-0 transition-all duration-150"
+              style={{
+                width: isMobile ? `${Math.round((window.innerWidth - 20) * scale)}px` : undefined,
+                maxWidth: isMobile ? 'none' : undefined,
+              }}
+            >
               {showRenderSpinner && (
                 <div className="absolute top-3 right-3 bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700/60 flex items-center gap-2 z-10 shadow-xl text-slate-300 text-xs animate-in fade-in duration-150">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
                   <span className="text-[11px] font-medium">جاري معالجة الصفحة...</span>
                 </div>
               )}
-              <canvas ref={canvasRef} className="block max-w-full h-auto" />
+              <canvas
+                ref={canvasRef}
+                className="block h-auto"
+                style={{
+                  width: isMobile ? '100%' : undefined,
+                  maxWidth: isMobile ? 'none' : '100%',
+                }}
+              />
             </div>
           )}
         </div>
