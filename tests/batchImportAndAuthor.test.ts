@@ -165,4 +165,45 @@ describe('Progressive Batch Import & Exclusion API Tests', () => {
     const dupItem = scanResAll.body.data.items.find((i: any) => i.fileHash === firstItem.fileHash);
     expect(dupItem.isDuplicate).toBe(true);
   });
+
+  it('should scan real books folder and NEVER assign fake publisher names like "المكتبة السعيدية"', async () => {
+    const userBooksDir = 'C:\\Users\\NABTAKIR\\Downloads\\كتب';
+    if (!fs.existsSync(userBooksDir)) return;
+
+    const res = await request(app)
+      .post('/api/v1/books/bulk-scan')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        folderPath: userBooksDir,
+        limit: 25,
+        excludeImported: false,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const items = res.body.data.items;
+
+    // Verify: NOT A SINGLE BOOK has author "المكتبة السعيدية" or publisher names
+    for (const item of items) {
+      expect(item.author).not.toContain('المكتبة السعيدية');
+      expect(item.author).not.toContain('المكتبة');
+      expect(item.author).not.toContain('وزارة');
+    }
+
+    // Verify known heritage books were accurately resolved
+    const alWadBook = items.find((i: any) => i.title.includes('كتاب الوضع'));
+    if (alWadBook) {
+      expect(alWadBook.author).toBe('أبو زكريا يحيى بن أبي بكر الجناوني');
+    }
+
+    const manhajBook = items.find((i: any) => i.title.includes('منهج الطالبين'));
+    if (manhajBook) {
+      expect(manhajBook.author).toBe('خميس بن علي بن رستم الرستاقي');
+    }
+
+    const ibnSalamBook = items.find((i: any) => i.title.includes('ابن سلام'));
+    if (ibnSalamBook) {
+      expect(ibnSalamBook.author).toBe('ابن سلام الإباضي');
+    }
+  });
 });

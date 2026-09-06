@@ -579,7 +579,7 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
       // Feature 2: Accurate Author Extraction from document pages 1 & 2 (or EPUB metadata)
       if (author === 'مؤلف غير محدد' || !author.trim()) {
         try {
-          const docAuthorResult = await extractAuthorFromDocument(stagedFilePath, ext);
+          const docAuthorResult = await extractAuthorFromDocument(stagedFilePath, ext, { folderName, title });
           if (docAuthorResult?.author) {
             author = docAuthorResult.author;
             authorDetectedFrom = 'document';
@@ -753,7 +753,7 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
       // Feature 2: Accurate Author Extraction from document pages 1 & 2 (or EPUB metadata)
       if (author === 'مؤلف غير محدد' || !author.trim()) {
         try {
-          const docAuthorResult = await extractAuthorFromDocument(filePath, ext);
+          const docAuthorResult = await extractAuthorFromDocument(filePath, ext, { folderName, title });
           if (docAuthorResult?.author) {
             author = docAuthorResult.author;
             authorDetectedFrom = 'document';
