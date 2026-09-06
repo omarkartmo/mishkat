@@ -8,6 +8,7 @@ import { serverConfig } from '../config';
 import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
+import { extractAuthorFromDocument } from '../utils/authorExtractor';
 
 const router = Router();
 
@@ -572,7 +573,19 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
 
       // Extract title & author from folder name if adopted, otherwise from file name
       const sourceName = adoptFolder && folderName ? folderName : file.originalname;
-      const { title, author } = extractTitleAndAuthor(sourceName);
+      let { title, author } = extractTitleAndAuthor(sourceName);
+      let authorDetectedFrom: 'folder' | 'file' | 'document' = adoptFolder && author !== 'مؤلف غير محدد' ? 'folder' : author !== 'مؤلف غير محدد' ? 'file' : 'file';
+
+      // Feature 2: Accurate Author Extraction from document pages 1 & 2 (or EPUB metadata)
+      if (author === 'مؤلف غير محدد' || !author.trim()) {
+        try {
+          const docAuthorResult = await extractAuthorFromDocument(stagedFilePath, ext);
+          if (docAuthorResult?.author) {
+            author = docAuthorResult.author;
+            authorDetectedFrom = 'document';
+          }
+        } catch {}
+      }
 
       // Automatic classification (Section 24)
       const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceName, categories);
@@ -589,6 +602,7 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
         originalFileName: file.originalname,
         folderName: folderName || null,
         detectedFrom: adoptFolder ? 'folder' : 'file',
+        authorDetectedFrom,
         stagedFilePath,
         format: ext,
         fileSizeMb: sizeMb,
@@ -622,7 +636,7 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
 
 // POST /api/v1/books/bulk-scan (Scan directory configured in digitalBookRootUrl - Section 19 & 20)
 router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
-  const { folderPath } = req.body;
+  const { folderPath, limit, offset = 0, excludeImported = true } = req.body;
 
   try {
     // Resolve scan directory from input or system settings (Section 19)
@@ -652,6 +666,13 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
 
     const { rows: categories } = await db.query('SELECT id, name FROM categories ORDER BY name ASC');
 
+    // Query existing digital books in DB to exclude already imported ones
+    const { rows: existingRows } = await db.query(
+      "SELECT file_hash, file_path FROM books WHERE type = 'digital'"
+    );
+    const existingHashes = new Set(existingRows.map((r) => r.file_hash).filter(Boolean));
+    const existingPaths = new Set(existingRows.map((r) => r.file_path ? path.resolve(r.file_path) : null).filter(Boolean));
+
     const discoveredFiles: string[] = [];
     const scanRecursively = (dir: string) => {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -670,8 +691,49 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
 
     scanRecursively(resolvedDir);
 
-    const scannedResults: any[] = [];
+    let alreadyImportedCount = 0;
+    const pendingFiles: string[] = [];
+
     for (const filePath of discoveredFiles) {
+      const resolvedFilePath = path.resolve(filePath);
+      let isImported = existingPaths.has(resolvedFilePath);
+
+      // Check by file hash if path does not match
+      if (!isImported) {
+        try {
+          const buffer = fs.readFileSync(filePath);
+          const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+          if (existingHashes.has(hash)) {
+            isImported = true;
+          }
+        } catch {}
+      }
+
+      if (isImported) {
+        alreadyImportedCount++;
+        if (excludeImported === false) {
+          pendingFiles.push(filePath);
+        }
+      } else {
+        pendingFiles.push(filePath);
+      }
+    }
+
+    const totalDiscoveredInFolder = discoveredFiles.length;
+    const totalPendingCount = pendingFiles.length;
+
+    // Apply batch limit if requested (e.g. 25, 50, 100, or 'all')
+    const numericLimit = limit && Number(limit) > 0 ? Number(limit) : 0;
+    const startIndex = Math.max(0, Number(offset) || 0);
+    const batchFiles = numericLimit > 0
+      ? pendingFiles.slice(startIndex, startIndex + numericLimit)
+      : pendingFiles.slice(startIndex);
+
+    const hasMore = numericLimit > 0 && (startIndex + batchFiles.length < totalPendingCount);
+    const remainingCount = Math.max(0, totalPendingCount - (startIndex + batchFiles.length));
+
+    const scannedResults: any[] = [];
+    for (const filePath of batchFiles) {
       const fileName = path.basename(filePath);
       const ext = path.extname(fileName).toLowerCase().replace('.', '') as 'pdf' | 'epub';
       const stat = fs.statSync(filePath);
@@ -685,17 +747,30 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
       const { adopt: adoptFolder, folderName } = shouldAdoptFolderNameAsTitle(filePath, resolvedDir);
       const sourceNameForMeta = adoptFolder && folderName ? folderName : fileName;
 
-      const { title, author } = extractTitleAndAuthor(sourceNameForMeta);
+      let { title, author } = extractTitleAndAuthor(sourceNameForMeta);
+      let authorDetectedFrom: 'folder' | 'file' | 'document' = adoptFolder && author !== 'مؤلف غير محدد' ? 'folder' : author !== 'مؤلف غير محدد' ? 'file' : 'file';
+
+      // Feature 2: Accurate Author Extraction from document pages 1 & 2 (or EPUB metadata)
+      if (author === 'مؤلف غير محدد' || !author.trim()) {
+        try {
+          const docAuthorResult = await extractAuthorFromDocument(filePath, ext);
+          if (docAuthorResult?.author) {
+            author = docAuthorResult.author;
+            authorDetectedFrom = 'document';
+          }
+        } catch {}
+      }
+
       const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceNameForMeta, categories);
 
-      const { rows: dupHashRows } = await db.query('SELECT id, title FROM books WHERE file_hash = $1 LIMIT 1', [hash]);
-      const isDuplicate = dupHashRows.length > 0;
+      const isDuplicate = existingHashes.has(hash);
 
       scannedResults.push({
         tempId: `scan-${hash.substring(0, 8)}`,
         originalFileName: fileName,
         folderName: folderName || null,
         detectedFrom: adoptFolder ? 'folder' : 'file',
+        authorDetectedFrom,
         stagedFilePath: filePath,
         format: ext,
         fileSizeMb: sizeMb,
@@ -707,7 +782,7 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
         confidence,
         status: isDuplicate ? 'duplicate' : confidence < 40 ? 'needs_review' : 'ready',
         isDuplicate,
-        duplicateReason: isDuplicate ? `موجود مسبقاً بنفس البصمة (${dupHashRows[0].title})` : null,
+        duplicateReason: isDuplicate ? 'الكتاب مستورد مسبقاً في المستودع الرقمي المركزي' : null,
         pages: Math.max(50, Math.round(sizeMb * 45)),
         summary: adoptFolder
           ? `كتاب رقمي تم اعتماد عنوانه من اسم المجلد (${folderName}): ${path.relative(resolvedDir, filePath)}`
@@ -720,6 +795,12 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
       data: {
         rootScanned: resolvedDir,
         totalDiscovered: scannedResults.length,
+        totalDiscoveredInFolder,
+        alreadyImportedCount,
+        pendingCount: totalPendingCount,
+        batchSize: scannedResults.length,
+        hasMore,
+        remainingCount,
         items: scannedResults,
       },
     });

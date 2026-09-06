@@ -449,10 +449,24 @@ export class BookRepository {
   }
 
   /**
-   * Scan server directory (or configured root URL) for PDF/EPUB books (POST /api/v1/books/bulk-scan)
+   * Scan server directory (or configured root URL) for PDF/EPUB books with batching & exclusion (POST /api/v1/books/bulk-scan)
    */
-  public async bulkScanDirectory(folderPath?: string): Promise<ApiResponse<{ rootScanned: string; totalDiscovered: number; items: any[] }>> {
-    return apiClient.post<{ rootScanned: string; totalDiscovered: number; items: any[] }>('/books/bulk-scan', { folderPath });
+  public async bulkScanDirectory(
+    folderPath?: string,
+    limit?: number,
+    excludeImported: boolean = true
+  ): Promise<ApiResponse<{
+    rootScanned: string;
+    totalDiscovered: number;
+    totalDiscoveredInFolder?: number;
+    alreadyImportedCount?: number;
+    pendingCount?: number;
+    batchSize?: number;
+    hasMore?: boolean;
+    remainingCount?: number;
+    items: any[];
+  }>> {
+    return apiClient.post('/books/bulk-scan', { folderPath, limit, excludeImported });
   }
 
   /**

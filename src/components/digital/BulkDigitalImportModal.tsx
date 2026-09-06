@@ -20,6 +20,8 @@ import {
   Search,
   ShieldCheck,
   AlertTriangle,
+  BookOpen,
+  Sliders,
 } from 'lucide-react';
 import { Category, DigitalBook } from '../../types/library';
 import { bookRepository } from '../../services/bookRepository';
@@ -36,6 +38,7 @@ export interface StagedBookItem {
   originalFileName: string;
   folderName?: string | null;
   detectedFrom?: 'folder' | 'file';
+  authorDetectedFrom?: 'folder' | 'file' | 'document';
   stagedFilePath: string;
   format: 'pdf' | 'epub';
   fileSizeMb: number;
@@ -65,6 +68,15 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
   const [bulkCategoryOverride, setBulkCategoryOverride] = useState<string>('');
   const [showGuide, setShowGuide] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [batchLimit, setBatchLimit] = useState<number | undefined>(25);
+  const [excludeImported, setExcludeImported] = useState<boolean>(true);
+  const [scanStats, setScanStats] = useState<{
+    totalInFolder: number;
+    alreadyImportedCount: number;
+    pendingCount: number;
+    hasMore: boolean;
+    remainingCount: number;
+  } | null>(null);
   const [importResult, setImportResult] = useState<{
     total: number;
     imported: number;
@@ -126,20 +138,37 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
     }
   };
 
-  // Scan server folder path (or configured digitalBookRootUrl)
+  // Scan server folder path (or configured digitalBookRootUrl) with progressive batching
   const handleScanDirectory = async () => {
     setIsProcessing(true);
     setErrorMessage(null);
     setImportResult(null);
 
     try {
-      const res = await bookRepository.bulkScanDirectory(folderPathInput.trim() || undefined);
+      const res = await bookRepository.bulkScanDirectory(
+        folderPathInput.trim() || undefined,
+        batchLimit,
+        excludeImported
+      );
       if (res.success && res.data) {
         if (res.data.items.length === 0) {
-          setErrorMessage(`لم يتم العثور على أي ملفات PDF أو EPUB في المسار: ${res.data.rootScanned}`);
+          if (res.data.alreadyImportedCount && res.data.alreadyImportedCount > 0 && excludeImported) {
+            setErrorMessage(`تم استيراد جميع الكتب الموجودة في هذا المجلد مسبقاً (${res.data.alreadyImportedCount} كتاب). لم يتبق أي كتب جديدة للاستيراد.`);
+          } else {
+            setErrorMessage(`لم يتم العثور على أي ملفات PDF أو EPUB في المسار: ${res.data.rootScanned}`);
+          }
+          setStagedBooks([]);
         } else {
           setStagedBooks(res.data.items);
         }
+
+        setScanStats({
+          totalInFolder: res.data.totalDiscoveredInFolder ?? res.data.totalDiscovered,
+          alreadyImportedCount: res.data.alreadyImportedCount ?? 0,
+          pendingCount: res.data.pendingCount ?? res.data.items.length,
+          hasMore: res.data.hasMore ?? false,
+          remainingCount: res.data.remainingCount ?? 0,
+        });
       } else {
         setErrorMessage(res.error?.message || 'فشل فحص المجلد المركزي.');
       }
@@ -201,6 +230,22 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
       if (res.success && res.data) {
         setImportResult(res.data);
         onImportSuccess(res.data.imported);
+
+        // Update progressive stats
+        if (res.data.imported > 0 && scanStats) {
+          setScanStats((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  alreadyImportedCount: prev.alreadyImportedCount + res.data!.imported,
+                  pendingCount: Math.max(0, prev.pendingCount - res.data!.imported),
+                  remainingCount: Math.max(0, prev.pendingCount - res.data!.imported),
+                  hasMore: prev.pendingCount - res.data!.imported > 0,
+                }
+              : null
+          );
+        }
+
         // Clear staged books if all imported or show remaining
         if (res.data.imported > 0) {
           setStagedBooks([]);
@@ -236,7 +281,7 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                فحص الخادم أو رفع الملفات، استخراج البصمات والعناوين والتصنيف التلقائي قبل الاستيراد لمنع التكرار
+                فحص الخادم أو رفع الملفات، استخراج البصمات والعناوين والمؤلفين والتصنيف التلقائي لمنع التكرار
               </p>
             </div>
           </div>
@@ -310,14 +355,26 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
         )}
 
         {importResult && (
-          <div className="p-3 bg-emerald-950/60 border-b border-emerald-800/60 flex items-center justify-between text-xs text-emerald-300">
+          <div className="p-3 bg-emerald-950/60 border-b border-emerald-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-300">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
               <span>{importResult.message}</span>
+              <span className="font-mono text-[11px] bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-700/50">
+                ناجح: {importResult.imported} | متخطى (مكرر): {importResult.skipped} | فاشل: {importResult.failed}
+              </span>
             </div>
-            <span className="font-mono text-[11px] bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-700/50">
-              ناجح: {importResult.imported} | متخطى (مكرر): {importResult.skipped} | فاشل: {importResult.failed}
-            </span>
+            {scanStats && scanStats.pendingCount > 0 && (
+              <button
+                onClick={handleScanDirectory}
+                disabled={isProcessing || isImporting}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow cursor-pointer shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>
+                  متابعة فحص الدفعة التالية ({batchLimit ? Math.min(batchLimit, scanStats.pendingCount) : scanStats.pendingCount} كتاب متبقي)
+                </span>
+              </button>
+            )}
           </div>
         )}
 
@@ -325,30 +382,77 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
         <div className="p-5 border-b border-slate-800 bg-slate-950/30 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
             {/* Direct Folder Path Input */}
-            <div className="md:col-span-7 flex items-center gap-2 bg-slate-900 border border-slate-800 focus-within:border-emerald-500 rounded-2xl px-3.5 py-2">
-              <FolderOpen className="w-4 h-4 text-emerald-400 shrink-0" />
-              <div className="flex-1">
-                <label className="text-[10px] text-slate-400 block">مسار المجلد على الخادم أو اترك فارغاً لاستخدام مسار الإعدادات المعتمد:</label>
-                <input
-                  type="text"
-                  value={folderPathInput}
-                  onChange={(e) => setFolderPathInput(e.target.value)}
-                  placeholder="المسار المعتمد في إعدادات النظام (Digital Book Root URL)"
-                  className="w-full bg-transparent text-xs text-slate-200 outline-none font-mono"
-                />
+            <div className="md:col-span-7 flex flex-col gap-2 bg-slate-900 border border-slate-800 focus-within:border-emerald-500 rounded-2xl px-3.5 py-2.5">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div className="flex-1">
+                  <label className="text-[10px] text-slate-400 block">
+                    مسار المجلد على الخادم أو اترك فارغاً لاستخدام مسار الإعدادات المعتمد:
+                  </label>
+                  <input
+                    type="text"
+                    value={folderPathInput}
+                    onChange={(e) => setFolderPathInput(e.target.value)}
+                    placeholder="المسار المعتمد في إعدادات النظام (Digital Book Root URL)"
+                    className="w-full bg-transparent text-xs text-slate-200 outline-none font-mono"
+                  />
+                </div>
+                <button
+                  onClick={handleScanDirectory}
+                  disabled={isProcessing || isImporting}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {isProcessing ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                  <span>فحص وتصنيف الخادم</span>
+                </button>
               </div>
-              <button
-                onClick={handleScanDirectory}
-                disabled={isProcessing || isImporting}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50 shrink-0"
-              >
-                {isProcessing ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5" />
-                )}
-                <span>فحص وتصنيف الخادم</span>
-              </button>
+
+              {/* Batch Limit Selector & Exclusion Option */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80 flex-wrap">
+                <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                  حجم الدفعة:
+                </span>
+                {[25, 50, 100].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setBatchLimit(num)}
+                    className={`px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      batchLimit === num
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                    }`}
+                  >
+                    {num} كتاب
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setBatchLimit(undefined)}
+                  className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    batchLimit === undefined
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                  }`}
+                >
+                  فحص الكل دفعة واحدة
+                </button>
+
+                <label className="mr-auto flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={excludeImported}
+                    onChange={(e) => setExcludeImported(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-emerald-500 rounded cursor-pointer"
+                  />
+                  <span>استبعاد الكتب المستوردة مسبقاً (متابعة الدفعات)</span>
+                </label>
+              </div>
             </div>
 
             {/* Direct Multi-file Browse buttons */}
@@ -390,6 +494,31 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Progressive Scan Stats Bar */}
+          {scanStats && (
+            <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 flex-wrap gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-slate-400">
+                  إجمالي ملفات المجلد: <strong className="text-slate-200 font-mono">{scanStats.totalInFolder}</strong>
+                </span>
+                <span className="text-slate-400">
+                  مستورد سابقاً: <strong className="text-sky-400 font-mono">{scanStats.alreadyImportedCount}</strong>
+                </span>
+                <span className="text-slate-400">
+                  متبقٍ للاستيراد: <strong className="text-amber-400 font-mono">{scanStats.pendingCount}</strong>
+                </span>
+                <span className="text-slate-400">
+                  معروض في هذه الدفعة للمراجعة: <strong className="text-emerald-400 font-mono">{stagedBooks.length}</strong>
+                </span>
+              </div>
+              {scanStats.hasMore && (
+                <span className="text-[11px] bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded border border-amber-500/20">
+                  توجد دفعات تالية للمراجعة ({scanStats.remainingCount} كتاب متبقٍ)
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Staged Books Table / Review area */}
@@ -517,6 +646,14 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                               onChange={(e) => handleUpdateBook(book.tempId, { author: e.target.value })}
                               className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-2 py-1 text-slate-300 outline-none disabled:opacity-50"
                             />
+                            {book.authorDetectedFrom === 'document' && (
+                              <div className="flex items-center gap-1 mt-1 text-[10px] text-sky-400 font-sans" title="تم استخراج اسم المؤلف تلقائياً بدقة من الصفحة الأولى/الثانية للكتاب">
+                                <BookOpen className="w-3 h-3 shrink-0 text-sky-400" />
+                                <span className="bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                                  مستخرج من صفحة الكتاب
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="p-3">
                             <select
