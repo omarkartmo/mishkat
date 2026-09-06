@@ -432,4 +432,19 @@ describe('Phase 15.4-E: Source of Truth, Capability Classification & Server Down
       })
     ).rejects.toThrow('FILE_NOT_FOUND');
   });
+
+  afterAll(async () => {
+    if (mockServer) {
+      mockServer.close();
+    }
+    try {
+      const files = fs.readdirSync(serverConfig.dirs.digital);
+      for (const f of files) {
+        if (f.startsWith('dig-sub-') || f.startsWith('dig-upload-')) {
+          try { fs.unlinkSync(path.join(serverConfig.dirs.digital, f)); } catch {}
+        }
+      }
+    } catch {}
+    await db.query("DELETE FROM books WHERE id LIKE 'dig-sub-%' OR id LIKE 'dig-upload-%'");
+  });
 });

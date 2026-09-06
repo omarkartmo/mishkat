@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { Express } from 'express';
 import path from 'path';
@@ -1082,6 +1082,11 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3 & 15.3.1)', () => 
     const hasManual = res.body.data.some((b: any) => b.type === 'manual');
     expect(hasManual).toBe(true);
     expect(hasPreRestore).toBe(true);
+  });
+
+  afterAll(async () => {
+    const testPdfPath = path.resolve('LibraryData/books/digital/test-reader-sample.pdf');
+    try { if (fs.existsSync(testPdfPath)) fs.unlinkSync(testPdfPath); } catch {}
   });
 });
 

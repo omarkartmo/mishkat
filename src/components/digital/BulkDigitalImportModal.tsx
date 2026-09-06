@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
   FolderUp,
   FileUp,
+  Folder,
   Sparkles,
   CheckCircle2,
   AlertCircle,
@@ -33,6 +34,8 @@ interface BulkDigitalImportModalProps {
 export interface StagedBookItem {
   tempId: string;
   originalFileName: string;
+  folderName?: string | null;
+  detectedFrom?: 'folder' | 'file';
   stagedFilePath: string;
   format: 'pdf' | 'epub';
   fileSizeMb: number;
@@ -85,11 +88,15 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
 
     try {
       const formData = new FormData();
+      const relativePathsMap: Record<string, string> = {};
       let count = 0;
       Array.from(files).forEach((file) => {
         const ext = file.name.split('.').pop()?.toLowerCase();
         if (ext === 'pdf' || ext === 'epub') {
           formData.append('files', file);
+          if (file.webkitRelativePath) {
+            relativePathsMap[file.name] = file.webkitRelativePath;
+          }
           count++;
         }
       });
@@ -98,6 +105,10 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
         setErrorMessage('لم يتم العثور على أي ملفات بصيغة PDF أو EPUB صالحة.');
         setIsProcessing(false);
         return;
+      }
+
+      if (Object.keys(relativePathsMap).length > 0) {
+        formData.append('relativePaths', JSON.stringify(relativePathsMap));
       }
 
       const res = await bookRepository.bulkStageFiles(formData);
@@ -478,8 +489,16 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                             book.isDuplicate ? 'opacity-60 bg-rose-950/10' : ''
                           }`}
                         >
-                          <td className="p-3 font-mono text-[11px] text-slate-400 max-w-[160px] truncate" title={book.originalFileName}>
-                            {book.originalFileName}
+                          <td className="p-3 font-mono text-[11px] text-slate-400 max-w-[200px]" title={book.originalFileName}>
+                            <div className="truncate font-medium text-slate-300">{book.originalFileName}</div>
+                            {book.detectedFrom === 'folder' && book.folderName && (
+                              <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-400 font-sans" title={`تم اعتماد اسم المجلد الحاضن كعنوان للكتاب: ${book.folderName}`}>
+                                <Folder className="w-3 h-3 shrink-0 text-emerald-400" />
+                                <span className="truncate bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                  {book.folderName}
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="p-3">
                             <input

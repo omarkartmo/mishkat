@@ -731,16 +731,22 @@ export default function App() {
     }
   };
 
-  const handleDeletePhysicalBook = async (id: string) => {
+  const handleDeletePhysicalBook = async (
+    id: string,
+    options?: { copiesCount?: number; reason?: string }
+  ) => {
     try {
-      const res = await bookRepository.deleteBook(id);
+      const res = await bookRepository.deleteBook(id, options);
       if (res.success) {
-        await loadBooks();
+        await Promise.all([loadBooks(), loadLoans(), loadLoanRequests(), loadFavorites()]);
+        return { success: true, message: res.data?.message };
       } else {
-        alert(res.error?.message || 'فشل حذف الكتاب من الخادم المركزي.');
+        alert(res.error?.message || 'فشل تنفيذ العملية في الخادم المركزي.');
+        return { success: false, message: res.error?.message };
       }
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء حذف الكتاب.');
+      alert(err.message || 'حدث خطأ أثناء معالجة الطلب.');
+      return { success: false, message: err.message };
     }
   };
 
@@ -1567,6 +1573,7 @@ export default function App() {
               onNavigateTab={handleNavigateToTab}
               onAddDigitalBook={handleAddDigitalBook}
               onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
+              onDeletePhysicalBook={handleDeletePhysicalBook}
             />
           )}
 

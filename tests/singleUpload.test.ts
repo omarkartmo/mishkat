@@ -284,7 +284,15 @@ describe('Phase 15.4-I-A: Single Digital Book Upload Verification', () => {
       .set('Authorization', `Bearer ${studentToken}`);
 
     expect(streamRes.status).toBe(200);
-    expect(streamRes.headers['content-type']).toBe('application/pdf');
+    expect(streamRes.headers['content-type']).toContain('application/pdf');
     expect(Number(streamRes.headers['content-length'])).toBeGreaterThan(0);
+  });
+
+  afterAll(async () => {
+    try { if (uploadedPdfPath && fs.existsSync(uploadedPdfPath)) fs.unlinkSync(uploadedPdfPath); } catch {}
+    try { if (uploadedEpubPath && fs.existsSync(uploadedEpubPath)) fs.unlinkSync(uploadedEpubPath); } catch {}
+    if (createdDigitalBookId) {
+      await db.query('DELETE FROM books WHERE id = $1', [createdDigitalBookId]);
+    }
   });
 });

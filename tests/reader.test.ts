@@ -16,7 +16,7 @@
  * 11. Path traversal security prevents access outside digital storage
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { Express } from 'express';
 import fs from 'fs';
@@ -211,5 +211,114 @@ describe('Digital Library Reader & Streaming Architecture (Phase 15.4-F)', () =>
     const headerStr = JSON.stringify(res.headers);
     expect(headerStr).not.toContain('C:\\');
     expect(headerStr).not.toContain('/projects/mishkat');
+  });
+
+  it('11. When custom digitalBookRootUrl is set, files inside custom root are served', async () => {
+    const customDir = path.join(process.cwd(), 'LibraryData', 'scratch_test_root');
+    fs.mkdirSync(customDir, { recursive: true });
+    const customFileName = 'custom-book-sample.pdf';
+    const customFilePath = path.join(customDir, customFileName);
+    fs.writeFileSync(customFilePath, '%PDF-1.4\nCustom book sample content\n%%EOF', 'utf8');
+
+    // Configure digitalBookRootUrl
+    await db.query(`
+      INSERT INTO system_settings (key, value)
+      VALUES ('library_config', $1)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    `, [JSON.stringify({ digitalBookRootUrl: customDir })]);
+
+    // Insert book with only filename or pointing to custom book
+    const customBookId = 'book-custom-root-01';
+    await db.query(`
+      INSERT INTO books (
+        id, type, title, author, category_id, format, file_size, file_url, pages_count, uploaded_by
+      ) VALUES ($1, 'digital', 'كتاب المسار المخصص', 'مؤلف تجريبي', 'cat-science', 'pdf', '1 MB', $2, 50, 'admin-001')
+      ON CONFLICT (id) DO UPDATE SET file_url = EXCLUDED.file_url;
+    `, [customBookId, `/api/v1/books/files/digital/${customFileName}`]);
+
+    const res = await request(app)
+      .get(`/api/v1/books/${customBookId}/file`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+
+    // Clean up scratch file
+    try { fs.unlinkSync(customFilePath); } catch {}
+    try { fs.rmdirSync(customDir); } catch {}
+  });
+
+  it('12. When custom digitalBookRootUrl is set, books absent from custom root return 404 (no silent fallback to default directory)', async () => {
+    const emptyCustomDir = path.join(process.cwd(), 'LibraryData', 'empty_custom_root');
+    fs.mkdirSync(emptyCustomDir, { recursive: true });
+
+    // Point digitalBookRootUrl to this empty directory
+    await db.query(`
+      INSERT INTO system_settings (key, value)
+      VALUES ('library_config', $1)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    `, [JSON.stringify({ digitalBookRootUrl: emptyCustomDir })]);
+
+    // testPdfId exists in default directory (serverConfig.dirs.digital) but NOT in emptyCustomDir
+    const res = await request(app)
+      .get(`/api/v1/books/${testPdfId}/file`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    // Must return 404 and NOT silently open from default directory
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('FILE_NOT_FOUND');
+
+    // Clean up empty directory
+    try { fs.rmdirSync(emptyCustomDir); } catch {}
+  });
+
+  it('13. Deleting a digital book via DELETE /:id physically unlinks the file from disk', async () => {
+    // Reset digitalBookRootUrl to default
+    await db.query(`
+      INSERT INTO system_settings (key, value)
+      VALUES ('library_config', $1)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    `, [JSON.stringify({ digitalBookRootUrl: 'LibraryData/books/digital' })]);
+
+    // Create a temporary file in digital directory
+    const deleteTestId = 'book-delete-file-test-99';
+    const deleteFilename = 'to-be-deleted-file.pdf';
+    const deleteFilePath = path.join(serverConfig.dirs.digital, deleteFilename);
+    fs.writeFileSync(deleteFilePath, '%PDF-1.4\nDelete test content\n%%EOF', 'utf8');
+    expect(fs.existsSync(deleteFilePath)).toBe(true);
+
+    await db.query(`
+      INSERT INTO books (
+        id, type, title, author, category_id, format, file_size, file_url, file_path, pages_count, uploaded_by
+      ) VALUES ($1, 'digital', 'كتاب اختبار الحذف الفيزيائي', 'مؤلف', 'cat-science', 'pdf', '1 MB', $2, $3, 10, 'admin-001')
+      ON CONFLICT (id) DO UPDATE SET file_path = EXCLUDED.file_path, file_url = EXCLUDED.file_url;
+    `, [deleteTestId, `/api/v1/books/files/digital/${deleteFilename}`, deleteFilePath]);
+
+    // Delete the book as Admin
+    const delRes = await request(app)
+      .delete(`/api/v1/books/${deleteTestId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(delRes.status).toBe(200);
+    expect(delRes.body.success).toBe(true);
+
+    // Physically verify file is UNLINKED from disk
+    expect(fs.existsSync(deleteFilePath)).toBe(false);
+
+    // Verify DB record is removed
+    const { rows } = await db.query('SELECT id FROM books WHERE id = $1', [deleteTestId]);
+    expect(rows.length).toBe(0);
+  });
+
+  afterAll(async () => {
+    // Clean up sample test files created by tests in serverConfig.dirs.digital
+    const testPdfPath = path.join(serverConfig.dirs.digital, testPdfFilename);
+    const testEpubPath = path.join(serverConfig.dirs.digital, testEpubFilename);
+    try { if (fs.existsSync(testPdfPath)) fs.unlinkSync(testPdfPath); } catch {}
+    try { if (fs.existsSync(testEpubPath)) fs.unlinkSync(testEpubPath); } catch {}
+
+    // Clean up database test rows
+    await db.query("DELETE FROM books WHERE id LIKE 'book-dig-reader-%' OR id LIKE 'book-custom-%' OR id LIKE 'book-traversal-%' OR id = 'book-delete-file-test-99'");
   });
 });

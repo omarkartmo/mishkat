@@ -75,36 +75,185 @@ const uploadStaging = multer({
 function isWithinDirectory(targetPath: string, parentDir: string): boolean {
   const resolvedTarget = path.resolve(targetPath);
   const resolvedParent = path.resolve(parentDir);
-  const relative = path.relative(resolvedParent, resolvedTarget);
+  const relative = path.relative(resolvedParent.toLowerCase(), resolvedTarget.toLowerCase());
   return !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+// Helper to resolve digital storage directories and configured root URL (Section 19)
+async function getDigitalStorageContext(): Promise<{
+  allowedDirs: string[];
+  customRoot: string | null;
+  defaultDir: string;
+  hasCustomRoot: boolean;
+}> {
+  const defaultDir = path.resolve(serverConfig.dirs.digital);
+  const allowedDirs: string[] = [
+    defaultDir,
+    path.resolve(serverConfig.dirs.books),
+    path.resolve(stagingDir),
+  ];
+
+  let customRoot: string | null = null;
+  try {
+    const { rows } = await db.query("SELECT value FROM system_settings WHERE key = 'library_config' LIMIT 1");
+    if (rows.length > 0) {
+      const val = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value;
+      if (val?.digitalBookRootUrl && typeof val.digitalBookRootUrl === 'string' && val.digitalBookRootUrl.trim()) {
+        const trimmed = val.digitalBookRootUrl.trim();
+        const rootPath = path.isAbsolute(trimmed)
+          ? trimmed
+          : path.join(process.cwd(), trimmed);
+        customRoot = path.resolve(rootPath);
+        allowedDirs.push(customRoot);
+      }
+    }
+  } catch {}
+
+  const hasCustomRoot = !!(customRoot && path.normalize(customRoot).toLowerCase() !== path.normalize(defaultDir).toLowerCase());
+
+  return { allowedDirs, customRoot, defaultDir, hasCustomRoot };
 }
 
 // Helper to extract clean Title & Author from filename patterns (Section 23 Requirement)
 function extractTitleAndAuthor(filename: string): { title: string; author: string } {
-  const base = path.basename(filename, path.extname(filename))
+  const rawBase = path.basename(filename, path.extname(filename)).trim();
+
+  // Pattern: "العنوان - المؤلف"
+  if (rawBase.includes(' - ')) {
+    const parts = rawBase.split(' - ');
+    const title = parts[0].replace(/_/g, ' ').trim();
+    const author = parts.slice(1).join(' - ').replace(/_/g, ' ').trim();
+    return { title: title || 'بدون عنوان', author: author || 'مؤلف غير محدد' };
+  }
+  if (rawBase.includes(' للشيخ ')) {
+    const parts = rawBase.split(' للشيخ ');
+    return { title: parts[0].replace(/[_-]/g, ' ').trim(), author: `الشيخ ${parts[1].replace(/[_-]/g, ' ').trim()}` };
+  }
+  if (rawBase.includes(' تأليف ')) {
+    const parts = rawBase.split(' تأليف ');
+    return { title: parts[0].replace(/[_-]/g, ' ').trim(), author: parts[1].replace(/[_-]/g, ' ').trim() };
+  }
+  if (rawBase.includes(' تحقيق ')) {
+    const parts = rawBase.split(' تحقيق ');
+    return { title: parts[0].replace(/[_-]/g, ' ').trim(), author: `تحقيق ${parts[1].replace(/[_-]/g, ' ').trim()}` };
+  }
+
+  const base = rawBase
     .replace(/[_-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Pattern: "العنوان - المؤلف" or "العنوان للشيخ المؤلف" or "العنوان تأليف المؤلف"
-  if (base.includes(' - ')) {
-    const parts = base.split(' - ');
-    return { title: parts[0].trim(), author: parts.slice(1).join(' ').trim() };
-  }
-  if (base.includes(' للشيخ ')) {
-    const parts = base.split(' للشيخ ');
-    return { title: parts[0].trim(), author: `الشيخ ${parts[1].trim()}` };
-  }
-  if (base.includes(' تأليف ')) {
-    const parts = base.split(' تأليف ');
-    return { title: parts[0].trim(), author: parts[1].trim() };
-  }
-  if (base.includes(' تحقيق ')) {
-    const parts = base.split(' تحقيق ');
-    return { title: parts[0].trim(), author: `تحقيق ${parts[1].trim()}` };
+  return { title: base, author: 'مؤلف غير محدد' };
+}
+
+// Generic folder names to ignore when extracting titles
+const GENERIC_FOLDER_NAMES = new Set([
+  'pdf', 'epub', 'digital', 'books', 'ebooks', 'files', 'temp', 'tmp',
+  'downloads', 'new folder', 'مجلد جديد', 'كتب', 'ملفات', 'تحميل', 'المكتبة'
+]);
+
+// Helper to detect if a file name is random, generic, numeric, or hash-like
+function isRandomOrGenericFileName(baseName: string): boolean {
+  const clean = baseName.trim();
+  if (!clean) return true;
+
+  // 1. Pure numbers/digits (e.g. "12345", "987654321")
+  if (/^\d+$/.test(clean)) return true;
+
+  // 2. Hexadecimal hash (e.g. MD5, SHA, 8+ hex chars: "a94f29bc", "4f8a3c9b21")
+  if (/^[0-9a-fA-F]{8,}$/.test(clean)) return true;
+
+  // 3. UUID / GUID (e.g. "c9bf9e57-1685-4c89-bafb-ff5af830be8a")
+  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(clean)) return true;
+
+  // 4. Common generic filenames
+  const genericNames = [
+    'book', 'document', 'file', 'download', 'output', 'scan', 'content', 'main', 'text',
+    'ebook', 'pdf', 'epub', 'final', 'print', 'temp', 'untitled', 'doc', 'sample', 'preview',
+    'كتاب', 'ملف', 'مستند', 'تحميل', 'نسخة', 'بدون عنوان', 'مطبوع'
+  ];
+  if (genericNames.includes(clean.toLowerCase())) return true;
+
+  // 5. Generic prefixes with numbers (e.g. "book_1", "doc-12", "file_001", "scan_1")
+  if (/^(book|doc|file|scan|download|temp|ebook|output|كتاب|ملف|مستند)[_-]?\d+$/i.test(clean)) return true;
+
+  // 6. Random alphanumeric string without spaces or Arabic characters
+  if (/^[a-zA-Z0-9_-]{1,24}$/.test(clean) && !/[\u0600-\u06FF]/.test(clean)) {
+    const hasDigits = /\d/.test(clean);
+    const hasLetters = /[a-zA-Z]/.test(clean);
+    // Mixed letters and digits (e.g. "f83b2a9e", "k92m10", "doc12a")
+    if (hasDigits && hasLetters) return true;
+    // Very short without spaces (<= 4 chars)
+    if (clean.length <= 4) return true;
   }
 
-  return { title: base, author: 'مؤلف غير محدد' };
+  return false;
+}
+
+// Helper to check whether a book in a subfolder should adopt its parent folder name as title
+function shouldAdoptFolderNameAsTitle(
+  filePath: string,
+  rootDir: string
+): { adopt: boolean; folderName: string | null } {
+  const parentDir = path.dirname(filePath);
+  const resolvedParent = path.resolve(parentDir);
+  const resolvedRoot = path.resolve(rootDir);
+
+  // If file is not in a subfolder beneath root, do not adopt
+  if (resolvedParent === resolvedRoot || !resolvedParent.startsWith(resolvedRoot)) {
+    return { adopt: false, folderName: null };
+  }
+
+  const folderName = path.basename(parentDir).trim();
+  if (!folderName || GENERIC_FOLDER_NAMES.has(folderName.toLowerCase())) {
+    return { adopt: false, folderName: null };
+  }
+
+  // Count how many digital book files are in this parent folder
+  let booksInFolder = 0;
+  try {
+    const entries = fs.readdirSync(parentDir);
+    for (const entry of entries) {
+      const ext = path.extname(entry).toLowerCase();
+      if (['.pdf', '.epub'].includes(ext)) {
+        booksInFolder++;
+      }
+    }
+  } catch {
+    return { adopt: false, folderName: null };
+  }
+
+  // Only adopt if the folder is dedicated to this book (has exactly 1 digital book)
+  if (booksInFolder !== 1) {
+    return { adopt: false, folderName: null };
+  }
+
+  const fileName = path.basename(filePath);
+  const baseName = path.basename(fileName, path.extname(fileName));
+
+  // Condition 1: File name is recognized as random or generic
+  if (isRandomOrGenericFileName(baseName)) {
+    return { adopt: true, folderName };
+  }
+
+  // Condition 2: Folder name has Arabic characters while filename does not
+  const folderHasArabic = /[\u0600-\u06FF]/.test(folderName);
+  const fileHasArabic = /[\u0600-\u06FF]/.test(baseName);
+  if (folderHasArabic && !fileHasArabic) {
+    return { adopt: true, folderName };
+  }
+
+  // Condition 3: Folder name has explicit title/author separators (e.g. " - ", " للشيخ ", " تأليف ")
+  if (folderName.includes(' - ') || folderName.includes(' للشيخ ') || folderName.includes(' تأليف ') || folderName.includes(' تحقيق ')) {
+    return { adopt: true, folderName };
+  }
+
+  // Condition 4: Folder name has spaces (multiple words) while filename is a single token
+  if (folderName.includes(' ') && !baseName.includes(' ') && !baseName.includes('_') && !baseName.includes('-')) {
+    return { adopt: true, folderName };
+  }
+
+  return { adopt: false, folderName: null };
 }
 
 // Automatic Classification Algorithm using MISHKAT Category Model (Section 24 Requirement)
@@ -118,7 +267,7 @@ function classifyBook(
 
   const rules: { keywords: string[]; catId: string; name: string; weight: number }[] = [
     {
-      keywords: ['فقه', 'عقيدة', 'شريعة', 'حديث', 'تفسير', 'قرآن', 'إباضي', 'سالمي', 'جيطالي', 'بخاري', 'مسلم', 'أصول', 'صلاة', 'زكاة', 'صوم', 'حج', 'وفاء', 'استقامة'],
+      keywords: ['فقه', 'عقيدة', 'شريعة', 'حديث', 'تفسير', 'قرآن', 'إباضي', 'سالمي', 'جيطالي', 'بخاري', 'مسلم', 'أصول', 'صلاة', 'زكاة', 'صوم', 'حج', 'وفاء', 'استقامة', 'سنة', 'نووي', 'صالحين', 'أذكار', 'دعاء'],
       catId: 'cat-islamic',
       name: 'العلوم الشرعية',
       weight: 40,
@@ -178,40 +327,70 @@ function classifyBook(
 
 // Helper to resolve digital book file path safely across local, digital dirs and configured root URL (Section 17 & 19 Requirement)
 async function resolveDigitalBookFilePath(book: any): Promise<string | null> {
-  const allowedDirectories: string[] = [
-    serverConfig.dirs.digital,
-    serverConfig.dirs.books,
-    stagingDir,
-  ];
+  const { allowedDirs, customRoot, defaultDir, hasCustomRoot } = await getDigitalStorageContext();
 
-  // Check admin configured digital root URL (Section 19 Requirement)
-  try {
-    const { rows } = await db.query("SELECT value FROM system_settings WHERE key = 'library_config' LIMIT 1");
-    if (rows.length > 0) {
-      const val = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value;
-      if (val?.digitalBookRootUrl) {
-        const rootPath = path.isAbsolute(val.digitalBookRootUrl)
-          ? val.digitalBookRootUrl
-          : path.join(process.cwd(), val.digitalBookRootUrl);
-        allowedDirectories.push(path.resolve(rootPath));
+  const rawNames: string[] = [];
+  if (book.file_path) {
+    rawNames.push(path.basename(book.file_path));
+  }
+  if (book.file_url) {
+    const bname = path.basename(book.file_url);
+    try {
+      rawNames.push(decodeURIComponent(bname));
+    } catch {}
+    rawNames.push(bname);
+  }
+  if (book.title && book.format) {
+    rawNames.push(`${book.title.trim()}.${book.format.trim()}`);
+  }
+  if (book.id && book.format) {
+    rawNames.push(`${book.id}.${book.format.trim()}`);
+  }
+  const fileNames = Array.from(new Set(rawNames.filter(Boolean)));
+
+  // Case 1: An authoritative custom root directory is configured by the admin (Section 19)
+  // When a custom directory is active, books must be retrieved from that directory.
+  // We do NOT silently fall back to the old default folder if a file does not exist in the custom root.
+  if (hasCustomRoot && customRoot) {
+    // 1. Check direct candidates inside the custom root
+    for (const fname of fileNames) {
+      const cand = path.join(customRoot, fname);
+      if (fs.existsSync(cand) && isWithinDirectory(cand, customRoot)) {
+        return path.resolve(cand);
       }
     }
-  } catch {}
 
+    // 2. If book.file_path is an absolute path explicitly within the custom root
+    if (book.file_path && path.isAbsolute(book.file_path)) {
+      const resolved = path.resolve(book.file_path);
+      if (fs.existsSync(resolved) && isWithinDirectory(resolved, customRoot)) {
+        return resolved;
+      }
+    }
+
+    // 3. Staging directory for newly uploaded/staged books awaiting finalize
+    if (book.file_path && isWithinDirectory(book.file_path, stagingDir) && fs.existsSync(book.file_path)) {
+      return path.resolve(book.file_path);
+    }
+
+    // File was not found in the configured custom repository
+    return null;
+  }
+
+  // Case 2: Standard default storage (LibraryData/books/digital)
   const candidates: string[] = [];
 
   if (book.file_path) {
     if (path.isAbsolute(book.file_path)) {
       candidates.push(book.file_path);
     } else {
-      candidates.push(path.join(serverConfig.dirs.digital, path.basename(book.file_path)));
-      candidates.push(path.join(serverConfig.dirs.digital, book.file_path));
+      candidates.push(path.join(defaultDir, path.basename(book.file_path)));
+      candidates.push(path.join(defaultDir, book.file_path));
     }
   }
 
-  if (book.file_url) {
-    const fname = path.basename(book.file_url);
-    candidates.push(path.join(serverConfig.dirs.digital, fname));
+  for (const fname of fileNames) {
+    candidates.push(path.join(defaultDir, fname));
     candidates.push(path.join(serverConfig.dirs.books, fname));
     candidates.push(path.join(stagingDir, fname));
   }
@@ -219,12 +398,10 @@ async function resolveDigitalBookFilePath(book: any): Promise<string | null> {
   for (const cand of candidates) {
     const resolved = path.resolve(cand);
     if (fs.existsSync(resolved)) {
-      // Check if file is within allowed digital directories
-      const isAllowed = allowedDirectories.some((dir) => isWithinDirectory(resolved, dir));
+      const isAllowed = allowedDirs.some((dir) => isWithinDirectory(resolved, dir));
       if (isAllowed) {
         return resolved;
       } else {
-        // Explicitly marked as forbidden path outside digital storage
         return '__FORBIDDEN_PATH__';
       }
     }
@@ -345,9 +522,20 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
 
     const { rows: categories } = await db.query('SELECT id, name FROM categories ORDER BY name ASC');
 
+    // Optional relativePaths passed when uploading entire folders via webkitdirectory
+    let relativePathsMap: Record<string, string> = {};
+    if (req.body.relativePaths) {
+      try {
+        relativePathsMap = typeof req.body.relativePaths === 'string'
+          ? JSON.parse(req.body.relativePaths)
+          : req.body.relativePaths;
+      } catch {}
+    }
+
     const stagedResults: any[] = [];
 
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       const ext = path.extname(file.originalname).toLowerCase().replace('.', '') as 'pdf' | 'epub';
       const stagedFilePath = file.path;
 
@@ -356,11 +544,38 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
       const hash = crypto.createHash('sha256').update(buffer).digest('hex');
       const sizeMb = Number((file.size / (1024 * 1024)).toFixed(2));
 
-      // Extract title & author
-      const { title, author } = extractTitleAndAuthor(file.originalname);
+      // Check if relative path was provided (e.g. from folder upload) and has a meaningful parent folder
+      const relPath = relativePathsMap[file.originalname] || relativePathsMap[String(i)] || '';
+      let adoptFolder = false;
+      let folderName: string | null = null;
+
+      if (relPath) {
+        const parts = relPath.replace(/\\/g, '/').split('/').filter(Boolean);
+        if (parts.length > 1) {
+          const candidateFolder = parts[parts.length - 2].trim();
+          if (candidateFolder && !GENERIC_FOLDER_NAMES.has(candidateFolder.toLowerCase())) {
+            const baseName = path.basename(file.originalname, path.extname(file.originalname));
+            if (
+              isRandomOrGenericFileName(baseName) ||
+              (/[\u0600-\u06FF]/.test(candidateFolder) && !/[\u0600-\u06FF]/.test(baseName)) ||
+              candidateFolder.includes(' - ') ||
+              candidateFolder.includes(' للشيخ ') ||
+              candidateFolder.includes(' تأليف ') ||
+              (candidateFolder.includes(' ') && !baseName.includes(' '))
+            ) {
+              adoptFolder = true;
+              folderName = candidateFolder;
+            }
+          }
+        }
+      }
+
+      // Extract title & author from folder name if adopted, otherwise from file name
+      const sourceName = adoptFolder && folderName ? folderName : file.originalname;
+      const { title, author } = extractTitleAndAuthor(sourceName);
 
       // Automatic classification (Section 24)
-      const { categoryId, categoryName, confidence } = classifyBook(title, author, file.originalname, categories);
+      const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceName, categories);
 
       // Duplicate detection (Section 26)
       const { rows: dupHashRows } = await db.query('SELECT id, title FROM books WHERE file_hash = $1 LIMIT 1', [hash]);
@@ -372,6 +587,8 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
       stagedResults.push({
         tempId: path.basename(file.filename, path.extname(file.filename)),
         originalFileName: file.originalname,
+        folderName: folderName || null,
+        detectedFrom: adoptFolder ? 'folder' : 'file',
         stagedFilePath,
         format: ext,
         fileSizeMb: sizeMb,
@@ -385,7 +602,9 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
         isDuplicate,
         duplicateReason,
         pages: Math.max(50, Math.round(sizeMb * 45)),
-        summary: `كتاب رقمي تم استخراجه وفرزه آلياً من الملف المرفوع: ${file.originalname}`,
+        summary: adoptFolder
+          ? `كتاب رقمي تم اعتماد عنوانه من اسم المجلد (${folderName}): ${file.originalname}`
+          : `كتاب رقمي تم استخراجه وفرزه آلياً من الملف المرفوع: ${file.originalname}`,
       });
     }
 
@@ -462,8 +681,12 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
       const buffer = fs.readFileSync(filePath);
       const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-      const { title, author } = extractTitleAndAuthor(fileName);
-      const { categoryId, categoryName, confidence } = classifyBook(title, author, fileName, categories);
+      // Check whether to adopt parent folder name as title/author
+      const { adopt: adoptFolder, folderName } = shouldAdoptFolderNameAsTitle(filePath, resolvedDir);
+      const sourceNameForMeta = adoptFolder && folderName ? folderName : fileName;
+
+      const { title, author } = extractTitleAndAuthor(sourceNameForMeta);
+      const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceNameForMeta, categories);
 
       const { rows: dupHashRows } = await db.query('SELECT id, title FROM books WHERE file_hash = $1 LIMIT 1', [hash]);
       const isDuplicate = dupHashRows.length > 0;
@@ -471,6 +694,8 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
       scannedResults.push({
         tempId: `scan-${hash.substring(0, 8)}`,
         originalFileName: fileName,
+        folderName: folderName || null,
+        detectedFrom: adoptFolder ? 'folder' : 'file',
         stagedFilePath: filePath,
         format: ext,
         fileSizeMb: sizeMb,
@@ -484,7 +709,9 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
         isDuplicate,
         duplicateReason: isDuplicate ? `موجود مسبقاً بنفس البصمة (${dupHashRows[0].title})` : null,
         pages: Math.max(50, Math.round(sizeMb * 45)),
-        summary: `كتاب رقمي تم اكتشافه من المجلد: ${path.relative(resolvedDir, filePath)}`,
+        summary: adoptFolder
+          ? `كتاب رقمي تم اعتماد عنوانه من اسم المجلد (${folderName}): ${path.relative(resolvedDir, filePath)}`
+          : `كتاب رقمي تم اكتشافه من المجلد: ${path.relative(resolvedDir, filePath)}`,
       });
     }
 
@@ -510,6 +737,9 @@ router.post('/bulk-import', authenticateToken, requireRole('admin', 'librarian')
   }
 
   try {
+    const { allowedDirs, customRoot, defaultDir, hasCustomRoot } = await getDigitalStorageContext();
+    const destinationDir = (hasCustomRoot && customRoot) ? customRoot : defaultDir;
+
     let importedCount = 0;
     let skippedCount = 0;
     let failedCount = 0;
@@ -573,7 +803,7 @@ router.post('/bulk-import', authenticateToken, requireRole('admin', 'librarian')
           // Move or copy file to permanent digital storage directory (Section 20 & 27)
           const bookId = `dig-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
           const finalFileName = `${bookId}.${format}`;
-          const finalFilePath = path.join(serverConfig.dirs.digital, finalFileName);
+          const finalFilePath = path.join(destinationDir, finalFileName);
 
           try {
             if (stagedFilePath.includes(stagingDir)) {
@@ -821,31 +1051,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'librarian'), async (
   }
 });
 
-// DELETE /api/v1/books/:id
-router.delete('/:id', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
-  const { id } = req.params;
-  try {
-    const { rows: activeLoans } = await db.query(
-      "SELECT id FROM loans WHERE book_id = $1 AND status != 'returned'",
-      [id]
-    );
-    if (activeLoans.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'ACTIVE_LOANS_EXIST',
-          message: `لا يمكن حذف هذا الكتاب لوجود ${activeLoans.length} عملية إعارة نشطة مرتبطة به حالياً.`,
-        },
-      });
-    }
 
-    await db.query('DELETE FROM books WHERE id = $1', [id]);
-    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'DELETE_BOOK', 'book', id, null, req);
-    res.json({ success: true, data: { message: 'تم حذف الكتاب من الخادم المركزي بنجاح.' } });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
-  }
-});
 
 // POST /api/v1/books/upload (Multer Single Upload with strict validation & duplicate safety)
 router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (req: Request, res: Response, next: NextFunction) => {
@@ -985,12 +1191,18 @@ router.get('/files/covers/:filename', optionalAuth, (req: Request, res: Response
 });
 
 // GET /api/v1/books/files/digital/:filename
-router.get('/files/digital/:filename', authenticateToken, (req: Request, res: Response) => {
+router.get('/files/digital/:filename', authenticateToken, async (req: Request, res: Response) => {
   const safeFilename = path.basename(req.params.filename);
-  const targetPath = path.join(serverConfig.dirs.digital, safeFilename);
+  const { allowedDirs, customRoot, defaultDir, hasCustomRoot } = await getDigitalStorageContext();
 
-  if (!isWithinDirectory(targetPath, serverConfig.dirs.digital) || !fs.existsSync(targetPath)) {
-    return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'الملف الرقمي غير موجود.' } });
+  let targetPath = path.join(defaultDir, safeFilename);
+  if (hasCustomRoot && customRoot) {
+    targetPath = path.join(customRoot, safeFilename);
+  }
+
+  const isAllowed = allowedDirs.some((dir) => isWithinDirectory(targetPath, dir));
+  if (!isAllowed || !fs.existsSync(targetPath)) {
+    return res.status(404).json({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'الملف الرقمي غير موجود في المستودع المحدد.' } });
   }
 
   const isViewer =
@@ -1041,10 +1253,10 @@ async function streamDigitalBook(req: Request, res: Response) {
       });
     }
 
-    // Path traversal check
-    const projectRoot = path.resolve(process.cwd());
-    const relative = path.relative(projectRoot, resolvedPath);
-    if (relative.startsWith('..') && !isWithinDirectory(resolvedPath, serverConfig.dirs.root)) {
+    // Path traversal check: verify path is within allowed digital storage directories
+    const { allowedDirs } = await getDigitalStorageContext();
+    const isAllowedPath = allowedDirs.some((dir) => isWithinDirectory(resolvedPath, dir));
+    if (!isAllowedPath) {
       return res.status(403).json({ success: false, error: { code: 'ACCESS_DENIED', message: 'مسار الملف غير مصرح به.' } });
     }
 
@@ -1154,10 +1366,10 @@ async function getDigitalBookContent(req: Request, res: Response) {
       });
     }
 
-    // Path traversal check
-    const projectRoot = path.resolve(process.cwd());
-    const relative = path.relative(projectRoot, resolvedPath);
-    if (relative.startsWith('..') && !isWithinDirectory(resolvedPath, serverConfig.dirs.root)) {
+    // Path traversal check: verify path is within allowed digital storage directories
+    const { allowedDirs } = await getDigitalStorageContext();
+    const isAllowedPath = allowedDirs.some((dir) => isWithinDirectory(resolvedPath, dir));
+    if (!isAllowedPath) {
       return res.status(403).json({ success: false, error: { code: 'ACCESS_DENIED', message: 'مسار الملف غير مصرح به.' } });
     }
 
@@ -1194,10 +1406,159 @@ router.post('/:id/increment-read', optionalAuth, async (req: Request, res: Respo
   }
 });
 
-// DELETE /api/v1/books/:id (Delete Physical or Digital Book - Admin & Librarian)
+// Helper: Reduce physical book copies (Missing/damaged copies retirement)
+async function handleReduceBookCopies(req: Request, res: Response, id: string, copiesCount: number, reason: string) {
+  const { rows } = await db.query('SELECT * FROM books WHERE id = $1 LIMIT 1', [id]);
+  if (rows.length === 0) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'BOOK_NOT_FOUND', message: 'الكتاب المطلوب غير موجود في الخادم المركزي.' },
+    });
+  }
+
+  const book = rows[0];
+  if (book.type !== 'physical') {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_OPERATION', message: 'خاصية تقليص أو استبعاد النسخ تنطبق على الكتب الورقية فقط.' },
+    });
+  }
+
+  if (copiesCount <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_COPIES_COUNT', message: 'يرجى تحديد عدد نسخ صحيح أكبر من صفر.' },
+    });
+  }
+
+  const availableCopies = book.available_copies ?? 0;
+  const totalCopies = book.total_copies ?? 1;
+
+  if (copiesCount > availableCopies) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INSUFFICIENT_AVAILABLE_COPIES',
+        message: `لا يمكن استبعاد ${copiesCount} نسخ؛ النسخ المتوفرة حالياً في المكتبة هي ${availableCopies} فقط (النسخ الأخرى قيد الاستعارة).`,
+      },
+    });
+  }
+
+  // If removing all copies, verify no active loans and delete entire book
+  if (copiesCount >= totalCopies) {
+    const activeLoans = await db.query(
+      "SELECT id FROM loans WHERE book_id = $1 AND status IN ('active', 'extended', 'overdue')",
+      [id]
+    );
+    if (activeLoans.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'HAS_ACTIVE_LOANS',
+          message: `لا يمكن حذف هذا الكتاب بالكامل لوجود ${activeLoans.rows.length} إعارة جارية أو متأخرة مرتبطة به.`,
+        },
+      });
+    }
+
+    await db.query('DELETE FROM loans WHERE book_id = $1', [id]);
+    await db.query('DELETE FROM books WHERE id = $1', [id]);
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'DELETE_BOOK',
+      'book',
+      id,
+      { title: book.title, type: 'physical', reason: 'REMOVED_ALL_COPIES' },
+      req
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        message: `تم استبعاد جميع نسخ كتاب "${book.title}" وحذفه بالكامل من الفهرس.`,
+        deletedEntireBook: true,
+        remainingTotal: 0,
+        remainingAvailable: 0,
+      },
+    });
+  }
+
+  // Otherwise, delete the requested number of available physical copies
+  await db.query(`
+    DELETE FROM physical_copies
+    WHERE id IN (
+      SELECT id FROM physical_copies
+      WHERE book_id = $1 AND status = 'available'
+      ORDER BY copy_number DESC
+      LIMIT $2
+    )
+  `, [id, copiesCount]);
+
+  const newTotal = totalCopies - copiesCount;
+  const newAvailable = availableCopies - copiesCount;
+
+  await db.query(`
+    UPDATE books
+    SET total_copies = $1,
+        available_copies = $2,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $3
+  `, [newTotal, newAvailable, id]);
+
+  await recordAuditLog(
+    req.user!.id,
+    req.user!.name,
+    req.user!.role,
+    'REDUCE_BOOK_COPIES',
+    'book',
+    id,
+    {
+      title: book.title,
+      copiesRemoved: copiesCount,
+      reason,
+      remainingTotal: newTotal,
+      remainingAvailable: newAvailable,
+    },
+    req
+  );
+
+  return res.json({
+    success: true,
+    data: {
+      message: `تم استبعاد ${copiesCount} نسخة من كتاب "${book.title}" بنجاح (${reason}). المتبقي في الفهرس: ${newTotal} نسخ (${newAvailable} متوفرة).`,
+      deletedEntireBook: false,
+      remainingTotal: newTotal,
+      remainingAvailable: newAvailable,
+    },
+  });
+}
+
+// POST /api/v1/books/:id/reduce-copies (Retire specific copies - Missing / Damaged)
+router.post('/:id/reduce-copies', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const copiesCount = Number(req.body?.copiesCount || req.query.copies || 1);
+  const reason = req.body?.reason || (req.query.reason as string) || 'استبعاد نسخة مفقودة أو تالفة من الجرد';
+  try {
+    return await handleReduceBookCopies(req, res, id, copiesCount, reason);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// DELETE /api/v1/books/:id (Delete Entire Book or Specific Copies - Admin & Librarian)
 router.delete('/:id', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
   const { id } = req.params;
+  const copiesCount = Number(req.query.copies || req.body?.copiesCount || 0);
+  const reason = (req.query.reason as string) || req.body?.reason || 'استبعاد نسخة مفقودة أو تالفة من الجرد';
+
   try {
+    // If copies parameter is provided and > 0, execute copy reduction workflow
+    if (copiesCount > 0) {
+      return await handleReduceBookCopies(req, res, id, copiesCount, reason);
+    }
+
     const { rows } = await db.query('SELECT * FROM books WHERE id = $1 LIMIT 1', [id]);
     if (rows.length === 0) {
       return res.status(404).json({
@@ -1225,15 +1586,42 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'librarian'), asyn
       }
     }
 
-    // If digital book, safely delete the physical file from disk if stored locally
-    if (book.type === 'digital' && book.file_path) {
+    // If digital book, safely delete the physical file from disk across active and default repositories
+    if (book.type === 'digital') {
       try {
-        const resolved = path.resolve(book.file_path);
-        if (
-          fs.existsSync(resolved) &&
-          (isWithinDirectory(resolved, serverConfig.dirs.digital) || isWithinDirectory(resolved, serverConfig.dirs.root))
-        ) {
-          fs.unlinkSync(resolved);
+        const { allowedDirs, defaultDir } = await getDigitalStorageContext();
+
+        // 1. Unlink primary resolved file on disk
+        const resolved = await resolveDigitalBookFilePath(book);
+        if (resolved && resolved !== '__FORBIDDEN_PATH__' && fs.existsSync(resolved)) {
+          const isAllowed = allowedDirs.some((dir) => isWithinDirectory(resolved, dir));
+          if (isAllowed) {
+            try { fs.unlinkSync(resolved); } catch {}
+          }
+        }
+
+        // 2. Also ensure cleanup from default digital directory if a local copy exists
+        const candidateNames = [
+          book.file_path ? path.basename(book.file_path) : null,
+          book.file_url ? path.basename(decodeURIComponent(book.file_url)) : null,
+          book.id && book.format ? `${book.id}.${book.format}` : null,
+          book.title && book.format ? `${book.title.trim()}.${book.format.trim()}` : null,
+        ].filter(Boolean) as string[];
+
+        for (const cName of candidateNames) {
+          const defaultPath = path.join(defaultDir, cName);
+          if (fs.existsSync(defaultPath) && isWithinDirectory(defaultPath, defaultDir)) {
+            try { fs.unlinkSync(defaultPath); } catch {}
+          }
+        }
+
+        // 3. Unlink local cover image if uploaded
+        if (book.cover_image && typeof book.cover_image === 'string' && book.cover_image.includes('/covers/')) {
+          const coverName = path.basename(decodeURIComponent(book.cover_image));
+          const coverPath = path.join(serverConfig.dirs.covers, coverName);
+          if (fs.existsSync(coverPath) && isWithinDirectory(coverPath, serverConfig.dirs.covers)) {
+            try { fs.unlinkSync(coverPath); } catch {}
+          }
         }
       } catch (fileErr) {
         console.warn('Notice: could not unlink digital file on disk:', fileErr);

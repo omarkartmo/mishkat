@@ -367,4 +367,19 @@ describe('MISHKAT — Phase 15.4-G: Retire Quick Explorer & Trusted Browsing/Sug
       expect(fileRes.body.toString()).toContain('%PDF-1.4');
     });
   });
+
+  afterAll(async () => {
+    if (mockServer) {
+      mockServer.close();
+    }
+    try {
+      const files = fs.readdirSync(serverConfig.dirs.digital);
+      for (const f of files) {
+        if (f.startsWith('dig-sub-') || f.startsWith('dig-upload-')) {
+          try { fs.unlinkSync(path.join(serverConfig.dirs.digital, f)); } catch {}
+        }
+      }
+    } catch {}
+    await db.query("DELETE FROM books WHERE id LIKE 'dig-sub-%' OR id LIKE 'dig-upload-%'");
+  });
 });

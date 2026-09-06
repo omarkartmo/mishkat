@@ -27,6 +27,10 @@ import {
   LayoutGrid,
   List,
   Eye,
+  Trash2,
+  AlertCircle,
+  MinusCircle,
+  PlusCircle,
 } from 'lucide-react';
 import {
   PhysicalBook,
@@ -62,6 +66,7 @@ interface SearchResultsViewProps {
   onNavigateTab?: (tab: NavigationTab) => void;
   onAddDigitalBook?: (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => void;
   onBulkAddDigitalBooks?: (books: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => void;
+  onDeletePhysicalBook?: (id: string, options?: { copiesCount?: number; reason?: string }) => Promise<any> | void;
 }
 
 const POPULAR_RESEARCH_TOPICS = [
@@ -92,6 +97,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   onNavigateTab,
   onAddDigitalBook,
   onBulkAddDigitalBooks,
+  onDeletePhysicalBook,
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [selectedMedium, setSelectedMedium] = useState<'all' | 'physical' | 'digital'>('all');
@@ -104,6 +110,20 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   // Modals for Digital Management
   const [isAddDigitalModalOpen, setIsAddDigitalModalOpen] = useState(false);
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
+  const [physicalBookToDelete, setPhysicalBookToDelete] = useState<PhysicalBook | null>(null);
+  const [deleteMode, setDeleteMode] = useState<'entire' | 'copies'>('copies');
+  const [copiesToRemove, setCopiesToRemove] = useState(1);
+  const [removalReason, setRemovalReason] = useState('نسخة مفقودة / ضائعة (لم يتم العثور عليها)');
+  const [customRemovalReason, setCustomRemovalReason] = useState('');
+  const [isDeletingPhysical, setIsDeletingPhysical] = useState(false);
+
+  const handleOpenDeleteModal = (book: PhysicalBook) => {
+    setPhysicalBookToDelete(book);
+    setDeleteMode(book.totalCopies > 1 ? 'copies' : 'entire');
+    setCopiesToRemove(1);
+    setRemovalReason('نسخة مفقودة / ضائعة (لم يتم العثور عليها)');
+    setCustomRemovalReason('');
+  };
 
   // Search filter logic
   const trimmedQuery = searchQuery.trim();
@@ -623,6 +643,16 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
+                      {currentUser.role === 'admin' && onDeletePhysicalBook && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDeleteModal(pBook)}
+                          className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-xl transition-colors cursor-pointer"
+                          title="حذف الكتاب أو استبعاد نسخ مفقودة"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                       {/* Physical Bookmark */}
                       {onOpenPhysicalBookmark && (
                         <button
@@ -889,6 +919,16 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                    {currentUser.role === 'admin' && onDeletePhysicalBook && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDeleteModal(pBook)}
+                        className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        title="حذف الكتاب أو استبعاد نسخ مفقودة"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {onOpenPhysicalBookmark && (
                       <button
                         onClick={() => onOpenPhysicalBookmark(pBook)}
@@ -1021,6 +1061,287 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
           categories={categories}
           onSuccess={handleBulkImportSuccess}
         />
+      )}
+
+      {/* Delete Physical Book Confirmation Modal */}
+      {physicalBookToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-right" dir="rtl">
+            {/* Modal Header */}
+            <div className="flex items-center gap-3 text-rose-500">
+              <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">إدارة الحذف واستبعاد النسخ</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">حذف الكتاب بالكامل أو استبعاد نسخ مفقودة لتطابق جرد الرف</p>
+              </div>
+            </div>
+
+            {/* Book info summary box */}
+            <div className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">عنوان الكتاب:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{physicalBookToDelete.title}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">المؤلف:</span>
+                <span className="text-slate-700 dark:text-slate-300">{physicalBookToDelete.author}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">الموقع المكتبي:</span>
+                <span className="font-mono text-indigo-600 dark:text-indigo-400">{physicalBookToDelete.location.cabinet} • {physicalBookToDelete.location.shelf}</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-800/60">
+                <span className="text-slate-500 dark:text-slate-400">حالة الجرد الحالي:</span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-mono font-bold">
+                    {physicalBookToDelete.totalCopies} نسخة إجمالية
+                  </span>
+                  <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-mono font-bold">
+                    {physicalBookToDelete.availableCopies} متوفرة
+                  </span>
+                  {physicalBookToDelete.totalCopies > physicalBookToDelete.availableCopies && (
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-400 font-mono font-bold">
+                      {physicalBookToDelete.totalCopies - physicalBookToDelete.availableCopies} معارة
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* If book has multiple copies, show selection between Copies Reduction vs Full Deletion */}
+            {physicalBookToDelete.totalCopies > 1 && (
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">اختر نوع العملية المطلوبة:</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteMode('copies')}
+                    className={`p-3 rounded-2xl border text-right transition-all cursor-pointer space-y-1 ${
+                      deleteMode === 'copies'
+                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-800 dark:text-amber-300 shadow-sm'
+                        : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <MinusCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>استبعاد نسخ مفقودة/تالفة</span>
+                    </div>
+                    <p className="text-[11px] opacity-80 leading-relaxed">
+                      تقليص عدد النسخ فقط ليعكس النظام ما هو موجود فعلياً بالرف
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDeleteMode('entire')}
+                    className={`p-3 rounded-2xl border text-right transition-all cursor-pointer space-y-1 ${
+                      deleteMode === 'entire'
+                        ? 'bg-rose-500/15 border-rose-500/50 text-rose-800 dark:text-rose-300 shadow-sm'
+                        : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <Trash2 className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                      <span>حذف الكتاب بالكامل</span>
+                    </div>
+                    <p className="text-[11px] opacity-80 leading-relaxed">
+                      إزالة سجل الكتاب نهائياً من المكتبة بجميع نسخه وبياناته
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Mode A: Reduce Specific Copies */}
+            {deleteMode === 'copies' && (
+              <div className="space-y-4 bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4">
+                {physicalBookToDelete.availableCopies === 0 ? (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">
+                      جميع نسخ هذا الكتاب معارة حالياً ({physicalBookToDelete.totalCopies} نسخ). لا يمكن استبعاد أي نسخة حتى يتم إرجاعها إلى المكتبة أولاً.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        عدد النسخ المراد استبعادها من الفهرس:
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl p-1">
+                          <button
+                            type="button"
+                            onClick={() => setCopiesToRemove(Math.max(1, copiesToRemove - 1))}
+                            disabled={copiesToRemove <= 1}
+                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-30 cursor-pointer"
+                          >
+                            <MinusCircle className="w-4 h-4" />
+                          </button>
+                          <span className="w-12 text-center font-mono font-bold text-base text-amber-600 dark:text-amber-400">
+                            {copiesToRemove}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCopiesToRemove(Math.min(physicalBookToDelete.availableCopies, copiesToRemove + 1))}
+                            disabled={copiesToRemove >= physicalBookToDelete.availableCopies}
+                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-30 cursor-pointer"
+                          >
+                            <PlusCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          (الحد الأقصى المتاح للاستبعاد: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{physicalBookToDelete.availableCopies}</strong> نسخة متوفرة)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        سبب الاستبعاد (لتوثيق الجرد):
+                      </label>
+                      <select
+                        value={removalReason}
+                        onChange={(e) => setRemovalReason(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+                      >
+                        <option value="نسخة مفقودة / ضائعة (لم يتم العثور عليها)">نسخة مفقودة / ضائعة (لم يتم العثور عليها بالرف)</option>
+                        <option value="نسخة تالفة / ممزقة (استبعاد من الجرد)">نسخة تالفة / ممزقة (استبعاد من الجرد)</option>
+                        <option value="نقل أو إهداء خارج المكتبة">نقل أو إهداء خارج المكتبة</option>
+                        <option value="سبب آخر (مخصص)">سبب آخر (مخصص)...</option>
+                      </select>
+
+                      {removalReason === 'سبب آخر (مخصص)' && (
+                        <input
+                          type="text"
+                          value={customRemovalReason}
+                          onChange={(e) => setCustomRemovalReason(e.target.value)}
+                          placeholder="اكتب سبب الاستبعاد باختصار..."
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 mt-2"
+                        />
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 rounded-xl text-xs space-y-1">
+                      <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                        <span>النسخ الإجمالية بعد الاستبعاد:</span>
+                        <strong className="text-amber-600 dark:text-amber-400 font-mono">
+                          {Math.max(0, physicalBookToDelete.totalCopies - copiesToRemove)} نسخة
+                        </strong>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">
+                        <span>النسخ المتوفرة على الرف بعد التحديث:</span>
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                          {Math.max(0, physicalBookToDelete.availableCopies - copiesToRemove)} نسخة
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Mode B: Delete Entire Book */}
+            {deleteMode === 'entire' && (
+              <div className="space-y-3">
+                {physicalBookToDelete.availableCopies < physicalBookToDelete.totalCopies ? (
+                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl text-xs text-amber-800 dark:text-amber-300 space-y-1.5">
+                    <div className="font-bold flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>تنبيه: توجد إعارات نشطة مرتبطة بهذا الكتاب</span>
+                    </div>
+                    <p className="leading-relaxed">
+                      يوجد حالياً {physicalBookToDelete.totalCopies - physicalBookToDelete.availableCopies} نسخة قيد الاستعارة. لا يمكن حذف الكتاب بالكامل من النظام حتى يتم استرجاع كافة النسخ المعارة أولاً منعاً لتعارض السجلات.
+                    </p>
+                    {physicalBookToDelete.availableCopies > 0 && (
+                      <p className="text-xs text-indigo-600 dark:text-indigo-400 underline cursor-pointer pt-1" onClick={() => setDeleteMode('copies')}>
+                        💡 هل تريد فقط استبعاد النسخ المفقودة المتوفرة ({physicalBookToDelete.availableCopies} متوفرة)؟ اضغط هنا.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-xs text-rose-800 dark:text-rose-300 leading-relaxed">
+                    هل أنت متأكد من رغبتك في حذف كتاب <strong className="text-slate-900 dark:text-white">«{physicalBookToDelete.title}»</strong> وجميع نسخه ({physicalBookToDelete.totalCopies} نسخ) نهائياً من الفهرس وقاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal Actions Footer */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPhysicalBookToDelete(null)}
+                disabled={isDeletingPhysical}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                إلغاء
+              </button>
+
+              {deleteMode === 'copies' ? (
+                <button
+                  type="button"
+                  disabled={isDeletingPhysical || physicalBookToDelete.availableCopies === 0 || copiesToRemove < 1 || copiesToRemove > physicalBookToDelete.availableCopies}
+                  onClick={async () => {
+                    if (onDeletePhysicalBook && physicalBookToDelete) {
+                      setIsDeletingPhysical(true);
+                      const finalReason = removalReason === 'سبب آخر (مخصص)' && customRemovalReason.trim()
+                        ? customRemovalReason.trim()
+                        : removalReason;
+                      try {
+                        await onDeletePhysicalBook(physicalBookToDelete.id, {
+                          copiesCount: copiesToRemove,
+                          reason: finalReason,
+                        });
+                        setPhysicalBookToDelete(null);
+                      } finally {
+                        setIsDeletingPhysical(false);
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  {isDeletingPhysical ? (
+                    <span>جارٍ الاستبعاد...</span>
+                  ) : (
+                    <>
+                      <MinusCircle className="w-3.5 h-3.5" />
+                      <span>تأكيد استبعاد {copiesToRemove} {copiesToRemove === 1 ? 'نسخة' : 'نسخ'}</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isDeletingPhysical || physicalBookToDelete.availableCopies < physicalBookToDelete.totalCopies}
+                  onClick={async () => {
+                    if (onDeletePhysicalBook && physicalBookToDelete) {
+                      setIsDeletingPhysical(true);
+                      try {
+                        await onDeletePhysicalBook(physicalBookToDelete.id);
+                        setPhysicalBookToDelete(null);
+                      } finally {
+                        setIsDeletingPhysical(false);
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  {isDeletingPhysical ? (
+                    <span>جارٍ الحذف...</span>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>تأكيد حذف الكتاب بالكامل</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

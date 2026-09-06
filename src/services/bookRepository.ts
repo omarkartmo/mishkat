@@ -279,14 +279,20 @@ export class BookRepository {
   }
 
   /**
-   * Delete Book from Central Server (DELETE /api/v1/books/:id - Admin only)
+   * Delete Book or reduce copies from Central Server (DELETE /api/v1/books/:id - Admin & Librarian)
    */
-  public async deleteBook(id: string): Promise<{
+  public async deleteBook(
+    id: string,
+    options?: { copiesCount?: number; reason?: string }
+  ): Promise<{
     success: boolean;
-    data?: { message: string };
+    data?: { message: string; remainingTotal?: number; remainingAvailable?: number; deletedEntireBook?: boolean };
     error?: ApiError;
   }> {
-    const res = await apiClient.delete<{ message: string }>(`/books/${id}`);
+    const query = options?.copiesCount && options.copiesCount > 0
+      ? `?copies=${options.copiesCount}${options.reason ? `&reason=${encodeURIComponent(options.reason)}` : ''}`
+      : '';
+    const res = await apiClient.delete<{ message: string; remainingTotal?: number; remainingAvailable?: number; deletedEntireBook?: boolean }>(`/books/${id}${query}`);
     if (res.success) {
       return {
         success: true,
@@ -298,7 +304,35 @@ export class BookRepository {
       success: false,
       error: res.error || {
         code: 'BOOK_DELETE_FAILED',
-        message: 'فشل حذف الكتاب من الخادم المركزي.',
+        message: 'فشل حذف الكتاب أو استبعاد النسخ من الخادم المركزي.',
+      },
+    };
+  }
+
+  /**
+   * Retire specific physical copies (e.g. missing/damaged) (POST /api/v1/books/:id/reduce-copies)
+   */
+  public async reducePhysicalCopies(
+    id: string,
+    copiesCount: number,
+    reason?: string
+  ): Promise<{
+    success: boolean;
+    data?: { message: string; remainingTotal?: number; remainingAvailable?: number; deletedEntireBook?: boolean };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<{ message: string; remainingTotal?: number; remainingAvailable?: number; deletedEntireBook?: boolean }>(`/books/${id}/reduce-copies`, {
+      copiesCount,
+      reason,
+    });
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'REDUCE_COPIES_FAILED',
+        message: 'فشل استبعاد النسخ في الخادم المركزي.',
       },
     };
   }

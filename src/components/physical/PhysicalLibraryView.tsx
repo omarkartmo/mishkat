@@ -19,6 +19,8 @@ import {
   BookOpenCheck,
   Sparkles,
   Bookmark,
+  MinusCircle,
+  PlusCircle,
 } from 'lucide-react';
 import { PhysicalBook, Category, UserRole, User as UserType, SystemConfig } from '../../types/library';
 import { StudentLoanRequestModal } from './StudentLoanRequestModal';
@@ -41,7 +43,7 @@ interface PhysicalLibraryViewProps {
   }) => void;
   onAddBook: (book: Omit<PhysicalBook, 'id' | 'addedAt' | 'availableCopies'>) => void;
   onUpdateBook?: (id: string, updates: Partial<PhysicalBook>) => void;
-  onDeleteBook?: (id: string) => void;
+  onDeleteBook?: (id: string, options?: { copiesCount?: number; reason?: string }) => Promise<any> | void;
   onIssueLoanForBook?: (book: PhysicalBook) => void;
   onQuickLoan?: (bookId: string) => void;
   initialSearchQuery?: string;
@@ -74,6 +76,19 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
   const [shelfCardBook, setShelfCardBook] = useState<PhysicalBook | null>(null);
   const [requestingLoanBook, setRequestingLoanBook] = useState<PhysicalBook | null>(null);
   const [bookToDelete, setBookToDelete] = useState<PhysicalBook | null>(null);
+  const [deleteMode, setDeleteMode] = useState<'entire' | 'copies'>('copies');
+  const [copiesToRemove, setCopiesToRemove] = useState(1);
+  const [removalReason, setRemovalReason] = useState('نسخة مفقودة / ضائعة (لم يتم العثور عليها)');
+  const [customRemovalReason, setCustomRemovalReason] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleOpenDeleteModal = (book: PhysicalBook) => {
+    setBookToDelete(book);
+    setDeleteMode(book.totalCopies > 1 ? 'copies' : 'entire');
+    setCopiesToRemove(1);
+    setRemovalReason('نسخة مفقودة / ضائعة (لم يتم العثور عليها)');
+    setCustomRemovalReason('');
+  };
 
   // Filtered books
   const filteredBooks = books.filter((b) => {
@@ -314,13 +329,16 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => setBookToDelete(book)}
-                          className="p-2 bg-slate-800 hover:bg-rose-900/50 text-slate-300 hover:text-rose-400 rounded-lg text-xs transition-colors cursor-pointer"
-                          title="حذف الكتاب"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {onDeleteBook && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDeleteModal(book)}
+                            className="p-2 bg-slate-800 hover:bg-rose-900/50 text-slate-300 hover:text-rose-400 rounded-lg text-xs transition-colors cursor-pointer"
+                            title="حذف الكتاب أو استبعاد نسخ مفقودة"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -398,6 +416,10 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
           onSave={(data) => {
             if (onUpdateBook) onUpdateBook(editingBook.id, data);
             setEditingBook(null);
+          }}
+          onDelete={(book) => {
+            setEditingBook(null);
+            handleOpenDeleteModal(book);
           }}
         />
       )}
@@ -486,44 +508,282 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
         />
       )}
 
-      {/* Delete Book Confirmation Modal */}
+      {/* Delete Book & Copies Management Modal */}
       {bookToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-right" dir="rtl">
+            {/* Modal Header */}
             <div className="flex items-center gap-3 text-rose-400">
-              <div className="p-3 bg-rose-500/10 rounded-xl border border-rose-500/20">
+              <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
                 <Trash2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-bold text-slate-100 text-base">تأكيد حذف الكتاب</h3>
-                <p className="text-xs text-slate-400">إزالة الكتاب الورقي من الفهرس</p>
+                <h3 className="font-bold text-slate-100 text-base">إدارة الحذف واستبعاد النسخ</h3>
+                <p className="text-xs text-slate-400">حذف الكتاب بالكامل أو استبعاد نسخ مفقودة لتطابق جرد الرف</p>
               </div>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
-              هل أنت متأكد من حذف كتاب <strong className="text-white">«{bookToDelete.title}»</strong> للمؤلف {bookToDelete.author}؟
-            </p>
+            {/* Book Info Summary */}
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">عنوان الكتاب:</span>
+                <span className="font-bold text-slate-200">{bookToDelete.title}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">المؤلف:</span>
+                <span className="text-slate-300">{bookToDelete.author}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">الموقع على الرف:</span>
+                <span className="font-mono text-indigo-400">{bookToDelete.location.cabinet} • {bookToDelete.location.shelf}</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-800/60">
+                <span className="text-slate-400">حالة الجرد الحالي:</span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 font-mono font-bold">
+                    {bookToDelete.totalCopies} نسخة إجمالية
+                  </span>
+                  <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 font-mono font-bold">
+                    {bookToDelete.availableCopies} متوفرة
+                  </span>
+                  {bookToDelete.totalCopies > bookToDelete.availableCopies && (
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-400 font-mono font-bold">
+                      {bookToDelete.totalCopies - bookToDelete.availableCopies} معارة
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            {/* If book has multiple copies, show selection between Copies Reduction vs Full Deletion */}
+            {bookToDelete.totalCopies > 1 && (
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">اختر نوع العملية المطلوبة:</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteMode('copies')}
+                    className={`p-3 rounded-2xl border text-right transition-all cursor-pointer space-y-1 ${
+                      deleteMode === 'copies'
+                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-sm'
+                        : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <MinusCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>استبعاد نسخ مفقودة/تالفة</span>
+                    </div>
+                    <p className="text-[11px] opacity-80 leading-relaxed">
+                      تقليص عدد النسخ فقط ليعكس النظام ما هو موجود فعلياً بالرف
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDeleteMode('entire')}
+                    className={`p-3 rounded-2xl border text-right transition-all cursor-pointer space-y-1 ${
+                      deleteMode === 'entire'
+                        ? 'bg-rose-500/15 border-rose-500/50 text-rose-300 shadow-sm'
+                        : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <Trash2 className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>حذف الكتاب بالكامل</span>
+                    </div>
+                    <p className="text-[11px] opacity-80 leading-relaxed">
+                      إزالة سجل الكتاب نهائياً من المكتبة بجميع نسخه وبياناته
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Mode A: Reduce Specific Copies */}
+            {deleteMode === 'copies' && (
+              <div className="space-y-4 bg-slate-950/50 border border-slate-800/80 rounded-2xl p-4">
+                {bookToDelete.availableCopies === 0 ? (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-xs text-amber-300 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">
+                      جميع نسخ هذا الكتاب معارة حالياً ({bookToDelete.totalCopies} نسخ). لا يمكن استبعاد أي نسخة حتى يتم إرجاعها إلى المكتبة أولاً.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-slate-300">
+                        عدد النسخ المراد استبعادها من الفهرس:
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-1">
+                          <button
+                            type="button"
+                            onClick={() => setCopiesToRemove(Math.max(1, copiesToRemove - 1))}
+                            disabled={copiesToRemove <= 1}
+                            className="p-1.5 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg disabled:opacity-30 cursor-pointer"
+                          >
+                            <MinusCircle className="w-4 h-4" />
+                          </button>
+                          <span className="w-12 text-center font-mono font-bold text-base text-amber-400">
+                            {copiesToRemove}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCopiesToRemove(Math.min(bookToDelete.availableCopies, copiesToRemove + 1))}
+                            disabled={copiesToRemove >= bookToDelete.availableCopies}
+                            className="p-1.5 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg disabled:opacity-30 cursor-pointer"
+                          >
+                            <PlusCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          (الحد الأقصى المتاح للاستبعاد: <strong className="text-emerald-400 font-mono">{bookToDelete.availableCopies}</strong> نسخة متوفرة)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-slate-300">
+                        سبب الاستبعاد (لتوثيق الجرد):
+                      </label>
+                      <select
+                        value={removalReason}
+                        onChange={(e) => setRemovalReason(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500"
+                      >
+                        <option value="نسخة مفقودة / ضائعة (لم يتم العثور عليها)">نسخة مفقودة / ضائعة (لم يتم العثور عليها بالرف)</option>
+                        <option value="نسخة تالفة / ممزقة (استبعاد من الجرد)">نسخة تالفة / ممزقة (استبعاد من الجرد)</option>
+                        <option value="نقل أو إهداء خارج المكتبة">نقل أو إهداء خارج المكتبة</option>
+                        <option value="سبب آخر (مخصص)">سبب آخر (مخصص)...</option>
+                      </select>
+
+                      {removalReason === 'سبب آخر (مخصص)' && (
+                        <input
+                          type="text"
+                          value={customRemovalReason}
+                          onChange={(e) => setCustomRemovalReason(e.target.value)}
+                          placeholder="اكتب سبب الاستبعاد باختصار..."
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500 mt-2"
+                        />
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-slate-900/90 border border-slate-800/80 rounded-xl text-xs space-y-1">
+                      <div className="flex items-center justify-between text-slate-300">
+                        <span>النسخ الإجمالية بعد الاستبعاد:</span>
+                        <strong className="text-amber-400 font-mono">
+                          {Math.max(0, bookToDelete.totalCopies - copiesToRemove)} نسخة
+                        </strong>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                        <span>النسخ المتوفرة على الرف بعد التحديث:</span>
+                        <span className="font-mono text-emerald-400 font-semibold">
+                          {Math.max(0, bookToDelete.availableCopies - copiesToRemove)} نسخة
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Mode B: Delete Entire Book */}
+            {deleteMode === 'entire' && (
+              <div className="space-y-3">
+                {bookToDelete.availableCopies < bookToDelete.totalCopies ? (
+                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl text-xs text-amber-300 space-y-1.5">
+                    <div className="font-bold flex items-center gap-1.5 text-amber-400">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>تنبيه: توجد إعارات نشطة مرتبطة بهذا الكتاب</span>
+                    </div>
+                    <p className="text-amber-300/90 leading-relaxed">
+                      يوجد حالياً {bookToDelete.totalCopies - bookToDelete.availableCopies} نسخة قيد الاستعارة. لا يمكن حذف الكتاب بالكامل من النظام حتى يتم استرجاع كافة النسخ المعارة أولاً منعاً لتعارض السجلات.
+                    </p>
+                    {bookToDelete.availableCopies > 0 && (
+                      <p className="text-xs text-indigo-300 underline cursor-pointer pt-1" onClick={() => setDeleteMode('copies')}>
+                        💡 هل تريد فقط استبعاد النسخ المفقودة المتوفرة ({bookToDelete.availableCopies} متوفرة)؟ اضغط هنا.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-xs text-rose-300 leading-relaxed">
+                    هل أنت متأكد من رغبتك في حذف كتاب <strong className="text-white">«{bookToDelete.title}»</strong> وجميع نسخه ({bookToDelete.totalCopies} نسخ) نهائياً من الفهرس وقاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal Actions Footer */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
               <button
                 type="button"
                 onClick={() => setBookToDelete(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                disabled={isDeleting}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
               >
                 إلغاء
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onDeleteBook) {
-                    onDeleteBook(bookToDelete.id);
-                  }
-                  setBookToDelete(null);
-                }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer"
-              >
-                تأكيد الحذف
-              </button>
+
+              {deleteMode === 'copies' ? (
+                <button
+                  type="button"
+                  disabled={isDeleting || bookToDelete.availableCopies === 0 || copiesToRemove < 1 || copiesToRemove > bookToDelete.availableCopies}
+                  onClick={async () => {
+                    if (onDeleteBook && bookToDelete) {
+                      setIsDeleting(true);
+                      const finalReason = removalReason === 'سبب آخر (مخصص)' && customRemovalReason.trim()
+                        ? customRemovalReason.trim()
+                        : removalReason;
+                      try {
+                        await onDeleteBook(bookToDelete.id, {
+                          copiesCount: copiesToRemove,
+                          reason: finalReason,
+                        });
+                        setBookToDelete(null);
+                      } finally {
+                        setIsDeleting(false);
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  {isDeleting ? (
+                    <span>جارٍ الاستبعاد...</span>
+                  ) : (
+                    <>
+                      <MinusCircle className="w-3.5 h-3.5" />
+                      <span>تأكيد استبعاد {copiesToRemove} {copiesToRemove === 1 ? 'نسخة' : 'نسخ'}</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isDeleting || bookToDelete.availableCopies < bookToDelete.totalCopies}
+                  onClick={async () => {
+                    if (onDeleteBook && bookToDelete) {
+                      setIsDeleting(true);
+                      try {
+                        await onDeleteBook(bookToDelete.id);
+                        setBookToDelete(null);
+                      } finally {
+                        setIsDeleting(false);
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  {isDeleting ? (
+                    <span>جارٍ الحذف...</span>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>تأكيد حذف الكتاب بالكامل</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -538,6 +798,7 @@ interface BookFormModalProps {
   categories: Category[];
   onClose: () => void;
   onSave: (data: any) => void;
+  onDelete?: (book: PhysicalBook) => void;
 }
 
 const BookFormModal: React.FC<BookFormModalProps> = ({
@@ -545,6 +806,7 @@ const BookFormModal: React.FC<BookFormModalProps> = ({
   categories,
   onClose,
   onSave,
+  onDelete,
 }) => {
   const [title, setTitle] = useState(initialBook?.title || '');
   const [author, setAuthor] = useState(initialBook?.author || '');
@@ -735,20 +997,36 @@ const BookFormModal: React.FC<BookFormModalProps> = ({
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30"
-            >
-              حفظ في الفهرس
-            </button>
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-800">
+            {initialBook && onDelete ? (
+              <button
+                type="button"
+                onClick={() => onDelete(initialBook)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                title="حذف هذا الكتاب نهائياً من الفهرس"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>حذف الكتاب من الفهرس</span>
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 cursor-pointer"
+              >
+                حفظ في الفهرس
+              </button>
+            </div>
           </div>
         </form>
       </div>
