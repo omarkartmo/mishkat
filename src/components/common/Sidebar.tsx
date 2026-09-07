@@ -118,17 +118,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 isCollapsed={isCollapsed}
               />
               <NavItem
-                icon={<Library className="w-4 h-4 text-emerald-500" />}
-                label="المستودع الرقمي"
-                active={activeTab === 'digital'}
-                onClick={() => onSelectTab('digital')}
-                isCollapsed={isCollapsed}
-              />
-              <NavItem
                 icon={<Search className="w-4 h-4 text-indigo-500" />}
                 label="البحث الشامل"
                 active={activeTab === 'search_results'}
                 onClick={() => onSelectTab('search_results')}
+                isCollapsed={isCollapsed}
+              />
+              <NavItem
+                icon={<BookOpen className="w-4 h-4 text-amber-500" />}
+                label="فهرس الكتب الورقية"
+                active={activeTab === 'physical'}
+                onClick={() => onSelectTab('physical')}
+                isCollapsed={isCollapsed}
+              />
+              <NavItem
+                icon={<Library className="w-4 h-4 text-emerald-500" />}
+                label="المستودع الرقمي"
+                active={activeTab === 'digital'}
+                onClick={() => onSelectTab('digital')}
                 isCollapsed={isCollapsed}
               />
               <NavItem
@@ -182,17 +189,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   isCollapsed={isCollapsed}
                 />
                 <NavItem
-                  icon={<Library className="w-4 h-4 text-emerald-500" />}
-                  label="المستودع الرقمي"
-                  active={activeTab === 'digital'}
-                  onClick={() => onSelectTab('digital')}
-                  isCollapsed={isCollapsed}
-                />
-                <NavItem
                   icon={<Search className="w-4 h-4 text-indigo-500" />}
                   label="البحث الشامل"
                   active={activeTab === 'search_results'}
                   onClick={() => onSelectTab('search_results')}
+                  isCollapsed={isCollapsed}
+                />
+                <NavItem
+                  icon={<BookOpen className="w-4 h-4 text-amber-500" />}
+                  label="فهرس الكتب الورقية"
+                  active={activeTab === 'physical'}
+                  onClick={() => onSelectTab('physical')}
+                  isCollapsed={isCollapsed}
+                />
+                <NavItem
+                  icon={<Library className="w-4 h-4 text-emerald-500" />}
+                  label="المستودع الرقمي"
+                  active={activeTab === 'digital'}
+                  onClick={() => onSelectTab('digital')}
                   isCollapsed={isCollapsed}
                 />
                 <NavItem

@@ -17,10 +17,12 @@ import {
   Sparkles,
   Activity,
   Trash2,
+  Edit2,
 } from 'lucide-react';
 import { DigitalBook, Category, UserRole } from '../../types/library';
 import { BulkDigitalImportModal } from './BulkDigitalImportModal';
 import { AddDigitalBookModal } from './AddDigitalBookModal';
+import { EditDigitalBookModal } from './EditDigitalBookModal';
 import { IngestionObservabilityPanel } from '../admin/IngestionObservabilityPanel';
 
 interface DigitalLibraryViewProps {
@@ -33,6 +35,7 @@ interface DigitalLibraryViewProps {
   onOpenReader: (book: DigitalBook) => void;
   onAddDigitalBook: (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => void;
   onBulkAddDigitalBooks?: (books: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => void;
+  onUpdateBook?: (id: string, updates: Partial<DigitalBook>) => Promise<boolean | void> | void;
   onDeleteBook?: (bookId: string) => Promise<void> | void;
   onRefreshBooks?: () => void;
 }
@@ -47,6 +50,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   onOpenReader,
   onAddDigitalBook,
   onBulkAddDigitalBooks,
+  onUpdateBook,
   onDeleteBook,
   onRefreshBooks,
 }) => {
@@ -56,6 +60,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [showObservability, setShowObservability] = useState(false);
+  const [editingBook, setEditingBook] = useState<DigitalBook | null>(null);
   const [bookToDelete, setBookToDelete] = useState<DigitalBook | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -305,6 +310,15 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
                   </span>
 
                   <div className="flex items-center gap-2">
+                    {userRole === 'admin' && onUpdateBook && (
+                      <button
+                        onClick={() => setEditingBook(book)}
+                        className="p-2 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-xl transition-all cursor-pointer"
+                        title="تعديل معلومات الكتاب الرقمي"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
                     {userRole === 'admin' && onDeleteBook && (
                       <button
                         onClick={() => setBookToDelete(book)}
@@ -349,6 +363,27 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
           isOpen={isBulkModalOpen}
           onClose={() => setIsBulkModalOpen(false)}
           onImportSuccess={handleBulkImportSuccess}
+        />
+      )}
+
+      {/* Edit Digital Book Modal */}
+      {editingBook && (
+        <EditDigitalBookModal
+          book={editingBook}
+          categories={categories}
+          onClose={() => setEditingBook(null)}
+          onSave={async (id, updates) => {
+            if (onUpdateBook) {
+              await onUpdateBook(id, updates);
+              setEditingBook(null);
+              if (onRefreshBooks) onRefreshBooks();
+            }
+          }}
+          onDelete={onDeleteBook ? async (id) => {
+            await onDeleteBook(id);
+            setEditingBook(null);
+            if (onRefreshBooks) onRefreshBooks();
+          } : undefined}
         />
       )}
 

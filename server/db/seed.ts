@@ -147,7 +147,11 @@ export async function seedInitialData(): Promise<void> {
       const filename = book.fileUrl ? path.basename(decodeURIComponent(book.fileUrl)) : `${book.id}.pdf`;
       const filePath = path.join(serverConfig.dirs.digital, filename);
       if (!fs.existsSync(filePath)) {
-        continue; // Skip if physical file does not exist
+        try {
+          fs.writeFileSync(filePath, '%PDF-1.4 Mock PDF content for digital library streaming\n%%EOF');
+        } catch {
+          continue;
+        }
       }
 
       await db.query(`

@@ -763,6 +763,19 @@ export default function App() {
     }
   };
 
+  const handleUpdateDigitalBook = async (id: string, updates: Partial<DigitalBook>) => {
+    try {
+      const res = await bookRepository.updateDigitalBook(id, updates);
+      if (res.success) {
+        await loadBooks();
+      } else {
+        alert(res.error?.message || 'فشل تحديث بيانات الكتاب الرقمي في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء تحديث بيانات الكتاب الرقمي.');
+    }
+  };
+
   const handleAddDigitalBook = async (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => {
     try {
       const res = await bookRepository.createDigitalBook(book);
@@ -787,6 +800,25 @@ export default function App() {
       }
     } catch (err: any) {
       alert(err.message || 'حدث خطأ أثناء استيراد الكتب الرقمية.');
+    }
+  };
+
+  // Bulk add physical books via CSV import
+  const handleBulkImportPhysicalBooks = async (
+    items: Array<Partial<PhysicalBook> & { categoryName?: string }>
+  ) => {
+    try {
+      const res = await bookRepository.bulkImportPhysicalBooks(items);
+      if (res.success) {
+        await loadBooks();
+        return true;
+      } else {
+        alert(res.error?.message || 'فشل استيراد حزمة الكتب الورقية.');
+        return false;
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء استيراد الكتب الورقية.');
+      return false;
     }
   };
 
@@ -1372,6 +1404,8 @@ export default function App() {
               }}
               onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
               onRefreshBooks={loadBooks}
+              onAddPhysicalBook={handleAddPhysicalBook}
+              onBulkImportPhysicalBooks={handleBulkImportPhysicalBooks}
             />
           )}
 
@@ -1396,6 +1430,7 @@ export default function App() {
               onAddBook={handleAddPhysicalBook}
               onUpdateBook={handleUpdatePhysicalBook}
               onDeleteBook={handleDeletePhysicalBook}
+              onBulkImportBooks={handleBulkImportPhysicalBooks}
               onIssueLoanForBook={(book) => {
                 handleQuickLoanFromBook(book.id);
               }}
@@ -1437,6 +1472,7 @@ export default function App() {
               onOpenReader={handleOpenDigitalReader}
               onAddDigitalBook={handleAddDigitalBook}
               onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
+              onUpdateBook={handleUpdateDigitalBook}
               onDeleteBook={handleDeleteDigitalBook}
               onRefreshBooks={loadBooks}
             />
@@ -1573,6 +1609,10 @@ export default function App() {
               onNavigateTab={handleNavigateToTab}
               onAddDigitalBook={handleAddDigitalBook}
               onBulkAddDigitalBooks={handleBulkAddDigitalBooks}
+              onUpdateDigitalBook={handleUpdateDigitalBook}
+              onDeleteDigitalBook={handleDeleteDigitalBook}
+              onAddPhysicalBook={handleAddPhysicalBook}
+              onUpdatePhysicalBook={handleUpdatePhysicalBook}
               onDeletePhysicalBook={handleDeletePhysicalBook}
             />
           )}

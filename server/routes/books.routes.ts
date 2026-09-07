@@ -8,7 +8,7 @@ import { serverConfig } from '../config';
 import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
-import { extractAuthorFromDocument } from '../utils/authorExtractor';
+import { extractAuthorFromDocument, extractDocumentMetadata, normalizeArabicForSearch, stripDiacritics, synthesizeBookSummary } from '../utils/authorExtractor';
 
 const router = Router();
 
@@ -147,6 +147,16 @@ function extractTitleAndAuthor(filename: string): { title: string; author: strin
   return { title: base, author: 'مؤلف غير محدد' };
 }
 
+// Helper to strip volume/part designations to obtain the canonical base title of a book series
+export function getBaseBookTitle(rawTitle: string): string {
+  if (!rawTitle) return '';
+  return rawTitle
+    .replace(/\s*[-–]\s*(?:الجزء|المجلد|قسم|ج)\s*.*$/i, '')
+    .replace(/\s+(?:ج(?:زء)?|المجلد|الجزء|قسم)\s*(?:\d+|الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|[٠-٩]+).*$/i, '')
+    .replace(/\s+\d+$/, '')
+    .trim();
+}
+
 // Generic folder names to ignore when extracting titles
 const GENERIC_FOLDER_NAMES = new Set([
   'pdf', 'epub', 'digital', 'books', 'ebooks', 'files', 'temp', 'tmp',
@@ -257,45 +267,91 @@ function shouldAdoptFolderNameAsTitle(
   return { adopt: false, folderName: null };
 }
 
-// Automatic Classification Algorithm using MISHKAT Category Model (Section 24 Requirement)
-function classifyBook(
+// Automatic Classification Algorithm using MISHKAT Category Model
+// Enhanced multi-zone weighting (Title: 5x, Author: 3x, Introduction & Summary: 2x, Filename: 1x)
+export function classifyBook(
   title: string,
   author: string,
   filename: string,
-  categories: any[]
+  categories: any[],
+  introText?: string | null
 ): { categoryId: string; categoryName: string; confidence: number } {
-  const text = `${title} ${author} ${filename}`.toLowerCase();
+  const normTitle = normalizeArabicForSearch(title || '');
+  const normAuthor = normalizeArabicForSearch(author || '');
+  const normFilename = normalizeArabicForSearch(filename || '');
+  const normIntro = normalizeArabicForSearch(introText || '');
 
-  const rules: { keywords: string[]; catId: string; name: string; weight: number }[] = [
+  const rules: {
+    catId: string;
+    name: string;
+    keywords: string[];
+  }[] = [
     {
-      keywords: ['فقه', 'عقيدة', 'شريعة', 'حديث', 'تفسير', 'قرآن', 'إباضي', 'سالمي', 'جيطالي', 'بخاري', 'مسلم', 'أصول', 'صلاة', 'زكاة', 'صوم', 'حج', 'وفاء', 'استقامة', 'سنة', 'نووي', 'صالحين', 'أذكار', 'دعاء'],
       catId: 'cat-islamic',
-      name: 'العلوم الشرعية',
-      weight: 40,
+      name: 'العلوم الشرعية والفكر الإسلامي',
+      keywords: [
+        'فقه', 'عقيده', 'شريعه', 'حديث', 'تفسير', 'قران', 'اباضي', 'اباضيه', 'اصول الفقه', 'اصول الدين',
+        'توحيد', 'صلاه', 'زكاه', 'صوم', 'حج', 'طهاره', 'عبادات', 'معاملات', 'احكام', 'فتاوى', 'قضاء',
+        'فرائض', 'مواريث', 'اجماع', 'قياس', 'سنن', 'مسند', 'موطا', 'صحيح', 'مصطلح الحديث', 'علوم القران',
+        'تجويد', 'قراءات', 'فقه مقارن', 'سلف', 'تيميه', 'اطفيش', 'اتفيش', 'جيطالي', 'سالمي', 'كندي', 'عوتبي',
+        'ثميني', 'ورجلاني', 'وارجلاني', 'ربيع بن حبيب', 'ابن سلام', 'شماخي', 'جناويني', 'جناوني', 'الجامع الصغير',
+        'الجامع الكبير', 'بيان الشرع', 'المصنف', 'الضياء', 'قاموس الشريعه', 'النيل', 'منهج الطالبين', 'بلاغ الراغبين',
+        'الراغبين', 'الشقصي', 'الرستاقي', 'قواعد الاسلام', 'قناطر الخيرات', 'معارج الامال', 'جوهر النظام', 'تلقين الصبيان',
+        'بهجه الانوار', 'مدارج الكمال', 'الاديان', 'الايضاح', 'الوضع', 'هميان الزاد', 'تيسير التفسير', 'رياض الصالحين',
+        'الاربعون النوويه', 'نووي', 'استقامه'
+      ],
     },
     {
-      keywords: ['تاريخ', 'حضارة', 'عمان', 'أندلس', 'طبري', 'سيرة', 'فتوح', 'معركة', 'دولة', 'خلافة', 'يعاربة', 'بوسعيدي', 'أعيان'],
-      catId: 'cat-history',
-      name: 'التاريخ والحضارة',
-      weight: 40,
-    },
-    {
-      keywords: ['نحو', 'إعراب', 'بلاغة', 'معجم', 'ألفية', 'لسان', 'سيبويه', 'جرجاني', 'شعر', 'ديوان', 'لغة', 'صرف', 'عروض', 'أدب'],
       catId: 'cat-arabic',
       name: 'اللغة العربية وآدابها',
-      weight: 40,
+      keywords: [
+        'نحو', 'اعراب', 'بلاغه', 'معجم', 'معاجم', 'الفيه', 'لسان', 'سيبويه', 'جرجاني', 'شعر', 'ديوان',
+        'قصائد', 'قصيده', 'اشعار', 'ابيات', 'قوافي', 'عروض', 'لغه', 'صرف', 'فصاحه', 'بيان', 'بديع',
+        'معاني', 'مفردات', 'نحاه', 'ابن مالك', 'اجروميه', 'املاء', 'لسانيات', 'ادب عربي', 'ادب', 'ادبي',
+        'نقد ادبي', 'نثر', 'مقامه', 'مقامات', 'روايه', 'قصه', 'حكايه', 'مسرحيه', 'نصوص ادبيه', 'حسان عمان',
+        'حسان', 'رواحي', 'ابو مسلم', 'شوقي', 'حافظ', 'متنبي', 'معري', 'جاحظ', 'ابن جني', 'زمخشري', 'كشاف',
+        'خليل بن احمد', 'فراهيدي', 'ابن دريد', 'جمهره', 'لسان العرب', 'تاج العروس', 'اساس البلاغه', 'قطر الندى',
+        'شذور الذهب', 'الكتاب لسيبويه', 'ديوان شعر', 'قصص'
+      ],
     },
     {
-      keywords: ['علوم', 'فيزياء', 'كيمياء', 'أحياء', 'فلك', 'طب', 'طبيعة', 'كون', 'بيئة', 'هندسة', 'تقنية', 'حاسوب', 'برمجة', 'ذكاء'],
+      catId: 'cat-history',
+      name: 'التاريخ والحضارة والآثار',
+      keywords: [
+        'تاريخ', 'حضاره', 'حضارات', 'عمان', 'اندلس', 'طبري', 'سيره', 'سيره نبويه', 'سير', 'فتوح', 'معركه',
+        'غزوات', 'معارك', 'دوله', 'خلافه', 'يعاربه', 'نباهنه', 'بوسعيدي', 'اعيان', 'تراجم', 'وفيات', 'انساب',
+        'سلاطين', 'ملوك', 'ائمه', 'وقائع', 'رحلات', 'ابن بطوطه', 'مسالك', 'ممالك', 'وثائق', 'جغرافيا تاريخيه',
+        'اثار', 'قلاع', 'حصون', 'عصر', 'عهد', 'تحفه الاعيان', 'كشف الغمه', 'سير الائمه', 'انساب العرب',
+        'فتوح البلدان', 'الكامل في التاريخ', 'البدايه والنهايه', 'مروج الذهب', 'مقدمه ابن خلدون', 'ابن خلدون'
+      ],
+    },
+    {
       catId: 'cat-science',
-      name: 'العلوم الطبيعية والتقنية',
-      weight: 40,
+      name: 'العلوم الطبيعية والتكنولوجيا',
+      keywords: [
+        'علوم', 'فيزياء', 'كيمياء', 'احياء', 'فلك', 'طب', 'طبيعه', 'كون', 'بيئه', 'هندسه', 'تقنيه',
+        'حاسوب', 'برمجه', 'ذكاء اصطناعي', 'رياضيات', 'جبر', 'حساب', 'فلكي', 'طبيه', 'صيدله', 'ادويه',
+        'تشريح', 'كواكب', 'نجوم', 'شبكات', 'برمجيات', 'الكترونيات', 'طاقه', 'جيولوجيا', 'نبات', 'حيوان',
+        'تجارب', 'معادلات', 'مختبر', 'ذره', 'جينات', 'وراثه', 'معلوماتيه', 'امن سيبراني'
+      ],
     },
     {
-      keywords: ['رواية', 'قصة', 'أدب', 'مسرحية', 'حكاية', 'نصوص', 'مقامات', 'أساطير', 'أدبي', 'ناشئة'],
-      catId: 'cat-literature',
-      name: 'الأدب والروايات',
-      weight: 35,
+      catId: 'cat-education',
+      name: 'التربية ومناهج البحث العلمي',
+      keywords: [
+        'تربيه', 'تربوي', 'تعليم', 'تدريس', 'مناهج التعليم', 'مناهج التدريس', 'مناهج البحث', 'بحث علمي',
+        'مدرسه', 'مدارس', 'معلمين', 'معلم', 'طرق التدريس', 'علم النفس التربوي', 'ارشاد تربوي', 'تحصيل دراسي',
+        'تقويم تربوي', 'بيداغوجيا', 'اطروحه', 'رساله ماجستير', 'دكتوراه', 'كفايات', 'تدريب تربوي',
+        'بيئه تعليميه', 'اشراف تربوي', 'اداره مدرسيه', 'تعلم نشط', 'استراتيجيات التدريس', 'معالم الفكر التربوي'
+      ],
+    },
+    {
+      catId: 'cat-general',
+      name: 'الثقافة العامة والتطوير الذاتي',
+      keywords: [
+        'تطوير الذات', 'تنميه بشريه', 'اداره الوقت', 'نجاح', 'قياده', 'مهارات', 'فكر', 'ثقافه عامه',
+        'موسوعه', 'وعي', 'مجتمع', 'تواصل', 'علاقات', 'عادات', 'تحفيز', 'انتاجيه', 'ذكاء عاطفي', 'تفكير نقدي'
+      ],
     },
   ];
 
@@ -306,23 +362,43 @@ function classifyBook(
   for (const rule of rules) {
     let score = 0;
     for (const kw of rule.keywords) {
-      if (text.includes(kw)) {
-        score += rule.weight;
+      const normalizedKw = normalizeArabicForSearch(kw);
+      if (!normalizedKw) continue;
+
+      // 1. Title Zone: Highest weight (5x)
+      if (normTitle.includes(normalizedKw)) {
+        score += 50;
+      }
+      // 2. Author Zone: Strong weight (3x)
+      if (normAuthor.includes(normalizedKw)) {
+        score += 30;
+      }
+      // 3. Intro / Preface / Summary Zone: Content weight (2x)
+      if (normIntro.includes(normalizedKw)) {
+        score += 20;
+      }
+      // 4. Filename Zone: Basic weight (1x)
+      if (normFilename.includes(normalizedKw)) {
+        score += 10;
       }
     }
+
     if (score > bestScore) {
       bestScore = score;
-      const matched = categories.find((c) => c.id === rule.catId || c.name.includes(rule.name));
+      const matched = categories.find(
+        (c) => c.id === rule.catId || c.name === rule.name || c.name.includes(rule.name) || rule.name.includes(c.name)
+      );
       if (matched) {
         bestCatId = matched.id;
         bestCatName = matched.name;
       } else {
         bestCatName = rule.name;
+        bestCatId = rule.catId;
       }
     }
   }
 
-  const confidence = Math.min(100, Math.max(25, bestScore));
+  const confidence = bestScore > 0 ? Math.min(100, Math.max(50, Math.round(bestScore * 1.2))) : 30;
   return { categoryId: bestCatId, categoryName: bestCatName, confidence };
 }
 
@@ -576,19 +652,33 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
       let { title, author } = extractTitleAndAuthor(sourceName);
       let authorDetectedFrom: 'folder' | 'file' | 'document' = adoptFolder && author !== 'مؤلف غير محدد' ? 'folder' : author !== 'مؤلف غير محدد' ? 'file' : 'file';
 
-      // Feature 2: Accurate Author Extraction from document pages 1 & 2 (or EPUB metadata)
-      if (author === 'مؤلف غير محدد' || !author.trim()) {
-        try {
-          const docAuthorResult = await extractAuthorFromDocument(stagedFilePath, ext, { folderName, title });
-          if (docAuthorResult?.author) {
-            author = docAuthorResult.author;
-            authorDetectedFrom = 'document';
-          }
-        } catch {}
+      let docSummary: string | null = null;
+      let docIntroText: string | null = null;
+      let docNumPages: number | null = null;
+
+      try {
+        const docMeta = await extractDocumentMetadata(stagedFilePath, ext, { folderName, title });
+        if (docMeta.title && isRandomOrGenericFileName(title)) {
+          title = docMeta.title;
+        }
+        if (docMeta.author && (!author || author === 'مؤلف غير محدد')) {
+          author = docMeta.author;
+          authorDetectedFrom = 'document';
+        } else if (author === 'مؤلف غير محدد') {
+          // Strict user rule: if no authentic author is verified across pages 1-4, leave empty
+          author = '';
+        }
+        docIntroText = docMeta.introText;
+        docSummary = docMeta.summary;
+        docNumPages = docMeta.numPages || null;
+      } catch {
+        if (author === 'مؤلف غير محدد') {
+          author = '';
+        }
       }
 
-      // Automatic classification (Section 24)
-      const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceName, categories);
+      // Automatic classification (Section 24) with Intro Text analysis
+      const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceName, categories, docIntroText);
 
       // Duplicate detection (Section 26)
       const { rows: dupHashRows } = await db.query('SELECT id, title FROM books WHERE file_hash = $1 LIMIT 1', [hash]);
@@ -615,11 +705,41 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
         status,
         isDuplicate,
         duplicateReason,
-        pages: Math.max(50, Math.round(sizeMb * 45)),
-        summary: adoptFolder
-          ? `كتاب رقمي تم اعتماد عنوانه من اسم المجلد (${folderName}): ${file.originalname}`
-          : `كتاب رقمي تم استخراجه وفرزه آلياً من الملف المرفوع: ${file.originalname}`,
+        pages: docNumPages || Math.max(1, Math.round(sizeMb * 45)),
+        summary: docSummary || synthesizeBookSummary(title, author, categoryName),
       });
+    }
+
+    // Multi-Volume Series Harmonization:
+    // Harmonize author and category across all parts of multi-volume series
+    const stagedSeriesMap = new Map<string, { author: string; authorDetectedFrom: any; categoryId: string; categoryName: string; confidence: number }>();
+    for (const item of stagedResults) {
+      const baseTitle = getBaseBookTitle(item.title);
+      if (baseTitle && item.author && item.author.trim().length > 0) {
+        if (!stagedSeriesMap.has(baseTitle) || item.authorDetectedFrom === 'document') {
+          stagedSeriesMap.set(baseTitle, {
+            author: item.author,
+            authorDetectedFrom: item.authorDetectedFrom,
+            categoryId: item.categoryId,
+            categoryName: item.categoryName,
+            confidence: item.confidence,
+          });
+        }
+      }
+    }
+    for (const item of stagedResults) {
+      const baseTitle = getBaseBookTitle(item.title);
+      if (baseTitle && stagedSeriesMap.has(baseTitle)) {
+        const canonical = stagedSeriesMap.get(baseTitle)!;
+        if (!item.author || item.author !== canonical.author) {
+          item.author = canonical.author;
+          item.authorDetectedFrom = canonical.authorDetectedFrom;
+          item.categoryId = canonical.categoryId;
+          item.categoryName = canonical.categoryName;
+          item.confidence = Math.max(item.confidence, canonical.confidence);
+          item.status = item.isDuplicate ? 'duplicate' : item.confidence < 40 ? 'needs_review' : 'ready';
+        }
+      }
     }
 
     res.json({
@@ -750,18 +870,32 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
       let { title, author } = extractTitleAndAuthor(sourceNameForMeta);
       let authorDetectedFrom: 'folder' | 'file' | 'document' = adoptFolder && author !== 'مؤلف غير محدد' ? 'folder' : author !== 'مؤلف غير محدد' ? 'file' : 'file';
 
-      // Feature 2: Accurate Author Extraction from document pages 1 & 2 (or EPUB metadata)
-      if (author === 'مؤلف غير محدد' || !author.trim()) {
-        try {
-          const docAuthorResult = await extractAuthorFromDocument(filePath, ext, { folderName, title });
-          if (docAuthorResult?.author) {
-            author = docAuthorResult.author;
-            authorDetectedFrom = 'document';
-          }
-        } catch {}
+      let docSummary: string | null = null;
+      let docIntroText: string | null = null;
+      let docNumPages: number | null = null;
+
+      try {
+        const docMeta = await extractDocumentMetadata(filePath, ext, { folderName, title });
+        if (docMeta.title && isRandomOrGenericFileName(title)) {
+          title = docMeta.title;
+        }
+        if (docMeta.author && (!author || author === 'مؤلف غير محدد')) {
+          author = docMeta.author;
+          authorDetectedFrom = 'document';
+        } else if (author === 'مؤلف غير محدد') {
+          // Strict user rule: if no authentic author is verified across pages 1-4, leave empty
+          author = '';
+        }
+        docIntroText = docMeta.introText;
+        docSummary = docMeta.summary;
+        docNumPages = docMeta.numPages || null;
+      } catch {
+        if (author === 'مؤلف غير محدد') {
+          author = '';
+        }
       }
 
-      const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceNameForMeta, categories);
+      const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceNameForMeta, categories, docIntroText);
 
       const isDuplicate = existingHashes.has(hash);
 
@@ -783,11 +917,43 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
         status: isDuplicate ? 'duplicate' : confidence < 40 ? 'needs_review' : 'ready',
         isDuplicate,
         duplicateReason: isDuplicate ? 'الكتاب مستورد مسبقاً في المستودع الرقمي المركزي' : null,
-        pages: Math.max(50, Math.round(sizeMb * 45)),
-        summary: adoptFolder
-          ? `كتاب رقمي تم اعتماد عنوانه من اسم المجلد (${folderName}): ${path.relative(resolvedDir, filePath)}`
-          : `كتاب رقمي تم اكتشافه من المجلد: ${path.relative(resolvedDir, filePath)}`,
+        pages: docNumPages || Math.max(1, Math.round(sizeMb * 45)),
+        summary: docSummary || synthesizeBookSummary(title, author, categoryName),
       });
+    }
+
+    // Multi-Volume Series Harmonization:
+    // When multiple parts of the same book are scanned (e.g. "منهج الطالبين وبلاغ الراغبين ج 4" .. "ج 9"):
+    // 1. Group by base title (stripping volume / part indicators)
+    // 2. Harmonize author and category across all parts if any part or catalog has verified metadata
+    const scannedSeriesMap = new Map<string, { author: string; authorDetectedFrom: any; categoryId: string; categoryName: string; confidence: number }>();
+    for (const item of scannedResults) {
+      const baseTitle = getBaseBookTitle(item.title);
+      if (baseTitle && item.author && item.author.trim().length > 0) {
+        if (!scannedSeriesMap.has(baseTitle) || item.authorDetectedFrom === 'document') {
+          scannedSeriesMap.set(baseTitle, {
+            author: item.author,
+            authorDetectedFrom: item.authorDetectedFrom,
+            categoryId: item.categoryId,
+            categoryName: item.categoryName,
+            confidence: item.confidence,
+          });
+        }
+      }
+    }
+    for (const item of scannedResults) {
+      const baseTitle = getBaseBookTitle(item.title);
+      if (baseTitle && scannedSeriesMap.has(baseTitle)) {
+        const canonical = scannedSeriesMap.get(baseTitle)!;
+        if (!item.author || item.author !== canonical.author) {
+          item.author = canonical.author;
+          item.authorDetectedFrom = canonical.authorDetectedFrom;
+          item.categoryId = canonical.categoryId;
+          item.categoryName = canonical.categoryName;
+          item.confidence = Math.max(item.confidence, canonical.confidence);
+          item.status = item.isDuplicate ? 'duplicate' : item.confidence < 40 ? 'needs_review' : 'ready';
+        }
+      }
     }
 
     res.json({
@@ -1048,8 +1214,8 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
           book.fileUrl || `/api/v1/books/${id}/file`,
           book.filePath || null,
           book.fileHash || null,
-          book.pagesCount || 0,
-          book.summary || '',
+          Number(book.pagesCount || book.pages || 0),
+          book.summary || synthesizeBookSummary(book.title, book.author, ''),
           book.coverImage || null,
           book.sourceOrigin || null,
           req.user!.id,
@@ -1068,6 +1234,140 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
     if (book.filePath && fs.existsSync(book.filePath) && path.basename(book.filePath).startsWith('dig-upload-')) {
       try { fs.unlinkSync(book.filePath); } catch {}
     }
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/books/bulk-physical (Admin bulk import physical books via CSV/JSON payload)
+router.post('/bulk-physical', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { items } = req.body;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'NO_ITEMS', message: 'لم يتم توفير أي كتب ورقية للاستيراد.' }
+    });
+  }
+
+  try {
+    const { rows: categories } = await db.query('SELECT id, name FROM categories');
+    const importedBooks: any[] = [];
+
+    await db.transaction(async (client) => {
+      for (const item of items) {
+        if (!item.title || typeof item.title !== 'string' || !item.title.trim()) {
+          continue; // Skip items with no title
+        }
+
+        const title = item.title.trim();
+        const author = (item.author && typeof item.author === 'string') ? item.author.trim() : 'مؤلف غير محدد';
+        const id = `phys-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+
+        // Match category
+        let categoryId = 'cat-general';
+        if (item.categoryId) {
+          const matched = categories.find((c) => c.id === item.categoryId);
+          if (matched) categoryId = matched.id;
+        }
+        if (categoryId === 'cat-general' && item.categoryName) {
+          const normalizedCat = normalizeArabicForSearch(item.categoryName);
+          const matched = categories.find((c) => normalizeArabicForSearch(c.name).includes(normalizedCat) || normalizedCat.includes(normalizeArabicForSearch(c.name)));
+          if (matched) categoryId = matched.id;
+        }
+
+        const totalCopies = Math.max(1, parseInt(item.totalCopies, 10) || 1);
+        const pagesCount = Math.max(0, parseInt(item.pagesCount || item.pages, 10) || 0);
+        const publishYear = parseInt(item.publishYear || item.year, 10) || null;
+        const cabinet = item.cabinet || item.location?.cabinet || '';
+        const shelf = item.shelf || item.location?.shelf || '';
+        const section = item.section || item.location?.section || '';
+        const language = item.language || 'العربية';
+        const summary = item.summary || '';
+        const publisher = item.publisher || null;
+        const isbn = item.isbn || null;
+
+        await client.query(`
+          INSERT INTO books (
+            id, type, title, author, publisher, publish_year, isbn, category_id,
+            language, summary, pages_count, tags, cover_image,
+            total_copies, available_copies, cabinet, shelf, section
+          ) VALUES ($1, 'physical', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        `, [
+          id,
+          title,
+          author,
+          publisher,
+          publishYear,
+          isbn,
+          categoryId,
+          language,
+          summary,
+          pagesCount,
+          item.tags || [],
+          item.coverImage || null,
+          totalCopies,
+          totalCopies,
+          cabinet,
+          shelf,
+          section,
+        ]);
+
+        // Create inventory physical copies
+        for (let i = 1; i <= totalCopies; i++) {
+          const copyId = `copy-${id}-${i}`;
+          const barcode = `BC-${id.toUpperCase()}-${String(i).padStart(2, '0')}`;
+          await client.query(`
+            INSERT INTO physical_copies (id, book_id, barcode, copy_number, cabinet, shelf, section, status, condition)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'available', 'good')
+          `, [
+            copyId,
+            id,
+            barcode,
+            i,
+            cabinet,
+            shelf,
+            section,
+          ]);
+        }
+
+        importedBooks.push({
+          id,
+          type: 'physical',
+          title,
+          author,
+          categoryId,
+          totalCopies,
+          availableCopies: totalCopies,
+          publisher,
+          publishYear,
+          isbn,
+          location: { cabinet, shelf, section },
+          pages: pagesCount,
+          summary,
+        });
+      }
+    });
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'BULK_IMPORT_PHYSICAL_BOOKS',
+      'books',
+      'bulk',
+      { count: importedBooks.length },
+      req
+    );
+
+    res.status(201).json({
+      success: true,
+      data: {
+        count: importedBooks.length,
+        imported: importedBooks.length,
+        message: `تم استيراد ${importedBooks.length} كتاب ورقي بنجاح.`,
+        books: importedBooks,
+      }
+    });
+  } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }
 });
@@ -1238,6 +1538,11 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
       });
     }
 
+    let detectedMeta: any = null;
+    try {
+      detectedMeta = await extractDocumentMetadata(canonicalPath, ext as 'pdf' | 'epub');
+    } catch {}
+
     res.status(201).json({
       success: true,
       data: {
@@ -1252,6 +1557,10 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
         fileHash,
         sha256: fileHash,
         format: ext,
+        detectedTitle: detectedMeta?.title || null,
+        detectedAuthor: detectedMeta?.author || '',
+        detectedSummary: detectedMeta?.summary || null,
+        detectedPages: detectedMeta?.numPages || null,
       },
     });
   } catch (err: any) {

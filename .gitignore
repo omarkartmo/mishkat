@@ -17,3 +17,6 @@ pgdata/
 # Playwright artifacts
 playwright-report/
 test-results/
+
+# Temporary scratch and investigation scripts
+scratch/

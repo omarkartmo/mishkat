@@ -18,8 +18,12 @@ import {
   FileText,
   Play,
   FolderUp,
+  Plus,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { BulkDigitalImportModal } from '../digital/BulkDigitalImportModal';
+import { BookFormModal } from '../physical/PhysicalLibraryView';
+import { BulkCsvImportModal } from '../physical/BulkCsvImportModal';
 import {
   PhysicalBook,
   DigitalBook,
@@ -50,6 +54,8 @@ interface OverviewDashboardProps {
   onOpenNewPhysicalBookmark?: () => void;
   onBulkAddDigitalBooks?: (books: DigitalBook[]) => void;
   onRefreshBooks?: () => void;
+  onAddPhysicalBook?: (book: Omit<PhysicalBook, 'id'>) => Promise<boolean | void>;
+  onBulkImportPhysicalBooks?: (books: Array<Partial<PhysicalBook> & { categoryName?: string }>) => Promise<boolean | void>;
 }
 
 export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
@@ -77,8 +83,12 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   onOpenNewPhysicalBookmark,
   onBulkAddDigitalBooks,
   onRefreshBooks,
+  onAddPhysicalBook,
+  onBulkImportPhysicalBooks,
 }) => {
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
+  const [isBulkCsvModalOpen, setIsBulkCsvModalOpen] = useState(false);
+  const [isAddPhysicalBookModalOpen, setIsAddPhysicalBookModalOpen] = useState(false);
   const allSubmissions = submissions.length > 0 ? submissions : pendingSubmissions;
   const activeLoans = (loans || []).filter((l) => l.status !== 'returned');
   const overdueLoans = (loans || []).filter((l) => l.status === 'overdue');
@@ -124,19 +134,19 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 pt-2 lg:pt-0">
-            {currentUser.role === 'admin' && (
+            {currentUser?.role === 'admin' && (
               <>
                 <button
-                  onClick={handleLoanAction}
-                  className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap"
+                  onClick={() => setIsAddPhysicalBookModalOpen(true)}
+                  className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                  title="إضافة وتعديل الكتب الورقية في الفهرس المكتبي"
                 >
-                  <PlusCircle className="w-4 h-4 shrink-0" />
-                  <span>تسجيل إعارة جديدة</span>
+                  <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                  <span>إضافة الكتب الورقية</span>
                 </button>
-
                 <button
                   onClick={() => setIsBulkImportModalOpen(true)}
-                  className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-emerald-600/30 transition-all cursor-pointer whitespace-nowrap"
+                  className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-emerald-600/30 hover:shadow-emerald-500/40 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
                   title="استيراد مجلد كتب رقمية بالكامل دفعة واحدة"
                 >
                   <FolderUp className="w-4 h-4 shrink-0" />
@@ -146,7 +156,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             )}
             <button
               onClick={() => onNavigate('reading_workspace')}
-              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-amber-600/90 hover:bg-amber-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-amber-600/30 transition-all cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap"
             >
               <Bookmark className="w-4 h-4 shrink-0" />
               <span>مفكرة القراءة والتلخيص</span>
@@ -172,7 +182,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           value={physicalBooks.length}
           subtext={`${availableCopies} نسخة متوفرة`}
           icon={<BookOpen className="w-5 h-5 text-indigo-400" />}
-          onClick={() => onNavigate('search_results')}
+          onClick={() => onNavigate('physical')}
         />
         <MetricCard
           title="المستودع الرقمي"
@@ -571,6 +581,24 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             }
             setIsBulkImportModalOpen(false);
           }}
+        />
+      )}
+
+      {/* Add Physical Book Modal */}
+      {isAddPhysicalBookModalOpen && (
+        <BookFormModal
+          isOpen={isAddPhysicalBookModalOpen}
+          onClose={() => setIsAddPhysicalBookModalOpen(false)}
+          onSave={async (bookData) => {
+            if (onAddPhysicalBook) {
+              await onAddPhysicalBook(bookData);
+            }
+            setIsAddPhysicalBookModalOpen(false);
+            if (onRefreshBooks) onRefreshBooks();
+          }}
+          categories={categories}
+          onBulkImportBooks={onBulkImportPhysicalBooks}
+          onSuccessRefresh={onRefreshBooks}
         />
       )}
     </div>

@@ -391,83 +391,35 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
 
                 {/* Section 1.1 & 3: "فتح الموقع" opens INSIDE MISHKAT in Portal Fullscreen Mode.
                     NO <a target="_blank">, NO window.open, NO individual suggest button on cards. */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleOpenPortalFullscreen(portal);
-                  }}
-                  className="w-full py-2 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-600 text-sky-700 dark:text-sky-300 hover:text-white border border-sky-200 dark:border-sky-800 hover:border-sky-600 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
-                >
-                  <Globe2 className="w-3.5 h-3.5" />
-                  <span>فتح الموقع داخل المنصة</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalFullscreen(portal);
+                    }}
+                    className="flex-1 py-2 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-600 text-sky-700 dark:text-sky-300 hover:text-white border border-sky-200 dark:border-sky-800 hover:border-sky-600 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  >
+                    <Globe2 className="w-3.5 h-3.5" />
+                    <span>فتح الموقع (وضع التصفح بملء الشاشة)</span>
+                  </button>
+
+                  <a
+                    href={portal.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-sky-500 text-slate-400 hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                    title="فتح الموقع في علامة تبويب مستقلة للمتصفح (لتفادي قيود الحماية التي تمنع التضمين)"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
               </div>
             </div>
           );
         })}
       </div>
-
-      {/* Embedded Portal Browsing Preview Card */}
-      {selectedPortal && !isPortalFullscreen && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-md flex flex-col">
-          {/* Ribbon */}
-          <div className="bg-slate-100 dark:bg-slate-950 p-3.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">الموقع المحدد:</span>
-              <span className="font-bold text-xs text-slate-800 dark:text-slate-200">{selectedPortal.name}</span>
-              <span className="font-mono text-xs text-sky-600 dark:text-sky-400 hidden sm:inline">({selectedPortal.url})</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIframeKey((k) => k + 1)}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 transition-colors"
-                title="تحديث الصفحة"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => handleOpenPortalFullscreen(selectedPortal)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>وضع التصفح بملء الشاشة (ESC)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Embedded Sandbox */}
-          <div className="relative min-h-[460px] flex flex-col bg-slate-50 dark:bg-slate-950">
-            {isSafeUrl(selectedPortal.url) ? (
-              <iframe
-                key={iframeKey}
-                src={selectedPortal.url}
-                title={selectedPortal.name}
-                className="w-full flex-1 border-0 bg-white min-h-[460px]"
-                sandbox="allow-same-origin allow-scripts allow-forms"
-              />
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300">
-                <Lock className="w-12 h-12 mb-3 text-rose-500" />
-                <h3 className="font-bold text-base">تم حظر هذا الرابط لأسباب أمنية</h3>
-                <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 max-w-md">
-                  الرابط المدخل يحتوي على بروتوكول غير مصرح به. يُسمح فقط ببروتوكولات الويب الآمنة المعتمدة.
-                </p>
-              </div>
-            )}
-
-            {/* Non-Navigation Informational Banner (Section 1.1 Requirement) */}
-            <div className="p-3 bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-              <Info className="w-4 h-4 text-sky-500 shrink-0" />
-              <span>
-                إذا منع خادم الموقع التضمين الداخلي (عبر سياسة X-Frame-Options)، تذكر أنه يمكنك نسخ رابط صفحة الكتاب واستخدام زر <strong>[اقتراح كتاب للمكتبة]</strong> في أعلى الصفحة ليقوم أمين المكتبة باعتماده وإضافته إلى مشكاة.
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* PORTAL FULLSCREEN MODE (Section 3 Requirement) */}
       {isPortalFullscreen && selectedPortal && (
@@ -528,6 +480,18 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                 <span className="sm:hidden">اقتراح</span>
               </button>
 
+              {/* Open in external tab for sites that block iframes (X-Frame-Options) */}
+              <a
+                href={selectedPortal.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                title="فتح الموقع في علامة تبويب جديدة مستقلة لتجاوز حظر التضمين الأمني"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">فتح في تبويب خارجي</span>
+              </a>
+
               {/* Explicit Exit Control with ESC Badge (Section 3) */}
               <button
                 onClick={() => setIsPortalFullscreen(false)}
@@ -561,11 +525,11 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
             )}
 
             {/* Non-Navigation Guidance Footer (Section 1.1 Requirement) */}
-            <div className="bg-slate-900 border-t border-slate-800 px-4 py-2 flex items-center justify-between text-xs text-slate-400 shrink-0">
+            <div className="bg-slate-900 border-t border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 shrink-0">
               <div className="flex items-center gap-2">
-                <Info className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span className="text-[11px]">
-                  إذا ظهرت رسالة تمنع العرض داخل الإطار، فهذا الموقع لا يسمح بالتصفح المضمن داخل المنصة. يمكنك نسخ عنوان الكتاب ورابطه واستخدام زر [اقتراح كتاب من هذا الموقع] في الأعلى.
+                  ملاحظة أمنية: إذا ظهرت شاشة بيضاء أو رسالة تمنع الاتصال، فهذا الموقع يفرض سياسة حماية (X-Frame-Options / CSP) تمنع التضمين داخل الإطارات. يمكنك الضغط على <strong>[فتح في تبويب خارجي ↗]</strong> في الأعلى لتصفحه مباشرة.
                 </span>
               </div>
               <button

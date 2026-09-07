@@ -21,9 +21,11 @@ import {
   Bookmark,
   MinusCircle,
   PlusCircle,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { PhysicalBook, Category, UserRole, User as UserType, SystemConfig } from '../../types/library';
 import { StudentLoanRequestModal } from './StudentLoanRequestModal';
+import { BulkCsvImportModal, BulkCsvImportContent } from './BulkCsvImportModal';
 
 interface PhysicalLibraryViewProps {
   books: PhysicalBook[];
@@ -46,6 +48,7 @@ interface PhysicalLibraryViewProps {
   onDeleteBook?: (id: string, options?: { copiesCount?: number; reason?: string }) => Promise<any> | void;
   onIssueLoanForBook?: (book: PhysicalBook) => void;
   onQuickLoan?: (bookId: string) => void;
+  onBulkImportBooks?: (books: Array<Partial<PhysicalBook> & { categoryName?: string }>) => Promise<boolean | void>;
   initialSearchQuery?: string;
 }
 
@@ -64,6 +67,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
   onDeleteBook,
   onIssueLoanForBook,
   onQuickLoan,
+  onBulkImportBooks,
   initialSearchQuery = '',
 }) => {
   const [search, setSearch] = useState(initialSearchQuery);
@@ -72,6 +76,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
   
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<PhysicalBook | null>(null);
   const [shelfCardBook, setShelfCardBook] = useState<PhysicalBook | null>(null);
   const [requestingLoanBook, setRequestingLoanBook] = useState<PhysicalBook | null>(null);
@@ -125,14 +130,16 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
           </p>
         </div>
 
-        {userRole === 'admin' && (
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto shrink-0"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>إضافة كتاب ورقي جديد</span>
-          </button>
+        {(userRole === 'admin' || userRole === 'librarian') && (
+          <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0 flex-wrap">
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
+              <span>إضافة الكتب الورقية</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -207,10 +214,19 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
 
       {/* Book Grid */}
       {filteredBooks.length === 0 ? (
-        <div className="text-center py-16 bg-slate-900/40 border border-slate-800/60 rounded-2xl">
-          <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+        <div className="text-center py-16 bg-slate-900/40 border border-slate-800/60 rounded-2xl space-y-3">
+          <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-1" />
           <h3 className="text-base font-bold text-slate-300">لا توجد كتب مطابقة لخيارات البحث</h3>
-          <p className="text-xs text-slate-500 mt-1">جرب تغيير كلمات البحث أو اختيار قسم آخر</p>
+          <p className="text-xs text-slate-500">جرب تغيير كلمات البحث أو اختيار قسم آخر</p>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إضافة الكتب الورقية</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -312,7 +328,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
 
                 {/* Card Actions Footer */}
                 <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       onClick={() => setShelfCardBook(book)}
                       className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs transition-colors"
@@ -324,10 +340,11 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                       <>
                         <button
                           onClick={() => setEditingBook(book)}
-                          className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs transition-colors"
-                          title="تعديل بيانات الكتاب"
+                          className="px-2.5 py-1.5 bg-slate-800 hover:bg-indigo-950/60 text-slate-300 hover:text-indigo-300 border border-slate-700/70 hover:border-indigo-500/50 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                          title="تعديل بيانات الكتاب الورقي"
                         >
-                          <Edit2 className="w-4 h-4" />
+                          <Edit2 className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>تعديل</span>
                         </button>
                         {onDeleteBook && (
                           <button
@@ -404,6 +421,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
             onAddBook(data);
             setIsAddModalOpen(false);
           }}
+          onBulkImportBooks={onBulkImportBooks}
         />
       )}
 
@@ -793,21 +811,30 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
 };
 
 // Book Form Modal Component
-interface BookFormModalProps {
+export interface BookFormModalProps {
   initialBook?: PhysicalBook;
   categories: Category[];
   onClose: () => void;
   onSave: (data: any) => void;
   onDelete?: (book: PhysicalBook) => void;
+  isOpen?: boolean;
+  onBulkImportBooks?: (books: Array<Partial<PhysicalBook> & { categoryName?: string }>) => Promise<boolean | void>;
+  onSuccessRefresh?: () => void;
 }
 
-const BookFormModal: React.FC<BookFormModalProps> = ({
+export const BookFormModal: React.FC<BookFormModalProps> = ({
   initialBook,
   categories,
   onClose,
   onSave,
   onDelete,
+  isOpen = true,
+  onBulkImportBooks,
+  onSuccessRefresh,
 }) => {
+  if (!isOpen) return null;
+
+  const [importMode, setImportMode] = useState<'single' | 'bulk_csv'>('single');
   const [title, setTitle] = useState(initialBook?.title || '');
   const [author, setAuthor] = useState(initialBook?.author || '');
   const [publisher, setPublisher] = useState(initialBook?.publisher || '');
@@ -844,17 +871,89 @@ const BookFormModal: React.FC<BookFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 className="font-bold text-slate-100 text-lg flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-indigo-400" />
-            {initialBook ? 'تعديل بيانات الكتاب الورقي' : 'إضافة كتاب ورقي جديد للفهرس'}
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-200">
+      <div
+        className={`relative bg-slate-900 border border-slate-800 rounded-3xl w-full ${
+          importMode === 'bulk_csv' && !initialBook
+            ? 'max-w-4xl max-h-[92vh] flex flex-col'
+            : 'max-w-2xl max-h-[90vh] overflow-y-auto'
+        } p-5 sm:p-6 space-y-5 shadow-2xl transition-all`}
+      >
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+              {importMode === 'bulk_csv' && !initialBook ? (
+                <FileSpreadsheet className="w-5 h-5" />
+              ) : (
+                <BookOpen className="w-5 h-5 text-indigo-400" />
+              )}
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-100 text-base sm:text-lg flex items-center gap-2">
+                <span>{initialBook ? 'تعديل بيانات الكتاب الورقي' : 'إضافة الكتب الورقية'}</span>
+              </h3>
+              {!initialBook && (
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {importMode === 'single'
+                    ? 'إضافة كتاب ورقي جديد بشكل فردي إلى الفهرس'
+                    : 'استيراد مجموعة كتب دفعة واحدة عبر ملف CSV مع كامل التفاصيل'}
+                </p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Choice selector: single book vs bulk CSV */}
+        {!initialBook && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800 gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setImportMode('single')}
+              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                importMode === 'single'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <span>كتاب فردي</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportMode('bulk_csv')}
+              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                importMode === 'bulk_csv'
+                  ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-lg shadow-amber-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4 shrink-0 text-amber-400" />
+              <span>مجموعة كتب باضافة ملف csv فيه كامل المعلومات</span>
+            </button>
+          </div>
+        )}
+
+        {/* Content Body */}
+        {importMode === 'bulk_csv' && !initialBook ? (
+          <BulkCsvImportContent
+            categories={categories}
+            onImport={async (books) => {
+              if (onBulkImportBooks) {
+                await onBulkImportBooks(books);
+              }
+            }}
+            onSuccessRefresh={() => {
+              if (onSuccessRefresh) onSuccessRefresh();
+            }}
+            onClose={onClose}
+          />
+        ) : (
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1029,6 +1128,7 @@ const BookFormModal: React.FC<BookFormModalProps> = ({
             </div>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

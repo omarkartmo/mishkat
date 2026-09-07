@@ -31,6 +31,7 @@ import {
   AlertCircle,
   MinusCircle,
   PlusCircle,
+  Edit2,
 } from 'lucide-react';
 import {
   PhysicalBook,
@@ -43,6 +44,8 @@ import {
 import { matchesArabicQuery } from '../../utils/searchUtils';
 import { BulkDigitalImportModal } from '../digital/BulkDigitalImportModal';
 import { AddDigitalBookModal } from '../digital/AddDigitalBookModal';
+import { EditDigitalBookModal } from '../digital/EditDigitalBookModal';
+import { BookFormModal } from '../physical/PhysicalLibraryView';
 
 interface SearchResultsViewProps {
   initialQuery?: string;
@@ -66,6 +69,10 @@ interface SearchResultsViewProps {
   onNavigateTab?: (tab: NavigationTab) => void;
   onAddDigitalBook?: (book: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>) => void;
   onBulkAddDigitalBooks?: (books: Omit<DigitalBook, 'id' | 'addedAt' | 'downloadCount' | 'readCount'>[]) => void;
+  onUpdateDigitalBook?: (id: string, updates: Partial<DigitalBook>) => void;
+  onDeleteDigitalBook?: (id: string) => Promise<any> | void;
+  onAddPhysicalBook?: (book: Omit<PhysicalBook, 'id' | 'addedAt' | 'availableCopies'>) => void;
+  onUpdatePhysicalBook?: (id: string, updates: Partial<PhysicalBook>) => void;
   onDeletePhysicalBook?: (id: string, options?: { copiesCount?: number; reason?: string }) => Promise<any> | void;
 }
 
@@ -97,6 +104,10 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   onNavigateTab,
   onAddDigitalBook,
   onBulkAddDigitalBooks,
+  onUpdateDigitalBook,
+  onDeleteDigitalBook,
+  onAddPhysicalBook,
+  onUpdatePhysicalBook,
   onDeletePhysicalBook,
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
@@ -107,9 +118,14 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   const [sortBy, setSortBy] = useState<'relevance' | 'title' | 'author' | 'pages'>('relevance');
   const [viewLayout, setViewLayout] = useState<'detailed' | 'grid'>('detailed');
 
-  // Modals for Digital Management
+  // Modals for Physical & Digital Management
   const [isAddDigitalModalOpen, setIsAddDigitalModalOpen] = useState(false);
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
+  const [editingDigitalBook, setEditingDigitalBook] = useState<DigitalBook | null>(null);
+  const [digitalBookToDelete, setDigitalBookToDelete] = useState<DigitalBook | null>(null);
+  const [isDeletingDigital, setIsDeletingDigital] = useState(false);
+  const [isAddPhysicalModalOpen, setIsAddPhysicalModalOpen] = useState(false);
+  const [editingPhysicalBook, setEditingPhysicalBook] = useState<PhysicalBook | null>(null);
   const [physicalBookToDelete, setPhysicalBookToDelete] = useState<PhysicalBook | null>(null);
   const [deleteMode, setDeleteMode] = useState<'entire' | 'copies'>('copies');
   const [copiesToRemove, setCopiesToRemove] = useState(1);
@@ -249,6 +265,16 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               {currentUser.role === 'admin' && (
                 <>
+                  {onAddPhysicalBook && (
+                    <button
+                      onClick={() => setIsAddPhysicalModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600/90 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-700/20 transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>إضافة الكتب الورقية</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => setIsBulkImportModalOpen(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/20 transition-all cursor-pointer whitespace-nowrap"
@@ -643,6 +669,17 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
+                      {currentUser.role === 'admin' && onUpdatePhysicalBook && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingPhysicalBook(pBook)}
+                          className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                          title="تعديل بيانات الكتاب الورقي"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>تعديل الكتاب</span>
+                        </button>
+                      )}
                       {currentUser.role === 'admin' && onDeletePhysicalBook && (
                         <button
                           type="button"
@@ -826,6 +863,27 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
+                      {currentUser.role === 'admin' && onUpdateDigitalBook && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingDigitalBook(dBook)}
+                          className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                          title="تعديل بيانات الكتاب الرقمي"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>تعديل الكتاب</span>
+                        </button>
+                      )}
+                      {currentUser.role === 'admin' && onDeleteDigitalBook && (
+                        <button
+                          type="button"
+                          onClick={() => setDigitalBookToDelete(dBook)}
+                          className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-xl transition-colors cursor-pointer"
+                          title="مسح الكتاب الرقمي من المستودع"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                       {/* Direct Read in Reader (دخول فوري ومطالعة) */}
                       {onOpenReader && (
                         <button
@@ -919,6 +977,16 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                    {currentUser.role === 'admin' && onUpdatePhysicalBook && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingPhysicalBook(pBook)}
+                        className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
+                        title="تعديل بيانات الكتاب الورقي"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {currentUser.role === 'admin' && onDeletePhysicalBook && (
                       <button
                         type="button"
@@ -1024,14 +1092,34 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                    {currentUser.role === 'admin' && onUpdateDigitalBook && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingDigitalBook(dBook)}
+                        className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
+                        title="تعديل بيانات الكتاب الرقمي"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-emerald-500" />
+                      </button>
+                    )}
+                    {currentUser.role === 'admin' && onDeleteDigitalBook && (
+                      <button
+                        type="button"
+                        onClick={() => setDigitalBookToDelete(dBook)}
+                        className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-xl transition-colors cursor-pointer"
+                        title="مسح الكتاب الرقمي"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {onOpenReader && (
                       <button
                         onClick={() => onOpenReader(dBook)}
-                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <BookOpen className="w-4 h-4" />
-                        <span>فتح ومطالعة الآن 📖</span>
+                        <span>فتح ومطالعة 📖</span>
                       </button>
                     )}
                   </div>
@@ -1339,6 +1427,129 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                   )}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Physical Book Modal */}
+      {isAddPhysicalModalOpen && onAddPhysicalBook && (
+        <BookFormModal
+          categories={categories}
+          onClose={() => setIsAddPhysicalModalOpen(false)}
+          onSave={(data) => {
+            onAddPhysicalBook(data);
+            setIsAddPhysicalModalOpen(false);
+          }}
+        />
+      )}
+
+      {/* Edit Physical Book Modal */}
+      {editingPhysicalBook && onUpdatePhysicalBook && (
+        <BookFormModal
+          initialBook={editingPhysicalBook}
+          categories={categories}
+          onClose={() => setEditingPhysicalBook(null)}
+          onSave={(data) => {
+            onUpdatePhysicalBook(editingPhysicalBook.id, data);
+            setEditingPhysicalBook(null);
+          }}
+          onDelete={(book) => {
+            setEditingPhysicalBook(null);
+            handleOpenDeleteModal(book);
+          }}
+        />
+      )}
+
+      {/* Edit Digital Book Modal */}
+      {editingDigitalBook && onUpdateDigitalBook && (
+        <EditDigitalBookModal
+          book={editingDigitalBook}
+          categories={categories}
+          onClose={() => setEditingDigitalBook(null)}
+          onSave={async (id, updates) => {
+            onUpdateDigitalBook(id, updates);
+            setEditingDigitalBook(null);
+          }}
+          onDelete={onDeleteDigitalBook ? async (id) => {
+            const b = editingDigitalBook;
+            setEditingDigitalBook(null);
+            setDigitalBookToDelete(b);
+          } : undefined}
+        />
+      )}
+
+      {/* Delete Digital Book Confirmation Modal */}
+      {digitalBookToDelete && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-rose-600 dark:text-rose-400 text-sm flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                <span>تأكيد مسح الكتاب الرقمي</span>
+              </h3>
+              <button
+                onClick={() => !isDeletingDigital && setDigitalBookToDelete(null)}
+                disabled={isDeletingDigital}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">عنوان الكتاب:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100 truncate max-w-[240px]">{digitalBookToDelete.title}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">المؤلف:</span>
+                <span className="text-slate-700 dark:text-slate-300">{digitalBookToDelete.author}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">الصيغة:</span>
+                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold uppercase">{digitalBookToDelete.format}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              هل أنت متأكد من رغبتك في مسح هذا الكتاب الرقمي من المستودع المركزي؟ سيتم إزالة ملف الكتاب وجميع سجلات القراءة المرتبطة به.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDigitalBookToDelete(null)}
+                disabled={isDeletingDigital}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingDigital}
+                onClick={async () => {
+                  if (onDeleteDigitalBook && digitalBookToDelete) {
+                    setIsDeletingDigital(true);
+                    try {
+                      await onDeleteDigitalBook(digitalBookToDelete.id);
+                      setDigitalBookToDelete(null);
+                    } finally {
+                      setIsDeletingDigital(false);
+                    }
+                  }
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                {isDeletingDigital ? (
+                  <span>جارٍ المسح...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>تأكيد مسح الكتاب</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

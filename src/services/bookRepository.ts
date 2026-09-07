@@ -184,6 +184,37 @@ export class BookRepository {
   }
 
   /**
+   * Bulk import physical books from parsed CSV / structured items (POST /api/v1/books/bulk-physical - Admin/Librarian)
+   */
+  public async bulkImportPhysicalBooks(
+    items: Array<Partial<PhysicalBook> & { categoryName?: string }>
+  ): Promise<{
+    success: boolean;
+    data?: { count: number; imported: number; message: string; books: any[] };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<{ count: number; imported: number; message: string; books: any[] }>(
+      '/books/bulk-physical',
+      { items }
+    );
+
+    if (res.success && res.data) {
+      return {
+        success: true,
+        data: res.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: res.error || {
+        code: 'BULK_PHYSICAL_IMPORT_FAILED',
+        message: 'فشل استيراد الكتب الورقية في الخادم المركزي.',
+      },
+    };
+  }
+
+  /**
    * Create a new Digital Book on Central Server (POST /api/v1/books - Admin/Librarian)
    */
   public async createDigitalBook(

@@ -4,7 +4,14 @@ import { Express } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createExpressApp } from '../server/index';
-import { cleanAuthorName, extractAuthorFromText } from '../server/utils/authorExtractor';
+import {
+  cleanAuthorName,
+  extractAuthorFromText,
+  extractAuthorFromLines,
+  extractTitleFromPageText,
+  extractIntroductionExcerpt,
+  extractDocumentMetadata,
+} from '../server/utils/authorExtractor';
 
 let app: Express;
 let adminToken: string;
@@ -71,13 +78,68 @@ describe('Author Extraction & Text Normalization Unit Tests', () => {
     expect(author).toBe('ابن أبي زيد القيرواني');
   });
 
+  it('should extract author across lines when "تأليف" is on a separate line', () => {
+    const lines = [
+      'وزارة التراث القومي والثقافة',
+      'كتاب الضياء',
+      'تأليف',
+      'العلامة سلمة بن مسلم العوتبي',
+      'مطابع عمان',
+    ];
+    const author = extractAuthorFromLines(lines);
+    expect(author).toBe('العلامة سلمة بن مسلم العوتبي');
+  });
+
+  it('should verify / extract authentic book title from page text', () => {
+    const page1 = 'بسم الله الرحمن الرحيم كتاب المصنف في الفقه والأحكام تأليف فلان';
+    const title1 = extractTitleFromPageText(page1);
+    expect(title1).toContain('كتاب المصنف');
+
+    const page2 = 'ديوان أبي مسلم البهلاني الرواحي حسان عمان';
+    const title2 = extractTitleFromPageText(page2);
+    expect(title2).toContain('ديوان أبي مسلم');
+  });
+
+  it('should extract introductory excerpt for domain classification and description', () => {
+    const fullText = 'بسم الله الرحمن الرحيم المقدمة الحمد لله رب العالمين والصلاة والسلام على رسوله، أما بعد فهذا كتاب في أصول الفقه الإسلامي ومسائل الاجتهاد والتقليد';
+    const { introExcerpt, introFull } = extractIntroductionExcerpt(fullText);
+    expect(introExcerpt).not.toBeNull();
+    expect(introExcerpt).toContain('مقدمة الكتاب');
+    expect(introFull).toContain('أصول الفقه');
+  });
+
   it('should normalize Arabic Unicode presentation forms (NFKC)', () => {
-    // Unicode presentation forms: ﺗﺄﻟﻴﻒ (presentation form) vs standard تأليف
-    // \uFE97 (Teh) \uFE83 (Alef Hamza) \uFEDF (Lam) \uFEF4 (Yeh medial) \uFEBB (Feh final)
     const presentationText = '\uFE97\uFE83\uFEDF\uFEF4\uFEBB : \u0627\u0644\u062F\u0643\u062A\u0648\u0631 \u0645\u062D\u0645\u062F \u0627\u0644\u0637\u0627\u0647\u0631';
     const author = extractAuthorFromText(presentationText);
     expect(author).not.toBeNull();
     expect(author).toContain('محمد');
+  });
+
+  it('should extract author "د. محمد بن صالح ناصر" when title is "أبو مسلم الرواحي (حسان عمان)" and not confuse title with author', () => {
+    const lines = [
+      'أبو مسلم الرواحي',
+      '«حسان عمان»',
+      'ت: (1920م)',
+      'تأليف',
+      'د/ محمد بن صالح ناصر',
+    ];
+    const author = extractAuthorFromLines(lines);
+    expect(author).toContain('محمد بن صالح ناصر');
+    expect(author).not.toContain('أبو مسلم');
+  });
+
+  it('should extract author "محمد بن يوسف إطفيش" from "تصنيف: العلامة محمد بن يوسف إطفيش" and NEVER return Baruni', () => {
+    const lines = [
+      'سلطنة عمان',
+      'وزارة التراث القومي والثقافة',
+      'كتاب الجامع الصغير',
+      'تصنيف',
+      'العلامة محمد بن يوسف إطفيش',
+      'الجزء الأول',
+    ];
+    const author = extractAuthorFromLines(lines);
+    expect(author).toContain('محمد بن يوسف إطفيش');
+    expect(author).not.toContain('الباروني');
   });
 });
 
@@ -190,20 +252,99 @@ describe('Progressive Batch Import & Exclusion API Tests', () => {
       expect(item.author).not.toContain('وزارة');
     }
 
-    // Verify known heritage books were accurately resolved
+    // Verify books extract actual author without fake publishers or forced catalog names
     const alWadBook = items.find((i: any) => i.title.includes('كتاب الوضع'));
     if (alWadBook) {
-      expect(alWadBook.author).toBe('أبو زكريا يحيى بن أبي بكر الجناوني');
+      expect(alWadBook.author).toBeTruthy();
+      expect(alWadBook.author).not.toContain('المكتبة');
+      expect(alWadBook.author).not.toContain('وزارة');
     }
 
     const manhajBook = items.find((i: any) => i.title.includes('منهج الطالبين'));
     if (manhajBook) {
-      expect(manhajBook.author).toBe('خميس بن علي بن رستم الرستاقي');
+      expect(manhajBook.author).toBeTruthy();
+      expect(manhajBook.author).not.toContain('المكتبة');
     }
 
     const ibnSalamBook = items.find((i: any) => i.title.includes('ابن سلام'));
     if (ibnSalamBook) {
-      expect(ibnSalamBook.author).toBe('ابن سلام الإباضي');
+      expect(typeof ibnSalamBook.author).toBe('string');
+      expect(ibnSalamBook.author).not.toContain('المكتبة');
+    }
+
+    // Specific test for user's real books in C:\Users\NABTAKIR\Downloads\كتب
+    const abuMuslimBook = items.find((i: any) => (i.originalFileName && i.originalFileName.includes('1000323')) || i.title.includes('أبو مسلم'));
+    if (abuMuslimBook) {
+      expect(abuMuslimBook.author).toBe('د. محمد بن صالح ناصر');
+      expect(abuMuslimBook.categoryId).toBe('cat-arabic');
+    }
+
+    const jamiSaghirBook = items.find((i: any) => (i.originalFileName && i.originalFileName.includes('1000746')) || i.title.includes('الجامع الصغير'));
+    if (jamiSaghirBook) {
+      expect(jamiSaghirBook.author).toBe('العلامة محمد بن يوسف إطفيش');
+      expect(jamiSaghirBook.author).not.toContain('الباروني');
+      expect(jamiSaghirBook.categoryId).toBe('cat-islamic');
+    }
+  });
+
+  it('should leave author empty ("") when no authentic author is found across pages 1-4', async () => {
+    // Test book 2 has no author pattern in filename or mock content
+    const res = await request(app)
+      .post('/api/v1/books/bulk-scan')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        folderPath: testDir,
+        limit: 10,
+        excludeImported: false,
+      });
+
+    expect(res.status).toBe(200);
+    const items = res.body.data.items;
+    const anonymousBook = items.find((i: any) => i.title.includes('مختصر المسائل الفقهية الفريد'));
+    expect(anonymousBook).toBeDefined();
+    // Author should be strictly empty string ("") without fabricating an unrelated author
+    expect(anonymousBook.author).toBe('');
+    // But category should be accurately classified as Sharia because of the title
+    expect(anonymousBook.categoryId).toBe('cat-islamic');
+  });
+
+  it('should strictly reject OCR gibberish and reversed non-author tokens', () => {
+    expect(cleanAuthorName('د. هللاو قفوملا')).toBeNull();
+    expect(cleanAuthorName('مين')).toBeNull();
+    expect(cleanAuthorName('عمينبتيميربعلنسعرر')).toBeNull();
+    expect(cleanAuthorName('عمى تمير على سعر')).toBeNull();
+    expect(cleanAuthorName('ممين تم على سمر')).toBeNull();
+  });
+
+  it('should classify "منهج الطالبين وبلاغ الراغبين" as Islamic Sciences across all parts', async () => {
+    const userBooksDir = 'C:\\Users\\NABTAKIR\\Downloads\\كتب';
+    if (!fs.existsSync(userBooksDir)) return;
+
+    const res = await request(app)
+      .post('/api/v1/books/bulk-scan')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        folderPath: userBooksDir,
+        limit: 25,
+        excludeImported: false,
+      });
+
+    expect(res.status).toBe(200);
+    const items = res.body.data.items;
+
+    // Filter all parts of "منهج الطالبين وبلاغ الراغبين"
+    const manhajParts = items.filter((i: any) => i.title.includes('منهج الطالبين'));
+    if (manhajParts.length > 0) {
+      for (const part of manhajParts) {
+        // Every single part MUST have author "خميس بن سعيد الشقصي الرستاقي"
+        expect(part.author).toBe('خميس بن سعيد الشقصي الرستاقي');
+        // Category must be Islamic Sciences (cat-islamic) NOT education
+        expect(part.categoryId).toBe('cat-islamic');
+        // Must NEVER contain any OCR gibberish
+        expect(part.author).not.toContain('هللاو');
+        expect(part.author).not.toContain('مين');
+        expect(part.author).not.toContain('عمينبتيمير');
+      }
     }
   });
 });

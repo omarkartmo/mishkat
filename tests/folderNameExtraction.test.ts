@@ -32,6 +32,11 @@ beforeAll(async () => {
   expect(adminLogin.status).toBe(200);
   adminToken = adminLogin.body.data.token;
 
+  // Clean up any previously imported test book from DB
+  try {
+    await db.query("DELETE FROM books WHERE title = 'رياض الصالحين'");
+  } catch {}
+
   // Set up test directory structure
   if (fs.existsSync(testBaseDir)) {
     fs.rmSync(testBaseDir, { recursive: true, force: true });
