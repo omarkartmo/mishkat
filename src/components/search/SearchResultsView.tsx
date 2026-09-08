@@ -1483,6 +1483,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
       {/* Edit Digital Book Modal */}
       {editingDigitalBook && onUpdateDigitalBook && (
         <EditDigitalBookModal
+          isOpen={Boolean(editingDigitalBook)}
           book={editingDigitalBook}
           categories={categories}
           onClose={() => setEditingDigitalBook(null)}

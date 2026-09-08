@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { Express } from 'express';
 import { createExpressApp } from '../server/index';
+import { db } from '../server/db/pool';
+import { healCorruptedDigitalBooks } from '../server/services/bookSanitizer';
 import {
   isValidArabicSentence,
   synthesizeBookSummary,
@@ -33,6 +35,15 @@ describe('Digital Book Quality & Summary Validation', () => {
     expect(isValidArabicSentence(cipherNoise)).toBe(false);
     expect(isValidArabicSentence(brokenAscii)).toBe(false);
     expect(isValidArabicSentence(lowArabic)).toBe(false);
+
+    // Reversed Arabic words and OCR hallucinations (user-reported absurd cases)
+    const reversedWordsSample = 'ةرازؤ ثازنلا وقلا ةفاقثلاو ةنطلس ناكم ةداعسلا';
+    const singleLetterNoise = '١ 2 ت ت 0 4 P$ ےک Ec روک O ج د ر ز س ش';
+    const reversedArticle = 'باتكلا مظعأو هيلع دومحملا لله دمحلا';
+
+    expect(isValidArabicSentence(reversedWordsSample)).toBe(false);
+    expect(isValidArabicSentence(singleLetterNoise)).toBe(false);
+    expect(isValidArabicSentence('ةرازو ملعتلا يلاعلا')).toBe(false); // starting with 'ة'
 
     // Authentic Arabic sentences
     const authenticProse1 = 'الحمد لله رب العالمين وصلى الله وسلم على نبينا محمد وعلى آله وصحبه أجمعين، وبعد فهذا كتاب جامع ومختصر في الفقه وأصوله.';
@@ -121,5 +132,34 @@ describe('Digital Book Quality & Summary Validation', () => {
     // 4. Verify it is removed
     const getRes = await request(app).get(`/api/v1/books/${bookId}`);
     expect(getRes.status).toBe(404);
+  });
+
+  it('should automatically heal corrupted / reversed book summaries in database', async () => {
+    // Insert a book with corrupted/reversed summary
+    const testBookId = `test-corrupt-${Date.now()}`;
+    await db.query(`
+      INSERT INTO books (id, title, author, type, format, summary, created_at, updated_at)
+      VALUES ($1, $2, $3, 'digital', 'pdf', $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [
+      testBookId,
+      'رياض الصالحين من كلام سيد المرسلين',
+      'الإمام يحيى بن شرف النووي',
+      'ةرازؤ ثازنلا وقلا ةفاقثلاو ةنطلس ناكم ةداعسلا', // Corrupted reversed text
+    ]);
+
+    // Run self-healing routine
+    const healedCount = await healCorruptedDigitalBooks(db);
+    expect(healedCount).toBeGreaterThanOrEqual(1);
+
+    // Verify summary was sanitized and synthesized cleanly
+    const { rows } = await db.query('SELECT summary FROM books WHERE id = $1', [testBookId]);
+    expect(rows.length).toBe(1);
+    const healedSummary = rows[0].summary;
+    expect(isValidArabicSentence(healedSummary)).toBe(true);
+    expect(healedSummary).not.toContain('ةرازؤ');
+    expect(healedSummary).toContain('رياض الصالحين');
+
+    // Clean up
+    await db.query('DELETE FROM books WHERE id = $1', [testBookId]);
   });
 });

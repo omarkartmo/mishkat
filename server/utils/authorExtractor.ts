@@ -382,34 +382,93 @@ export function extractTitleFromPageText(pageText: string, lines?: string[]): st
   return null;
 }
 
+// Arabic Common Lexicon for Coherence Verification
+const COMMON_ARABIC_WORDS = new Set([
+  'في', 'من', 'على', 'إلى', 'عن', 'مع', 'هذا', 'هذه', 'التي', 'الذي', 'الذين',
+  'هو', 'هي', 'أن', 'إن', 'كان', 'كانت', 'يكون', 'بين', 'قد', 'كل', 'غير',
+  'بعد', 'قبل', 'حيث', 'لما', 'كما', 'ثم', 'أو', 'أم', 'حتى', 'كذلك', 'ذلك',
+  'تلك', 'كتاب', 'الكتاب', 'بيان', 'علم', 'دراسة', 'فصل', 'باب', 'مقدمة',
+  'شرح', 'رسالة', 'مختصر', 'معرفة', 'أصول', 'قواعد', 'تأليف', 'تصنيف',
+  'الحمد', 'الله', 'رسول', 'نبي', 'صلى', 'وسلم', 'أجمعين', 'وبعد', 'فهذا',
+  'تاريخ', 'سيرة', 'أهل', 'عمان', 'الفقه', 'أحكام', 'مسائل', 'طالب', 'العلم',
+  'شريعة', 'دين', 'سنة', 'حديث', 'حديثا', 'رواية', 'أثر', 'الإسلام', 'الإسلامي',
+  'نظام', 'مكتبة', 'تراث', 'ثقافة', 'فكر', 'تربية', 'قراءة', 'مطالعة'
+]);
+
+export function normalizeArabicUnicode(text: string): string {
+  if (!text) return '';
+  return text
+    .normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '') // Tashkeel / Harakat
+    .replace(/\u0640/g, '') // Tatweel
+    .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, ' ') // Control chars
+    .replace(/\uFFFD/g, ' ') // Replacement chars
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * Validates that an extracted text snippet is genuine, coherent Arabic prose
- * and NOT raw OCR noise, garbled font encoding glyphs, or random characters.
+ * and NOT raw OCR noise, garbled font encoding glyphs, or random/reversed characters.
  */
 export function isValidArabicSentence(text: string): boolean {
-  if (!text || text.trim().length < 35) return false;
-  const clean = text.trim();
-  
-  // Count Arabic letters vs non-Arabic characters
+  if (!text) return false;
+  const clean = normalizeArabicUnicode(text);
+  if (clean.length < 35) return false;
+
+  // Check character composition
   const arabicLetters = clean.match(/[\u0600-\u06FF]/g) || [];
   const latinLetters = clean.match(/[a-zA-Z]/g) || [];
   const digits = clean.match(/[0-9\u0660-\u0669]/g) || [];
-
-  // Must have at least 25 Arabic letters
-  if (arabicLetters.length < 25) return false;
-
-  // Arabic letters must make up at least 65% of all non-space characters
   const nonSpaceLength = clean.replace(/\s+/g, '').length;
+
   if (nonSpaceLength === 0) return false;
-  if (arabicLetters.length / nonSpaceLength < 0.65) return false;
 
-  // Excessive digits or Latin letters indicate OCR noise, copyright codes, or cipher
-  if (digits.length > nonSpaceLength * 0.25) return false;
-  if (latinLetters.length > nonSpaceLength * 0.2) return false;
+  // Arabic letters must dominate (> 75% of non-space characters)
+  if (arabicLetters.length / nonSpaceLength < 0.75) return false;
 
-  // Must contain common functional Arabic words to ensure genuine sentences
-  const naturalProseMarker = /(?:في|من|على|إلى|عن|مع|هذا|هذه|الكتاب|المؤلف|الله|رسول|بيان|علم|دراسة|باب|فصل|الحمد|أما\s+بعد|مقدمة|مسائل|أحكام|تاريخ|سيرة|أهل|تربية|فكر|أصول)/i;
-  return naturalProseMarker.test(clean);
+  // Foreign noise must be low
+  if (latinLetters.length / nonSpaceLength > 0.10) return false;
+  if (digits.length / nonSpaceLength > 0.15) return false;
+
+  // Words breakdown
+  const words = clean.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length < 6) return false;
+
+  // Reject text with words starting with Taa Marbuta (ة) - this indicates character-reversed OCR
+  const taaMarbutaStartCount = words.filter((w) => w.startsWith('ة')).length;
+  if (taaMarbutaStartCount > 0) return false;
+
+  // Reject text with multiple words ending in 'ال' (reversed definite article e.g. باتكلا, ةبتكملا)
+  const reversedAlCount = words.filter((w) => w.length >= 4 && w.endsWith('ال')).length;
+  if (reversedAlCount >= 2) return false;
+
+  // Reject text where average word length is abnormal (disjointed single letters or merged strings)
+  const totalWordChars = words.reduce((acc, w) => acc + w.length, 0);
+  const avgWordLen = totalWordChars / words.length;
+  if (avgWordLen < 2.5 || avgWordLen > 9.0) return false;
+
+  // Reject if too many isolated 1-letter words (excluding valid prepositions 'و')
+  const singleLetters = words.filter((w) => w.length === 1 && w !== 'و').length;
+  if (singleLetters / words.length > 0.15) return false;
+
+  // Reject words with repeated single consonants >= 3 times (e.g. "رررر", "سسسس")
+  if (words.some((w) => /(.)\1\1/.test(w))) return false;
+
+  // Reject very long merged nonsense tokens
+  if (words.some((w) => w.length > 14)) return false;
+
+  // Check for genuine vocabulary matches
+  let recognizedCount = 0;
+  for (const w of words) {
+    const bare = w.replace(/^(?:ال|و|ف|ب|ل|ك)/, '');
+    if (COMMON_ARABIC_WORDS.has(w) || COMMON_ARABIC_WORDS.has(bare)) {
+      recognizedCount++;
+    }
+  }
+
+  // At least 2 recognized genuine functional/domain Arabic words required
+  return recognizedCount >= 2;
 }
 
 /**
@@ -445,11 +504,12 @@ export function synthesizeBookSummary(title: string, author?: string | null, cat
 
 /**
  * Extracts introductory / domain description excerpt from the document
+ * Strictly enforces that ONLY authentic, coherent Arabic prose is returned.
  */
 export function extractIntroductionExcerpt(allText: string): { introExcerpt: string | null; introFull: string } {
   if (!allText) return { introExcerpt: null, introFull: '' };
 
-  const normalized = allText.replace(/\s+/g, ' ').trim();
+  const normalized = normalizeArabicUnicode(allText);
 
   // Search for preface / introduction markers
   const introMatch = normalized.match(/(?:المقدمة|مقدمة الكتاب|تقديم|تمهيد|فاتحة الكتاب|أما بعد)([\s\S]{80,500})/i);
@@ -560,8 +620,9 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
         const pageStr = rawItems.join(' ').trim();
 
         if (pageStr.length > 0) {
+          // Append raw forward page text only; avoid polluting the document excerpt buffer with reversed words
+          combinedPagesText += ` ${pageStr}`;
           const decodedStr = reverseWords(pageStr);
-          combinedPagesText += ` ${pageStr} ${decodedStr}`;
 
           // If author not found yet, inspect this page strictly
           if (!author) {

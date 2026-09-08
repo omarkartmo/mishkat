@@ -8,6 +8,7 @@ import { serverConfig } from './config';
 import { db } from './db/pool';
 import { runMigrations } from './db/migrator';
 import { seedInitialData } from './db/seed';
+import { healCorruptedDigitalBooks } from './services/bookSanitizer';
 
 // Import Route Handlers
 import authRoutes from './routes/auth.routes';
@@ -94,6 +95,7 @@ export async function createExpressApp() {
     if (db.isPgConnected()) {
       await runMigrations();
       await seedInitialData();
+      await healCorruptedDigitalBooks(db);
     } else {
       console.log('ℹ️ [Database] Central Database is currently not connected. API will serve health checks and handle connection gracefully.');
     }

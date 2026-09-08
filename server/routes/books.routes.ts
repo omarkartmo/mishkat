@@ -8,7 +8,7 @@ import { serverConfig } from '../config';
 import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
-import { extractAuthorFromDocument, extractDocumentMetadata, normalizeArabicForSearch, stripDiacritics, synthesizeBookSummary } from '../utils/authorExtractor';
+import { extractAuthorFromDocument, extractDocumentMetadata, isValidArabicSentence, normalizeArabicForSearch, stripDiacritics, synthesizeBookSummary } from '../utils/authorExtractor';
 
 const router = Router();
 
@@ -706,7 +706,7 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
         isDuplicate,
         duplicateReason,
         pages: docNumPages || Math.max(1, Math.round(sizeMb * 45)),
-        summary: docSummary || synthesizeBookSummary(title, author, categoryName),
+        summary: (docSummary && isValidArabicSentence(docSummary)) ? docSummary : synthesizeBookSummary(title, author, categoryName),
       });
     }
 
@@ -918,7 +918,7 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
         isDuplicate,
         duplicateReason: isDuplicate ? 'الكتاب مستورد مسبقاً في المستودع الرقمي المركزي' : null,
         pages: docNumPages || Math.max(1, Math.round(sizeMb * 45)),
-        summary: docSummary || synthesizeBookSummary(title, author, categoryName),
+        summary: (docSummary && isValidArabicSentence(docSummary)) ? docSummary : synthesizeBookSummary(title, author, categoryName),
       });
     }
 
@@ -1415,7 +1415,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'librarian'), async (
         book.categoryId,
         book.format,
         book.fileSize,
-        book.pagesCount || 0,
+        book.pagesCount || book.pages || 0,
         book.summary,
         book.tags || [],
         book.coverImage || null,

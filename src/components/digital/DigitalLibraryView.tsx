@@ -369,6 +369,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
       {/* Edit Digital Book Modal */}
       {editingBook && (
         <EditDigitalBookModal
+          isOpen={Boolean(editingBook)}
           book={editingBook}
           categories={categories}
           onClose={() => setEditingBook(null)}
