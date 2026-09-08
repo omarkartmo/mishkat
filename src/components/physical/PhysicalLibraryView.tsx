@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BookOpen,
   Search,
@@ -71,6 +71,11 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
   initialSearchQuery = '',
 }) => {
   const [search, setSearch] = useState(initialSearchQuery);
+
+  // Sync external search query
+  useEffect(() => {
+    setSearch(initialSearchQuery);
+  }, [initialSearchQuery]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'borrowed'>('all');
   

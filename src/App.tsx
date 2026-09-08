@@ -66,6 +66,7 @@ export default function App() {
     authUser?.role === 'student' ? 'student_portal' : 'overview'
   );
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchTrigger, setSearchTrigger] = useState<number>(0);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -1331,6 +1332,7 @@ export default function App() {
           onQuickSearch={(query) => setSearchQuery(query)}
           onNavigateToSearchResults={(query) => {
             setSearchQuery(query);
+            setSearchTrigger((prev) => prev + 1);
             setActiveTab('search_results');
           }}
           isSidebarCollapsed={isSidebarCollapsed}
@@ -1589,6 +1591,8 @@ export default function App() {
           {activeTab === 'search_results' && (
             <SearchResultsView
               initialQuery={searchQuery}
+              searchTrigger={searchTrigger}
+              onQueryChange={(q) => setSearchQuery(q)}
               physicalBooks={physicalBooks}
               digitalBooks={digitalBooks}
               categories={categories}

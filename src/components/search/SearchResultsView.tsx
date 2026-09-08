@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   BookOpen,
@@ -49,6 +49,8 @@ import { BookFormModal } from '../physical/PhysicalLibraryView';
 
 interface SearchResultsViewProps {
   initialQuery?: string;
+  searchTrigger?: number;
+  onQueryChange?: (query: string) => void;
   physicalBooks: PhysicalBook[];
   digitalBooks: DigitalBook[];
   categories: Category[];
@@ -90,6 +92,8 @@ const POPULAR_RESEARCH_TOPICS = [
 
 export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   initialQuery = '',
+  searchTrigger = 0,
+  onQueryChange,
   physicalBooks = [],
   digitalBooks = [],
   categories = [],
@@ -111,6 +115,18 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   onDeletePhysicalBook,
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
+
+  // Sync external search query and re-trigger when requested (e.g. from HeaderBar search)
+  useEffect(() => {
+    setSearchQuery(initialQuery);
+  }, [initialQuery, searchTrigger]);
+
+  const handleSearchQueryChange = (val: string) => {
+    setSearchQuery(val);
+    if (onQueryChange) {
+      onQueryChange(val);
+    }
+  };
   const [selectedMedium, setSelectedMedium] = useState<'all' | 'physical' | 'digital'>('all');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [formatFilter, setFormatFilter] = useState<'all' | 'pdf' | 'epub'>('all');
@@ -308,13 +324,13 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchQueryChange(e.target.value)}
               placeholder="اكتب عنوان الكتاب، اسم المؤلف، أو تصنيفاً معيناً (مثال: فقه المعاملات، تاريخ عمان، النحو)..."
               className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-400 rounded-2xl pr-12 pl-12 py-3.5 text-sm sm:text-base font-semibold shadow-xl border-2 border-transparent focus:border-indigo-400 outline-none transition-all"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={() => handleSearchQueryChange('')}
                 className="absolute left-4 top-1/2 translate-y-[-20%] p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 rounded-full transition-colors cursor-pointer"
                 title="مسح البحث"
               >
@@ -333,7 +349,10 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
               {POPULAR_RESEARCH_TOPICS.map((topic) => (
                 <button
                   key={topic.id}
-                  onClick={() => setSearchQuery(topic.query)}
+                  onClick={() => {
+                    const nextQuery = searchQuery === topic.query ? '' : topic.query;
+                    handleSearchQueryChange(nextQuery);
+                  }}
                   className={`px-3 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                     searchQuery === topic.query
                       ? 'bg-amber-400 text-slate-950 font-bold shadow-md'

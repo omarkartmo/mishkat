@@ -163,6 +163,19 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     setIsSearchOpen(false);
   };
 
+  const handleExecuteSearch = (queryOverride?: string) => {
+    const q = (queryOverride !== undefined ? queryOverride : localSearch).trim();
+    if (!q) return;
+    setIsSearchOpen(false);
+    setIsMobileSearchExpanded(false);
+    if (onNavigateToSearchResults) {
+      onNavigateToSearchResults(q);
+    } else if (onNavigateToTab) {
+      if (onQuickSearch) onQuickSearch(q);
+      onNavigateToTab('search_results');
+    }
+  };
+
   const handleSelectUser = (user: User) => {
     if (onUserChange) {
       onUserChange(user);
@@ -279,7 +292,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         ref={searchContainerRef}
       >
         <div className="relative w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <button
+            type="button"
+            onClick={() => handleExecuteSearch()}
+            className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-colors rounded-lg z-10"
+            title="تنفيذ البحث"
+          >
+            <Search className="w-4 h-4" />
+          </button>
           <input
             type="text"
             value={localSearch}
@@ -288,16 +308,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               if (localSearch.trim()) setIsSearchOpen(true);
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && localSearch.trim()) {
+              if (e.key === 'Enter') {
                 e.preventDefault();
-                setIsSearchOpen(false);
-                setIsMobileSearchExpanded(false);
-                if (onNavigateToSearchResults) {
-                  onNavigateToSearchResults(localSearch.trim());
-                } else if (onNavigateToTab) {
-                  if (onQuickSearch) onQuickSearch(localSearch.trim());
-                  onNavigateToTab('search_results');
-                }
+                handleExecuteSearch();
               }
             }}
             placeholder="ابحث عن كتاب، مؤلف، موضوع، أو تصنيف..."
@@ -396,6 +409,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                   <p className="text-[11px] text-slate-400">
                     جرب البحث بكلمات أخرى، أو باسم المؤلف، أو بالتصنيف
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => handleExecuteSearch(trimmedSearch)}
+                    className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>البحث في صفحة البحث الشامل ←</span>
+                  </button>
                 </div>
               ) : (
                 <>
@@ -466,15 +487,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
                             <button
                               type="button"
-                              onClick={() => {
-                                setIsSearchOpen(false);
-                                if (onNavigateToSearchResults) {
-                                  onNavigateToSearchResults(book.title);
-                                } else if (onNavigateToTab) {
-                                  if (onQuickSearch) onQuickSearch(book.title);
-                                  onNavigateToTab('search_results');
-                                }
-                              }}
+                              onClick={() => handleExecuteSearch(book.title)}
                               className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap"
                             >
                               تفاصيل
@@ -541,15 +554,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
                             <button
                               type="button"
-                              onClick={() => {
-                                setIsSearchOpen(false);
-                                if (onNavigateToSearchResults) {
-                                  onNavigateToSearchResults(book.title);
-                                } else if (onNavigateToTab) {
-                                  if (onQuickSearch) onQuickSearch(book.title);
-                                  onNavigateToTab('search_results');
-                                }
-                              }}
+                              onClick={() => handleExecuteSearch(book.title)}
                               className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap"
                             >
                               تفاصيل
@@ -567,15 +572,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               <div className="p-2.5 bg-gradient-to-r from-indigo-50 via-slate-50 to-indigo-50 dark:from-slate-950 dark:via-indigo-950/30 dark:to-slate-950 border-t border-slate-200 dark:border-slate-800 text-center shrink-0">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsSearchOpen(false);
-                    if (onNavigateToSearchResults) {
-                      onNavigateToSearchResults(trimmedSearch);
-                    } else if (onNavigateToTab) {
-                      if (onQuickSearch) onQuickSearch(trimmedSearch);
-                      onNavigateToTab('search_results');
-                    }
-                  }}
+                  onClick={() => handleExecuteSearch(trimmedSearch)}
                   className="w-full py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md hover:shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Search className="w-4 h-4" />
