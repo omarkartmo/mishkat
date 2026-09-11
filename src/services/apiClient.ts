@@ -5,6 +5,16 @@
 
 const API_BASE_URL = '/api/v1';
 
+import { User } from '../types/library';
+import {
+  mockCategories,
+  mockPhysicalBooks,
+  mockDigitalBooks,
+  mockLoans,
+  mockUsers,
+  mockSettings,
+} from './demoMockData';
+
 export interface ApiError {
   code: string;
   message: string;
@@ -91,10 +101,18 @@ class ApiClient {
 
     // DEMO MODE BYPASS
     if (import.meta.env.VITE_DEMO_MODE === 'true') {
-      // Mock successful empty data so UI doesn't crash or show errors
+      let mockData: any = [];
+      if (endpoint.includes('/categories')) mockData = mockCategories;
+      else if (endpoint.includes('/books/physical')) mockData = mockPhysicalBooks;
+      else if (endpoint.includes('/books/digital')) mockData = mockDigitalBooks;
+      else if (endpoint.includes('/loans')) mockData = mockLoans;
+      else if (endpoint.includes('/users')) mockData = mockUsers;
+      else if (endpoint.includes('/system/settings')) mockData = mockSettings;
+
+      // Mock successful data
       return {
         success: true,
-        data: [] as any,
+        data: mockData,
       } as ApiResponse<T>;
     }
 
