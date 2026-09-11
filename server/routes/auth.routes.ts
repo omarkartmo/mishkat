@@ -171,4 +171,96 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
   });
 });
 
+// GET /api/v1/auth/security-question
+router.get('/security-question', authRateLimiter(15), async (req: Request, res: Response) => {
+  const { registrationNumber } = req.query;
+  
+  if (!registrationNumber) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'رقم القيد مطلوب.' }});
+  }
+
+  try {
+    const { rows } = await db.query(
+      `SELECT security_question FROM users WHERE (registration_number = $1 OR username = $1) AND role_id = 'admin' LIMIT 1`,
+      [String(registrationNumber).trim()]
+    );
+
+    if (rows.length === 0 || !rows[0].security_question) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'لا يوجد سؤال أمان مسجل لهذا الحساب، أو الحساب غير موجود.' } });
+    }
+
+    res.json({ success: true, data: { question: rows[0].security_question }});
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'خطأ في جلب سؤال الأمان.' } });
+  }
+});
+
+// POST /api/v1/auth/recover
+router.post('/recover', authRateLimiter(5), async (req: Request, res: Response) => {
+  const { registrationNumber, securityAnswer, newPassword } = req.body;
+
+  if (!registrationNumber || !securityAnswer || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_INPUT', message: 'يرجى إدخال جميع البيانات المطلوبة.' },
+    });
+  }
+
+  const cleanReg = String(registrationNumber).trim();
+
+  try {
+    const { rows } = await db.query(
+      `SELECT id, role_id, security_answer_hash FROM users WHERE registration_number = $1 OR username = $1 LIMIT 1`,
+      [cleanReg]
+    );
+
+    if (rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'رقم القيد غير صحيح.' },
+      });
+    }
+
+    const user = rows[0];
+    if (user.role_id !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'استرجاع كلمة المرور متاح للمشرفين فقط بهذه الطريقة.' },
+      });
+    }
+
+    if (!user.security_answer_hash) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'NO_SECURITY_SETUP', message: 'لم يتم إعداد سؤال الأمان مسبقاً لهذا الحساب.' },
+      });
+    }
+
+    const isAnswerValid = await bcrypt.compare(securityAnswer.trim().toLowerCase(), user.security_answer_hash);
+    
+    if (!isAnswerValid) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'إجابة سؤال الأمان غير صحيحة.' },
+      });
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newPasswordHash, user.id]);
+    await recordAuditLog(user.id, 'Admin', 'admin', 'PASSWORD_RECOVERED', 'user', user.id, null, req);
+
+    res.json({
+      success: true,
+      data: { message: 'تم تغيير كلمة المرور واسترجاع الحساب بنجاح، يمكنك الآن تسجيل الدخول.' },
+    });
+  } catch (err: any) {
+    console.error('[Auth Error]', err);
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: 'فشل استرجاع الحساب.' },
+    });
+  }
+});
+
 export default router;

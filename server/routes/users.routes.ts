@@ -242,4 +242,50 @@ router.post('/:id/reset-password', authenticateToken, requireRole('admin'), asyn
   }
 });
 
+// PUT /api/v1/users/admin/security (Admin updates their own password and security question)
+router.put('/admin/security', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const { currentPassword, newPassword, securityQuestion, securityAnswer } = req.body;
+  const adminId = req.user!.id;
+
+  try {
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [adminId]);
+    if (rows.length === 0) return res.status(404).json({ success: false });
+
+    const user = rows[0];
+    const isCurrentValid = await bcrypt.compare(currentPassword, user.password_hash);
+    
+    if (!isCurrentValid) {
+      return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'كلمة المرور الحالية غير صحيحة.' } });
+    }
+
+    let updates: string[] = [];
+    let params: any[] = [];
+    let paramIndex = 1;
+
+    if (newPassword) {
+      updates.push(`password_hash = $${paramIndex++}`);
+      params.push(await bcrypt.hash(newPassword, 10));
+    }
+
+    if (securityQuestion && securityAnswer) {
+      updates.push(`security_question = $${paramIndex++}`);
+      params.push(securityQuestion.trim());
+      
+      updates.push(`security_answer_hash = $${paramIndex++}`);
+      params.push(await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10));
+    }
+
+    if (updates.length > 0) {
+      params.push(adminId);
+      const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
+      await db.query(sql, params);
+      await recordAuditLog(adminId, req.user!.name, 'admin', 'UPDATE_ADMIN_SECURITY', 'user', adminId, null, req);
+    }
+
+    res.json({ success: true, data: { message: 'تم تحديث إعدادات الأمان بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 export default router;

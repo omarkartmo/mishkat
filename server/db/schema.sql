@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS users (
     is_blocked_from_borrowing BOOLEAN DEFAULT FALSE,
     block_reason TEXT,
     last_login_at TIMESTAMP WITH TIME ZONE,
+    security_question TEXT,
+    security_answer_hash VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

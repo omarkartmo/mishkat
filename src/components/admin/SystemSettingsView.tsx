@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { SystemConfig } from '../../types/library';
 import { settingsRepository } from '../../services/settingsRepository';
+import { AdminSecuritySettings } from './AdminSecuritySettings';
 
 interface SystemSettingsViewProps {
   config: SystemConfig;
@@ -407,6 +408,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </button>
         </div>
       </form>
+
+      <AdminSecuritySettings />
 
       {/* Database Maintenance & Backup Section */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">

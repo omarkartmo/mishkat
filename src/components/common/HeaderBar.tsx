@@ -98,7 +98,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onOpenBookReader,
   onOpenPhysicalBookmark,
 }) => {
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -600,19 +600,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           <Search className="w-4 h-4" />
         </button>
 
-        {/* Dark / Light Mode Toggle Button */}
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs shrink-0"
-          title={theme === 'dark' ? 'التبديل إلى الوضع النهاري (Light Mode)' : 'التبديل إلى الوضع الليلي (Dark Mode)'}
-          aria-label="تبديل المظهر"
-        >
-          {theme === 'dark' ? (
-            <Sun className="w-4 h-4 text-amber-400 hover:rotate-90 transition-transform" />
-          ) : (
-            <Moon className="w-4 h-4 text-indigo-600 hover:-rotate-12 transition-transform" />
-          )}
-        </button>
+
 
         {/* Notifications Bell Dropdown */}
         <div className="relative" ref={notifRef}>

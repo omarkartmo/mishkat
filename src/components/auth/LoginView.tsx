@@ -13,6 +13,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { User as LibraryUser, SystemConfig } from '../../types/library';
+import { AdminRecoveryModal } from './AdminRecoveryModal';
 
 interface LoginViewProps {
   config: SystemConfig;
@@ -41,6 +42,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lockoutSeconds, setLockoutSeconds] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
 
   // Lockout countdown timer
   useEffect(() => {
@@ -203,6 +205,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowRecoveryModal(true)}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer transition-colors"
+                >
+                  نسيت كلمة المرور؟
+                </button>
+              </div>
             </div>
 
             {/* Submit Action Button */}
@@ -270,6 +281,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
       <footer className="relative z-10 w-full max-w-6xl mx-auto px-6 py-4 text-center text-xs text-slate-500">
         نظام المشكاة الذكي لإدارة المكتبات المدرسية والأكاديمية
       </footer>
+
+      {showRecoveryModal && (
+        <AdminRecoveryModal
+          onClose={() => setShowRecoveryModal(false)}
+          onRecovered={() => setShowRecoveryModal(false)}
+        />
+      )}
     </div>
   );
 };
