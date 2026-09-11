@@ -548,7 +548,7 @@ export const INITIAL_PENDING_SUBMISSIONS: PendingBookSubmission[] = [
 ];
 
 export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
-  schoolName: 'معهد المنهاج للدراسات الأكاديمية',
+  schoolName: 'معهد المنهاج للتربية والتعليم',
   libraryName: 'المكتبة المركزية',
   generalReadingDurationDays: 7,
   academicResearchDurationDays: 14,

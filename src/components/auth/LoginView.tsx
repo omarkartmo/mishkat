@@ -102,14 +102,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
       {/* Top Header Bar */}
       <header className="relative z-10 w-full mx-auto px-6 py-8 flex flex-col items-center justify-center text-center space-y-4">
         <div className="w-20 h-20 rounded-3xl overflow-hidden bg-white shadow-xl shadow-black/50 border border-slate-800">
-          <img src="/mishkat-logo.jpg" alt="المشكاة" className="w-full h-full object-cover" />
+          <img src="/mishkat-logo.png" alt="المشكاة" className="w-full h-full object-contain p-2" />
         </div>
         <div>
           <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400 tracking-wide">
             نظام المشكاة
           </h1>
           <p className="text-sm text-slate-400 mt-2">
-            {config.libraryName || 'المكتبة المركزية'} • {config.schoolName || 'معهد المنهاج للدراسات الأكاديمية'}
+            {config.libraryName || 'المكتبة المركزية'} • {config.schoolName || 'معهد المنهاج للتربية والتعليم'}
           </p>
         </div>
       </header>

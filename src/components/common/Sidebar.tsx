@@ -63,7 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               title={isCollapsed ? 'انقر لتوسيع وإظهار أسماء القوائم' : 'انقر لطي القائمة الجانبية وتوفير مساحة العمل'}
               aria-label="تبديل حجم القائمة الجانبية"
             >
-              <img src="/mishkat-logo.jpg" alt="المشكاة" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+              <img src="/mishkat-logo.png" alt="المشكاة" className="w-full h-full object-contain p-1 group-hover:scale-110 transition-transform" />
               {isCollapsed && (
                 <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
               )}

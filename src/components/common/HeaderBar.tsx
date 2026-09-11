@@ -109,7 +109,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const notifRef = useRef<HTMLDivElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const displaySchool = schoolName || config?.schoolName || 'معهد المنهاج للدراسات الأكاديمية';
+  const displaySchool = schoolName || config?.schoolName || 'معهد المنهاج للتربية والتعليم';
   const displayLibrary = libraryName || config?.libraryName || 'المكتبة المركزية';
 
   const userNotifications = notifications.filter((n) => {
@@ -260,10 +260,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
         {/* Institutional Identity Badge */}
         <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-2xl bg-gradient-to-r from-slate-50 via-indigo-50/40 to-slate-50 dark:from-slate-800/90 dark:via-indigo-950/30 dark:to-slate-800/90 border border-slate-200/80 dark:border-slate-800/90 shadow-xs transition-all hover:border-indigo-300 dark:hover:border-indigo-700/50">
-          <div className="w-6.5 h-6.5 sm:w-7.5 sm:h-7.5 rounded-xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-slate-900 flex items-center justify-center text-amber-300 shadow-sm shrink-0">
-            <GraduationCap className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          </div>
-          <div className="flex flex-col min-w-0">
+          <div className="flex flex-col min-w-0 px-2">
             <div className="flex items-center gap-1 sm:gap-1.5">
               <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 tracking-tight leading-tight whitespace-nowrap max-w-[85px] xs:max-w-[120px] sm:max-w-[150px] lg:max-w-none truncate">
                 {displaySchool}

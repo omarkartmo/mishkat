@@ -165,7 +165,7 @@ export const mockUsers: User[] = [
 ];
 
 export const mockSettings: SystemConfig = {
-  schoolName: 'مدرسة المشكاة الذكية',
+  schoolName: 'معهد المنهاج للتربية والتعليم',
   libraryName: 'المكتبة المركزية',
   generalReadingDurationDays: 7,
   academicResearchDurationDays: 14,
