@@ -107,6 +107,16 @@ async function getDigitalStorageContext(): Promise<{
         customRoot = path.resolve(rootPath);
         allowedDirs.push(customRoot);
       }
+      if (Array.isArray(val?.allowedRoots)) {
+        for (const r of val.allowedRoots) {
+          if (typeof r === 'string' && r.trim()) {
+            const resolvedRoot = path.resolve(r.trim());
+            if (!allowedDirs.some((d) => d.toLowerCase() === resolvedRoot.toLowerCase())) {
+              allowedDirs.push(resolvedRoot);
+            }
+          }
+        }
+      }
     }
   } catch {}
 
@@ -784,6 +794,24 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
       });
     }
 
+    // Authorize scanned directory in system_settings.allowedRoots for in-place streaming
+    try {
+      const { rows: cfgRows } = await db.query("SELECT value FROM system_settings WHERE key = 'library_config' LIMIT 1");
+      let cfg: any = {};
+      if (cfgRows.length > 0) {
+        cfg = typeof cfgRows[0].value === 'string' ? JSON.parse(cfgRows[0].value) : cfgRows[0].value;
+      }
+      const roots: string[] = Array.isArray(cfg.allowedRoots) ? cfg.allowedRoots : [];
+      if (!roots.some((r) => r.toLowerCase() === resolvedDir.toLowerCase())) {
+        roots.push(resolvedDir);
+        cfg.allowedRoots = roots;
+        await db.query(`
+          INSERT INTO system_settings (key, value) VALUES ('library_config', $1)
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+        `, [JSON.stringify(cfg)]);
+      }
+    } catch {}
+
     const { rows: categories } = await db.query('SELECT id, name FROM categories ORDER BY name ASC');
 
     // Query existing digital books in DB to exclude already imported ones
@@ -1049,17 +1077,26 @@ router.post('/bulk-import', authenticateToken, requireRole('admin', 'librarian')
 
           // Move or copy file to permanent digital storage directory (Section 20 & 27)
           const bookId = `dig-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-          const finalFileName = `${bookId}.${format}`;
-          const finalFilePath = path.join(destinationDir, finalFileName);
+          let finalFilePath: string;
 
-          try {
-            if (stagedFilePath.includes(stagingDir)) {
+          // Check whether the file was uploaded into temporary staging
+          // vs an existing file residing on the server's filesystem (e.g. C:\Users\NABTAKIR\Downloads\كتب)
+          const isUploadedToStaging = stagedFilePath.includes(stagingDir);
+
+          if (isUploadedToStaging) {
+            // Browser-uploaded temporary file: move it to permanent destinationDir
+            const finalFileName = `${bookId}.${format}`;
+            finalFilePath = path.join(destinationDir, finalFileName);
+            try {
               fs.renameSync(stagedFilePath, finalFilePath);
-            } else {
+            } catch {
               fs.copyFileSync(stagedFilePath, finalFilePath);
+              try { fs.unlinkSync(stagedFilePath); } catch {}
             }
-          } catch {
-            fs.copyFileSync(stagedFilePath, finalFilePath);
+          } else {
+            // Zero-Copy In-Place: The file is already permanently located on the server disk!
+            // Link directly to the existing file without duplicating or renaming it.
+            finalFilePath = path.resolve(stagedFilePath);
           }
 
           const finalFileUrl = `/api/v1/books/${bookId}/file`;
@@ -1981,12 +2018,17 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'librarian'), asyn
       try {
         const { allowedDirs, defaultDir } = await getDigitalStorageContext();
 
-        // 1. Unlink primary resolved file on disk
+        // 1. Unlink primary resolved file on disk ONLY IF it is located in internal storage
+        // (Do NOT delete user's original personal files linked in-place from external directories like Downloads)
         const resolved = await resolveDigitalBookFilePath(book);
         if (resolved && resolved !== '__FORBIDDEN_PATH__' && fs.existsSync(resolved)) {
-          const isAllowed = allowedDirs.some((dir) => isWithinDirectory(resolved, dir));
-          if (isAllowed) {
+          const isInternalFile = isWithinDirectory(resolved, defaultDir) ||
+                                 isWithinDirectory(resolved, serverConfig.dirs.books) ||
+                                 isWithinDirectory(resolved, stagingDir);
+          if (isInternalFile) {
             try { fs.unlinkSync(resolved); } catch {}
+          } else {
+            console.log(`[Books] Digital book ${id} unlinked from database; external in-place file preserved on disk: ${resolved}`);
           }
         }
 

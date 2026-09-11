@@ -20,3 +20,4 @@ test-results/
 
 # Temporary scratch and investigation scripts
 scratch/
+.vercel

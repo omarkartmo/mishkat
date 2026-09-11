@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   BookOpen,
   Sliders,
+  HardDrive,
 } from 'lucide-react';
 import { Category, DigitalBook } from '../../types/library';
 import { bookRepository } from '../../services/bookRepository';
@@ -386,15 +387,20 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
               <div className="flex items-center gap-2">
                 <FolderOpen className="w-4 h-4 text-emerald-400 shrink-0" />
                 <div className="flex-1">
-                  <label className="text-[10px] text-slate-400 block">
-                    مسار المجلد على الخادم أو اترك فارغاً لاستخدام مسار الإعدادات المعتمد:
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] text-slate-400 block">
+                      مسار المجلد على الخادم (ربط مباشر بدون نسخ Zero-Copy):
+                    </label>
+                    <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800/40 px-1.5 py-0.2 rounded">
+                      بدون استهلاك مساحة إضافية
+                    </span>
+                  </div>
                   <input
                     type="text"
                     value={folderPathInput}
                     onChange={(e) => setFolderPathInput(e.target.value)}
-                    placeholder="المسار المعتمد في إعدادات النظام (Digital Book Root URL)"
-                    className="w-full bg-transparent text-xs text-slate-200 outline-none font-mono"
+                    placeholder="مثال: C:\Users\NABTAKIR\Downloads\كتب أو مسار الإعدادات"
+                    className="w-full bg-transparent text-xs text-slate-200 outline-none font-mono placeholder:text-slate-600"
                   />
                 </div>
                 <button
@@ -620,6 +626,14 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                         >
                           <td className="p-3 font-mono text-[11px] text-slate-400 max-w-[200px]" title={book.originalFileName}>
                             <div className="truncate font-medium text-slate-300">{book.originalFileName}</div>
+                            {book.stagedFilePath && !book.stagedFilePath.includes('staging') && (
+                              <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-400 font-sans" title="ربط مباشر من مكانه الأصلي دون نسخ أو استهلاك مساحة إضافية (Zero-Copy)">
+                                <HardDrive className="w-3 h-3 shrink-0 text-emerald-400" />
+                                <span className="bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-semibold">
+                                  ربط مباشر (Zero-Copy)
+                                </span>
+                              </div>
+                            )}
                             {book.detectedFrom === 'folder' && book.folderName && (
                               <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-400 font-sans" title={`تم اعتماد اسم المجلد الحاضن كعنوان للكتاب: ${book.folderName}`}>
                                 <Folder className="w-3 h-3 shrink-0 text-emerald-400" />

@@ -39,9 +39,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = useCallback(async () => {
     // DEMO MODE BYPASS
     if (import.meta.env.VITE_DEMO_MODE === 'true') {
-      const demoUser: User = {
+      const isStudent = localStorage.getItem('demo_role') === 'student';
+      const demoUser: User = isStudent ? {
+        id: 'demo-student-id',
+        registrationNumber: 'STU-2026-101',
+        name: 'طالب / باحث (نسخة تجريبية)',
+        role: 'student',
+        status: 'active',
+        permissions: [],
+        email: 'student@mishkat.app',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as unknown as User : {
         id: 'demo-admin-id',
-        registrationNumber: 'DEMO-ADMIN',
+        registrationNumber: 'ADM-001',
         name: 'مدير النظام (نسخة تجريبية)',
         role: 'admin',
         status: 'active',
@@ -105,9 +116,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (regNumber: string, password?: string): Promise<LoginResult> => {
     // DEMO MODE BYPASS
     if (import.meta.env.VITE_DEMO_MODE === 'true') {
-      const demoUser: User = {
+      const isStudent = regNumber.toUpperCase().startsWith('STU');
+      localStorage.setItem('demo_role', isStudent ? 'student' : 'admin');
+      
+      const demoUser: User = isStudent ? {
+        id: 'demo-student-id',
+        registrationNumber: regNumber,
+        name: 'طالب / باحث (نسخة تجريبية)',
+        role: 'student',
+        status: 'active',
+        permissions: [],
+        email: 'student@mishkat.app',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as unknown as User : {
         id: 'demo-admin-id',
-        registrationNumber: 'DEMO-ADMIN',
+        registrationNumber: regNumber || 'ADM-001',
         name: 'مدير النظام (نسخة تجريبية)',
         role: 'admin',
         status: 'active',
@@ -116,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       } as unknown as User;
+      
       setUser(demoUser);
       setIsAuthenticated(true);
       return {
