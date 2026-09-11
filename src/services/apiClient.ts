@@ -103,8 +103,8 @@ class ApiClient {
     if (import.meta.env.VITE_DEMO_MODE === 'true') {
       let mockData: any = [];
       if (endpoint.includes('/categories')) mockData = mockCategories;
-      else if (endpoint.includes('medium=physical')) mockData = mockPhysicalBooks;
-      else if (endpoint.includes('medium=digital')) mockData = mockDigitalBooks;
+      else if (endpoint.includes('type=physical')) mockData = mockPhysicalBooks;
+      else if (endpoint.includes('type=digital')) mockData = mockDigitalBooks;
       else if (endpoint.includes('/books')) mockData = [...mockPhysicalBooks, ...mockDigitalBooks];
       else if (endpoint.includes('/loans')) mockData = mockLoans;
       else if (endpoint.includes('/users')) mockData = mockUsers;
