@@ -59,11 +59,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-700 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 active:scale-95 flex items-center justify-center shadow-md shadow-indigo-500/25 text-white font-bold text-lg cursor-pointer transition-all shrink-0 group relative"
+              className="w-10 h-10 rounded-2xl overflow-hidden bg-white shadow-md shadow-indigo-500/25 cursor-pointer transition-all shrink-0 group relative border border-slate-200 dark:border-slate-800"
               title={isCollapsed ? 'انقر لتوسيع وإظهار أسماء القوائم' : 'انقر لطي القائمة الجانبية وتوفير مساحة العمل'}
               aria-label="تبديل حجم القائمة الجانبية"
             >
-              <BookOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <img src="/mishkat-logo.jpg" alt="المشكاة" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
               {isCollapsed && (
                 <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
               )}

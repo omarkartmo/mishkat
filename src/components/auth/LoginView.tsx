@@ -101,8 +101,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
 
       {/* Top Header Bar */}
       <header className="relative z-10 w-full mx-auto px-6 py-8 flex flex-col items-center justify-center text-center space-y-4">
-        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-indigo-600 to-emerald-500 flex items-center justify-center shadow-xl shadow-indigo-500/25 text-white font-bold">
-          <BookOpen className="w-8 h-8" />
+        <div className="w-20 h-20 rounded-3xl overflow-hidden bg-white shadow-xl shadow-black/50 border border-slate-800">
+          <img src="/mishkat-logo.jpg" alt="المشكاة" className="w-full h-full object-cover" />
         </div>
         <div>
           <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400 tracking-wide">
