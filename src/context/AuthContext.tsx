@@ -37,6 +37,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Fetch current user from Central Server
   const refreshUser = useCallback(async () => {
+    // DEMO MODE BYPASS
+    if (import.meta.env.VITE_DEMO_MODE === 'true') {
+      const demoUser: User = {
+        id: 'demo-admin-id',
+        registrationNumber: 'DEMO-ADMIN',
+        name: 'مدير النظام (نسخة تجريبية)',
+        role: 'admin',
+        status: 'active',
+        permissions: ['all'],
+        email: 'demo@mishkat.app',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as unknown as User;
+      setUser(demoUser);
+      setIsAuthenticated(true);
+      setIsLoading(false);
+      return;
+    }
+
     const token = apiClient.getToken();
     if (!token) {
       setUser(null);
@@ -84,6 +103,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Login handler
   const login = async (regNumber: string, password?: string): Promise<LoginResult> => {
+    // DEMO MODE BYPASS
+    if (import.meta.env.VITE_DEMO_MODE === 'true') {
+      const demoUser: User = {
+        id: 'demo-admin-id',
+        registrationNumber: 'DEMO-ADMIN',
+        name: 'مدير النظام (نسخة تجريبية)',
+        role: 'admin',
+        status: 'active',
+        permissions: ['all'],
+        email: 'demo@mishkat.app',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as unknown as User;
+      setUser(demoUser);
+      setIsAuthenticated(true);
+      return {
+        success: true,
+        user: demoUser,
+      };
+    }
+
     setIsLoading(true);
     try {
       const res = await authRepository.login({ registrationNumber: regNumber, password });

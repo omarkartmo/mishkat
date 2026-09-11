@@ -89,6 +89,15 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
+    // DEMO MODE BYPASS
+    if (import.meta.env.VITE_DEMO_MODE === 'true') {
+      // Mock successful empty data so UI doesn't crash or show errors
+      return {
+        success: true,
+        data: [] as any,
+      } as ApiResponse<T>;
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -234,6 +243,14 @@ class ApiClient {
     const headers: Record<string, string> = {};
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    // DEMO MODE BYPASS
+    if (import.meta.env.VITE_DEMO_MODE === 'true') {
+      return {
+        success: true,
+        data: [] as any,
+      } as ApiResponse<T>;
     }
 
     try {
