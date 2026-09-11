@@ -15,6 +15,8 @@ import {
   mockSettings,
 } from './demoMockData';
 
+let demoFavorites: string[] = ['pb-1', 'db-2'];
+
 export interface ApiError {
   code: string;
   message: string;
@@ -109,6 +111,26 @@ class ApiClient {
       else if (endpoint.includes('/loans')) mockData = mockLoans;
       else if (endpoint.includes('/users')) mockData = mockUsers;
       else if (endpoint.includes('/settings')) mockData = mockSettings;
+      else if (endpoint.includes('/favorites/toggle')) {
+        let bookId = '';
+        if (typeof options.body === 'string') {
+          try {
+            const bodyParsed = JSON.parse(options.body);
+            bookId = bodyParsed.bookId;
+          } catch (e) {}
+        }
+        if (bookId) {
+          if (demoFavorites.includes(bookId)) {
+            demoFavorites = demoFavorites.filter((id: string) => id !== bookId);
+            mockData = { isFavorited: false, bookId };
+          } else {
+            demoFavorites.push(bookId);
+            mockData = { isFavorited: true, bookId };
+          }
+        }
+      } else if (endpoint.includes('/favorites')) {
+        mockData = demoFavorites;
+      }
 
       // Mock successful data
       return {
