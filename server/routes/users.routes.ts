@@ -210,21 +210,36 @@ router.post('/roster-import', authenticateToken, requireRole('admin'), async (re
 
   try {
     let imported = 0;
-    const defaultPassHash = await bcrypt.hash('123456', 10);
+    const generatedCredentials: Array<{ name: string; registrationNumber: string; grade: string; password: string; tempPass: string }> = [];
 
     await db.transaction(async (client) => {
       for (const s of students) {
         if (!s.registrationNumber || !s.name) continue;
         const id = `stu-imp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+        
+        // Generate unique cryptographically secure random password for each student
+        const studentPlainPass = generateSecureStudentPassword(8);
+        const passHash = await bcrypt.hash(studentPlainPass, 10);
+
         await client.query(`
           INSERT INTO users (
             id, registration_number, name, role_id, grade,
-            password_hash, is_active, is_blocked, is_blocked_from_borrowing
-          ) VALUES ($1, $2, $3, 'student', $4, $5, true, false, false)
+            password_hash, token_version, is_active, is_blocked, is_blocked_from_borrowing
+          ) VALUES ($1, $2, $3, 'student', $4, $5, 1, true, false, false)
           ON CONFLICT (registration_number) DO UPDATE SET
             name = EXCLUDED.name,
-            grade = EXCLUDED.grade;
-        `, [id, s.registrationNumber.trim(), s.name.trim(), s.grade || '', defaultPassHash]);
+            grade = EXCLUDED.grade,
+            password_hash = EXCLUDED.password_hash,
+            token_version = COALESCE(users.token_version, 1) + 1;
+        `, [id, s.registrationNumber.trim(), s.name.trim(), s.grade || '', passHash]);
+
+        generatedCredentials.push({
+          name: s.name.trim(),
+          registrationNumber: s.registrationNumber.trim(),
+          grade: s.grade || '',
+          password: studentPlainPass,
+          tempPass: studentPlainPass,
+        });
         imported++;
       }
     });
@@ -233,7 +248,66 @@ router.post('/roster-import', authenticateToken, requireRole('admin'), async (re
 
     res.json({
       success: true,
-      data: { message: `تم استيراد ${imported} طالباً بنجاح وتخزينهم في الخادم المركزي.` },
+      data: {
+        message: `تم استيراد ${imported} طالباً بنجاح وتوليد كلمات مرور قوية لكل حساب.`,
+        importedCount: imported,
+        generatedCredentials,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/users/batch-reset-passwords (Batch reset passwords for selected students for bulk printing)
+router.post('/batch-reset-passwords', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { studentIds } = req.body;
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_INPUT', message: 'يرجى تحديد قائمة الطلاب لإعادة تعيين كلمات المرور.' },
+    });
+  }
+
+  try {
+    const updatedStudents: Array<{ id: string; name: string; registrationNumber: string; grade?: string; password: string }> = [];
+
+    await db.transaction(async (client) => {
+      for (const studentId of studentIds) {
+        const { rows } = await client.query(
+          "SELECT id, name, registration_number, role_id, grade FROM users WHERE id = $1 AND role_id = 'student'",
+          [studentId]
+        );
+        if (rows.length === 0) continue;
+
+        const u = rows[0];
+        const studentPlainPass = generateSecureStudentPassword(8);
+        const passHash = await bcrypt.hash(studentPlainPass, 10);
+
+        await client.query(
+          'UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 1) + 1 WHERE id = $2',
+          [passHash, u.id]
+        );
+
+        updatedStudents.push({
+          id: u.id,
+          name: u.name,
+          registrationNumber: u.registration_number,
+          grade: u.grade,
+          password: studentPlainPass,
+        });
+      }
+    });
+
+    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'BATCH_RESET_PASSWORDS', 'users', null, { count: updatedStudents.length }, req);
+
+    res.json({
+      success: true,
+      data: {
+        message: `تمت إعادة تعيين كلمات المرور لـ ${updatedStudents.length} طالباً بنجاح.`,
+        resetCount: updatedStudents.length,
+        students: updatedStudents,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
@@ -268,9 +342,12 @@ router.post('/:id/reset-password', authenticateToken, requireRole('admin', 'libr
     }
 
     // Auto-generate strong cryptographically secure password
-    const plainPassword = (req.body && req.body.newPassword && typeof req.body.newPassword === 'string' && req.body.newPassword.trim().length >= 6 && req.user!.role === 'admin')
-      ? req.body.newPassword.trim()
-      : generateSecureStudentPassword(8);
+    // Never allow predictable passwords such as '123', '123456', etc.
+    let plainPassword = (req.body && typeof req.body.newPassword === 'string') ? req.body.newPassword.trim() : '';
+    const forbidden = ['123', '1234', '12345', '123456', '12345678', 'password', 'student', 'admin', 'admin123'];
+    if (!plainPassword || plainPassword.length < 6 || forbidden.includes(plainPassword.toLowerCase()) || req.user!.role !== 'admin') {
+      plainPassword = generateSecureStudentPassword(8);
+    }
 
     const passHash = await bcrypt.hash(plainPassword, 10);
 

@@ -1191,6 +1191,20 @@ export default function App() {
     }
   };
 
+  const handleBatchResetStudentPasswords = async (studentIds: string[]) => {
+    try {
+      const res = await userRepository.batchResetPasswords(studentIds);
+      if (res.success && res.data) {
+        await loadUsers();
+        return res.data.students;
+      } else {
+        alert(res.error?.message || 'تعذر إعادة تعيين كلمات المرور للدفعة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إعادة تعيين كلمات المرور للدفعة.');
+    }
+  };
+
   const handleDeleteStudent = async (studentId: string) => {
     try {
       const res = await userRepository.deleteUser(studentId);
@@ -1510,6 +1524,7 @@ export default function App() {
               onAddStudent={handleAddStudent}
               onBulkImportStudents={handleBulkImportStudents}
               onResetStudentPassword={handleResetStudentPassword}
+              onBatchResetStudentPasswords={handleBatchResetStudentPasswords}
               onDeleteStudent={handleDeleteStudent}
             />
           )}

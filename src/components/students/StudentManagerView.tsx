@@ -15,21 +15,28 @@ import {
   Trash2,
   Printer,
   Copy,
+  CheckSquare,
 } from 'lucide-react';
 import { User, StudentRosterRow } from '../../types/library';
-import { printStudentCredentialCard } from '../../utils/printCredentialCard';
+import {
+  printStudentCredentialCard,
+  printBulkStudentCredentialCards,
+  StudentCredentialCardData,
+} from '../../utils/printCredentialCard';
+import { generateRandomStudentPassword } from '../../utils/clientPasswordGenerator';
 
 interface StudentManagerViewProps {
   students: User[];
   onAddStudent: (student: Omit<User, 'id'>) => Promise<any> | any;
   onBulkImportStudents: (roster: StudentRosterRow[]) => Promise<{
     importedCount: number;
-    generatedCredentials: { name: string; regNumber: string; tempPass: string }[];
+    generatedCredentials: { name: string; regNumber: string; tempPass: string; grade?: string }[];
   } | undefined> | {
     importedCount: number;
-    generatedCredentials: { name: string; regNumber: string; tempPass: string }[];
+    generatedCredentials: { name: string; regNumber: string; tempPass: string; grade?: string }[];
   };
   onResetStudentPassword: (studentId: string, newPassword?: string) => Promise<string | void> | string | void;
+  onBatchResetStudentPasswords?: (studentIds: string[]) => Promise<Array<{ id: string; name: string; registrationNumber: string; grade?: string; password: string }> | void>;
   onDeleteStudent?: (studentId: string) => Promise<{ success: boolean; error?: string } | void> | void;
 }
 
@@ -38,6 +45,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
   onAddStudent,
   onBulkImportStudents,
   onResetStudentPassword,
+  onBatchResetStudentPasswords,
   onDeleteStudent,
 }) => {
   const [search, setSearch] = useState('');
@@ -54,6 +62,11 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
     grade?: string;
   } | null>(null);
 
+  // Bulk selection and batch printing
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [isBulkPrintModalOpen, setIsBulkPrintModalOpen] = useState(false);
+  const [isBatchResetting, setIsBatchResetting] = useState(false);
+
   // Delete modal state
   const [deleteModalStudent, setDeleteModalStudent] = useState<User | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -64,7 +77,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importResult, setImportResult] = useState<{
     importedCount: number;
-    credentials: { name: string; regNumber: string; tempPass: string }[];
+    credentials: { name: string; regNumber: string; tempPass: string; grade?: string }[];
   } | null>(null);
 
   const filteredStudents = (students || []).filter((s) => {
@@ -85,21 +98,31 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
   const blockedCount = (students || []).filter((s) => s.isBlocked).length;
   const grades = Array.from(new Set((students || []).map((s) => s.grade).filter(Boolean)));
 
+  const handleOpenResetModal = (student: User) => {
+    const randomPass = generateRandomStudentPassword(8);
+    setNewPasswordInput(randomPass);
+    setResetModalStudent(student);
+  };
+
   const handleExecutePasswordReset = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!resetModalStudent) return;
     setIsResetting(true);
     try {
-      const pass = newPasswordInput.trim() || undefined;
-      const generatedPass = await onResetStudentPassword(resetModalStudent.id, pass);
-      if (generatedPass) {
-        setCredentialCardData({
-          name: resetModalStudent.name,
-          registrationNumber: resetModalStudent.registrationNumber,
-          password: generatedPass,
-          grade: resetModalStudent.grade,
-        });
+      let pass = newPasswordInput.trim();
+      const forbidden = ['123', '1234', '12345', '123456', '12345678', 'password', 'student', 'admin', 'admin123'];
+      if (!pass || pass.length < 6 || forbidden.includes(pass.toLowerCase())) {
+        pass = generateRandomStudentPassword(8);
+        setNewPasswordInput(pass);
       }
+      const generatedPass = await onResetStudentPassword(resetModalStudent.id, pass);
+      const finalPass = (typeof generatedPass === 'string' && generatedPass) ? generatedPass : pass;
+      setCredentialCardData({
+        name: resetModalStudent.name,
+        registrationNumber: resetModalStudent.registrationNumber,
+        password: finalPass,
+        grade: resetModalStudent.grade,
+      });
       setResetModalStudent(null);
       setNewPasswordInput('');
     } catch (err: any) {
@@ -107,6 +130,45 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
     } finally {
       setIsResetting(false);
     }
+  };
+
+  const handleBatchResetAndPrint = async (idsToReset: string[]) => {
+    if (!idsToReset || idsToReset.length === 0) return;
+    if (!onBatchResetStudentPasswords) {
+      alert('ميزة إعادة التعيين الجماعي غير متوفرة حالياً.');
+      return;
+    }
+    setIsBatchResetting(true);
+    try {
+      const results = await onBatchResetStudentPasswords(idsToReset);
+      if (results && results.length > 0) {
+        const cardsToPrint: StudentCredentialCardData[] = results.map((r) => ({
+          name: r.name,
+          registrationNumber: r.registrationNumber,
+          password: r.password,
+          grade: r.grade,
+        }));
+        printBulkStudentCredentialCards(cardsToPrint);
+        setSelectedStudentIds([]);
+        setIsBulkPrintModalOpen(false);
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إعادة تعيين كلمات المرور للدفعة.');
+    } finally {
+      setIsBatchResetting(false);
+    }
+  };
+
+  const handlePrintExistingCards = (studentsToPrint: User[]) => {
+    if (!studentsToPrint || studentsToPrint.length === 0) return;
+    const cardsToPrint: StudentCredentialCardData[] = studentsToPrint.map((s) => ({
+      name: s.name,
+      registrationNumber: s.registrationNumber,
+      password: '••••••••',
+      grade: s.grade,
+    }));
+    printBulkStudentCredentialCards(cardsToPrint);
+    setIsBulkPrintModalOpen(false);
   };
 
   const handleSaveNewStudent = async (newStudent: any) => {
@@ -155,7 +217,16 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setIsBulkPrintModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm"
+            title="طباعة مجمعة لبطاقات دخول الطلبة على ورق A4 (6 بطاقات لكل صفحة)"
+          >
+            <Printer className="w-4 h-4 text-sky-400" />
+            <span>طباعة بطاقات الطلبة (A4)</span>
+          </button>
+
           <button
             onClick={() => setIsImportModalOpen(true)}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
@@ -173,6 +244,34 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Selected Items Batch Bar */}
+      {selectedStudentIds.length > 0 && (
+        <div className="p-3 bg-indigo-950/60 border border-indigo-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in text-xs shadow-lg">
+          <div className="flex items-center gap-2 text-indigo-200">
+            <CheckSquare className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>
+              تم تحديد <strong>{selectedStudentIds.length}</strong> طالب (
+              {Math.ceil(selectedStudentIds.length / 6)} صفحة A4 بمعدل 6 بطاقات/صفحة)
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsBulkPrintModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 cursor-pointer transition-colors"
+            >
+              <Printer className="w-4 h-4" />
+              <span>طباعة بطاقات المحددين (A4)</span>
+            </button>
+            <button
+              onClick={() => setSelectedStudentIds([])}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium cursor-pointer transition-colors"
+            >
+              إلغاء التحديد
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Info / Overdue Notice */}
       {blockedCount > 0 && (
@@ -237,6 +336,21 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
           <table className="w-full text-right text-xs">
             <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-semibold">
               <tr>
+                <th className="py-3.5 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredStudents.length > 0 && selectedStudentIds.length === filteredStudents.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedStudentIds(filteredStudents.map((s) => s.id));
+                      } else {
+                        setSelectedStudentIds([]);
+                      }
+                    }}
+                    className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    title="تحديد كل الطلاب المعروضين"
+                  />
+                </th>
                 <th className="py-3.5 px-4">الطالب</th>
                 <th className="py-3.5 px-4">رقم التسجيل المدرسي</th>
                 <th className="py-3.5 px-4">القسم / المستوى</th>
@@ -248,14 +362,31 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
             <tbody className="divide-y divide-slate-800/60 text-slate-200">
               {filteredStudents.map((student) => {
                 const isBlocked = student.isBlocked;
+                const isSelected = selectedStudentIds.includes(student.id);
 
                 return (
                   <tr
                     key={student.id}
                     className={`hover:bg-slate-800/40 transition-colors ${
-                      isBlocked ? 'bg-rose-950/15' : ''
+                      isSelected ? 'bg-indigo-950/30' : isBlocked ? 'bg-rose-950/15' : ''
                     }`}
                   >
+                    {/* Checkbox */}
+                    <td className="py-3.5 px-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedStudentIds((prev) => [...prev, student.id]);
+                          } else {
+                            setSelectedStudentIds((prev) => prev.filter((id) => id !== student.id));
+                          }
+                        }}
+                        className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </td>
+
                     {/* Student Name */}
                     <td className="py-3.5 px-4 font-semibold text-slate-100">
                       <div className="flex items-center gap-2">
@@ -306,15 +437,28 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                     <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5 flex-wrap">
                         <button
-                          onClick={() => {
-                            setResetModalStudent(student);
-                            setNewPasswordInput('');
-                          }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
-                          title="إعادة تعيين كلمة المرور"
+                          onClick={() => handleOpenResetModal(student)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                          title="إعادة تعيين وتوليد كلمة سر عشوائية قوية"
                         >
-                          <KeyRound className="w-3 h-3" />
+                          <KeyRound className="w-3 h-3 text-amber-400" />
                           <span>إعادة تعيين كلمة السر</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setCredentialCardData({
+                              name: student.name,
+                              registrationNumber: student.registrationNumber,
+                              password: '••••••••',
+                              grade: student.grade,
+                            });
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                          title="طباعة بطاقة قيد الطالب"
+                        >
+                          <Printer className="w-3 h-3 text-sky-400" />
+                          <span>طباعة البطاقة</span>
                         </button>
 
                         {onDeleteStudent && (
@@ -327,7 +471,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                             title="حذف حساب الطالب"
                           >
                             <Trash2 className="w-3 h-3" />
-                            <span>حذف الحساب</span>
+                            <span>حذف</span>
                           </button>
                         )}
                       </div>
@@ -349,37 +493,56 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                 <KeyRound className="w-4 h-4 text-amber-400" />
                 <span>إعادة تعيين كلمة المرور: {resetModalStudent.name}</span>
               </h3>
-              <button onClick={() => setResetModalStudent(null)} className="text-slate-400 hover:text-slate-200">
+              <button onClick={() => setResetModalStudent(null)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-4 text-xs">
               <p className="text-slate-300 leading-relaxed">
-                سيقوم النظام المركزي فوراً بتوليد <strong>كلمة مرور عشوائية قوية وفريدة</strong>، وتشفيرها في قاعدة البيانات (Bcrypt Hash)، وإلغاء صلاحية كافة الجلسات المفتوحة للطالب.
+                يقوم النظام فوراً بتوليد <strong>كلمة مرور عشوائية قوية وفريدة</strong>، وتشفيرها في قاعدة البيانات (Bcrypt Hash)، وإلغاء صلاحية كافة الجلسات السابقة المفتوحة للطالب فوراً.
               </p>
 
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl space-y-1">
                 <div className="font-semibold flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-amber-400" />
-                  <span>توليد آمن وفوري</span>
+                  <span>توليد آمن وفوري (CSPRNG)</span>
                 </div>
-                <p className="text-[11px] text-amber-200/80">
-                  ستتمكن مباشرة بعد الضغط على الزر من استعراض كلمة المرور الجديدة وطباعة بطاقة الدخول لتسليمها للطالب يدوياً.
+                <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                  تم توليد كلمة سر عشوائية قوية أدناه تلقائياً. يمكنك توليد كلمة بديلة بضغطة زر، أو اعتمادها مباشرة وطباعة بطاقة الدخول للطالب.
                 </p>
               </div>
 
               <div>
-                <label className="block text-slate-400 font-medium mb-1 text-[11px]">
-                  تعيين كلمة مرور مخصصة (اختياري - اترك الحقل فارغاً للتوليد الآلي القوي)
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-slate-300 font-medium text-xs flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                    <span>كلمة المرور المقترحة عشوائياً:</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setNewPasswordInput(generateRandomStudentPassword(8))}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-md border border-amber-500/30 transition-colors font-semibold"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>🔄 توليد كلمة عشوائية أخرى</span>
+                  </button>
+                </div>
                 <input
                   type="text"
+                  name="student_generated_password"
+                  id="student_generated_password"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  autoCorrect="off"
                   value={newPasswordInput}
                   onChange={(e) => setNewPasswordInput(e.target.value)}
-                  placeholder="اترك فارغاً لتوليد كلمة سر عشوائية قوية تلقائياً"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs outline-none focus:border-amber-500"
+                  placeholder="كلمة مرور عشوائية قوية"
+                  className="w-full bg-slate-950 border border-amber-500/40 focus:border-amber-400 rounded-xl px-3 py-2 text-amber-300 font-mono text-sm tracking-wider outline-none shadow-inner"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  كلمة قوية مؤلفة من أحرف وأرقام عشوائية خالية من الرموز الملتبسة (مثل 0/O و 1/l) لتفادي أخطاء النقل.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
@@ -394,10 +557,9 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                   type="button"
                   onClick={() => handleExecutePasswordReset()}
                   disabled={isResetting}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-600/30"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-600/30 transition-colors"
                 >
                   <KeyRound className="w-4 h-4" />
-                  <span>{isResetting ? 'جارٍ التوليد والتشفير...' : 'توليد وتعيين كلمة المرور'}</span>
                 </button>
               </div>
             </div>
@@ -526,6 +688,20 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
           result={importResult}
         />
       )}
+
+      {/* Bulk Print Cards Modal (A4 - 6 cards/sheet) */}
+      {isBulkPrintModalOpen && (
+        <BulkPrintCardsModal
+          students={students}
+          filteredStudents={filteredStudents}
+          grades={grades}
+          selectedStudentIds={selectedStudentIds}
+          isResetting={isBatchResetting}
+          onClose={() => setIsBulkPrintModalOpen(false)}
+          onBatchResetAndPrint={handleBatchResetAndPrint}
+          onPrintExistingCards={handlePrintExistingCards}
+        />
+      )}
     </div>
   );
 };
@@ -540,12 +716,19 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
   const [name, setName] = useState('');
   const [regNumber, setRegNumber] = useState(`STU-${Math.floor(1000 + Math.random() * 9000)}`);
   const [grade, setGrade] = useState('الصف العاشر - عام');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(() => generateRandomStudentPassword(8));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !regNumber) return;
+
+    let finalPass = password.trim();
+    const forbidden = ['123', '1234', '12345', '123456', '12345678', 'password', 'student', 'admin', 'admin123'];
+    if (!finalPass || finalPass.length < 6 || forbidden.includes(finalPass.toLowerCase())) {
+      finalPass = generateRandomStudentPassword(8);
+      setPassword(finalPass);
+    }
 
     setIsSubmitting(true);
     try {
@@ -554,7 +737,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
         registrationNumber: regNumber,
         grade,
         role: 'student',
-        password: password.trim() || undefined,
+        password: finalPass,
         isBlocked: false,
       });
     } finally {
@@ -570,7 +753,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
             <Plus className="w-5 h-5 text-indigo-400" />
             <span>إضافة حساب طالب جديد</span>
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -613,23 +796,39 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
           <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-xl space-y-1">
             <div className="font-semibold flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-indigo-400" />
-              <span>أمان الحساب وتوليد بطاقة الدخول</span>
+              <span>أمان الحساب وتوليد بطاقة الدخول (CSPRNG)</span>
             </div>
             <p className="text-[11px] text-indigo-200/80 leading-relaxed">
-              سيقوم النظام المركزي تلقائياً بتوليد كلمة مرور عشوائية قوية وتشفيرها في قاعدة البيانات. ستظهر بطاقة الدخول قابلة للطباعة فور حفظ الحساب.
+              يقوم النظام المركزي بتوليد كلمة مرور عشوائية قوية تلقائياً وتشفيرها في قاعدة البيانات. ستظهر بطاقة الدخول قابلة للطباعة فور حفظ الحساب.
             </p>
           </div>
 
           <div>
-            <label className="block text-slate-400 font-medium mb-1 text-[11px]">
-              كلمة مرور مخصصة (اختياري - اترك الحقل فارغاً للتوليد العشوائي التلقائي)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-slate-300 font-medium text-[11px] flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                <span>كلمة المرور المقترحة عشوائياً للطالب:</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setPassword(generateRandomStudentPassword(8))}
+                className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-0.5 rounded-md border border-indigo-500/30 transition-colors font-semibold"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>🔄 توليد أخرى</span>
+              </button>
+            </div>
             <input
               type="text"
+              name="new_student_random_pwd"
+              id="new_student_random_pwd"
+              autoComplete="new-password"
+              spellCheck={false}
+              autoCorrect="off"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="اترك فارغاً لتوليد كلمة مرور عشوائية قوية ومشفرة"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs outline-none focus:border-indigo-500"
+              placeholder="كلمة مرور عشوائية قوية"
+              className="w-full bg-slate-950 border border-indigo-500/40 rounded-xl px-3 py-2 text-indigo-300 font-mono text-xs outline-none focus:border-indigo-400 shadow-inner"
             />
           </div>
 
@@ -662,7 +861,7 @@ interface BulkImportModalProps {
   onImport: (roster: StudentRosterRow[]) => void;
   result: {
     importedCount: number;
-    credentials: { name: string; regNumber: string; tempPass: string }[];
+    credentials: { name: string; regNumber: string; tempPass: string; grade?: string }[];
   } | null;
 }
 
@@ -704,7 +903,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
             <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
             استيراد قائمة الطلبة وتوليد الحسابات بالخادم المركزي
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -713,13 +912,58 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
           <div className="space-y-4 text-xs">
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded-xl flex items-center gap-2">
               <Check className="w-4 h-4" />
-              <span>تم استيراد وإنشاء <strong>{result.importedCount}</strong> حساب طالب بنجاح!</span>
+              <span>تم استيراد وإنشاء <strong>{result.importedCount}</strong> حساب طالب بنجاح مع كلمات مرور عشوائية قوية ومشفرة!</span>
             </div>
 
-            <div className="flex justify-end pt-2">
+            {result.credentials && result.credentials.length > 0 && (
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-200">
+                    بطاقات الدخول المولدة ({result.credentials.length} طالب):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      printBulkStudentCredentialCards(
+                        result.credentials.map((c) => ({
+                          name: c.name,
+                          registrationNumber: c.regNumber,
+                          password: c.tempPass,
+                          grade: c.grade,
+                        }))
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 cursor-pointer transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>طباعة كل البطاقات (A4 - 6 بطاقات بالصفحة)</span>
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-slate-400">
+                  عدد صفحات A4 المقدرة: <strong>{Math.ceil(result.credentials.length / 6)}</strong> صفحة (تخطيط 2×3 مع خطوط قص منقطة).
+                </div>
+
+                <div className="max-h-44 overflow-y-auto divide-y divide-slate-800/60 font-mono text-[11px] pr-1">
+                  {result.credentials.slice(0, 15).map((c, idx) => (
+                    <div key={idx} className="py-1.5 flex items-center justify-between text-slate-300">
+                      <span>{c.name} ({c.regNumber})</span>
+                      <span className="text-amber-400 font-bold tracking-wider">{c.tempPass}</span>
+                    </div>
+                  ))}
+                  {result.credentials.length > 15 && (
+                    <div className="py-1.5 text-center text-slate-500 text-[10px]">
+                      + {result.credentials.length - 15} طالب إضافي بالقائمة
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium cursor-pointer"
               >
                 إغلاق
               </button>
@@ -862,6 +1106,197 @@ const StudentCredentialCardModal: React.FC<StudentCredentialCardModalProps> = ({
               className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer"
             >
               إغلاق
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Bulk Print Cards Modal (A4 Portrait - Exactly 6 cards per sheet)
+interface BulkPrintCardsModalProps {
+  students: User[];
+  filteredStudents: User[];
+  grades: string[];
+  selectedStudentIds: string[];
+  isResetting: boolean;
+  onClose: () => void;
+  onBatchResetAndPrint: (studentIds: string[]) => Promise<void>;
+  onPrintExistingCards: (students: User[]) => void;
+}
+
+const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
+  students,
+  filteredStudents,
+  grades,
+  selectedStudentIds,
+  isResetting,
+  onClose,
+  onBatchResetAndPrint,
+  onPrintExistingCards,
+}) => {
+  const [scope, setScope] = useState<'selected' | 'filtered' | 'grade' | 'all'>(
+    selectedStudentIds.length > 0 ? 'selected' : 'filtered'
+  );
+  const [selectedGrade, setSelectedGrade] = useState<string>(grades[0] || '');
+
+  const getTargetStudents = (): User[] => {
+    if (scope === 'selected' && selectedStudentIds.length > 0) {
+      return students.filter((s) => selectedStudentIds.includes(s.id));
+    }
+    if (scope === 'grade') {
+      return students.filter((s) => s.grade === selectedGrade);
+    }
+    if (scope === 'all') {
+      return students;
+    }
+    return filteredStudents;
+  };
+
+  const targetStudents = getTargetStudents();
+  const studentCount = targetStudents.length;
+  const pageCount = Math.ceil(studentCount / 6);
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2 text-sky-400">
+            <Printer className="w-5 h-5" />
+            <h3 className="font-bold text-slate-100 text-base">طباعة مجمعة لبطاقات دخول الطلبة (A4)</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-3.5 bg-sky-950/30 border border-sky-800/40 rounded-2xl flex items-center gap-2.5 text-xs text-sky-300">
+          <Printer className="w-5 h-5 text-sky-400 shrink-0" />
+          <span>
+            مهيأ تلقائياً لمقاس <strong>A4 Portrait عمودي</strong>: كل ورقة A4 تحتوي بدقة على <strong>6 بطاقات</strong> (2 أعمدة × 3 صفوف) مع خطوط تقطيع منقطة ومظهر رسمي مناسب لبطاقات المكتبة.
+          </span>
+        </div>
+
+        {/* Scope selector */}
+        <div className="space-y-3 text-xs">
+          <label className="block text-slate-300 font-semibold">تحديد نطاق الطباعة:</label>
+          <div className="grid grid-cols-2 gap-2.5">
+            {selectedStudentIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setScope('selected')}
+                className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
+                  scope === 'selected'
+                    ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 font-bold'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <div>الطلاب المحددون بالجدول</div>
+                <div className="text-[11px] text-indigo-400 font-mono mt-0.5">{selectedStudentIds.length} طالب</div>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setScope('filtered')}
+              className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
+                scope === 'filtered'
+                  ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 font-bold'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div>الطلاب المعروضون بالبحث</div>
+              <div className="text-[11px] text-indigo-400 font-mono mt-0.5">{filteredStudents.length} طالب</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScope('grade')}
+              className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
+                scope === 'grade'
+                  ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 font-bold'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div>حسب الصف / القسم الدراسي</div>
+              <div className="text-[11px] text-indigo-400 font-mono mt-0.5">تصفية حسب الفصل</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScope('all')}
+              className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
+                scope === 'all'
+                  ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 font-bold'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div>جميع طلاب المدرسة بالكامل</div>
+              <div className="text-[11px] text-indigo-400 font-mono mt-0.5">{students.length} طالب</div>
+            </button>
+          </div>
+
+          {scope === 'grade' && grades.length > 0 && (
+            <div className="pt-1">
+              <label className="block text-slate-400 mb-1 text-[11px]">اختر الصف أو القسم:</label>
+              <select
+                value={selectedGrade}
+                onChange={(e) => setSelectedGrade(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 text-xs"
+              >
+                {grades.map((g) => (
+                  <option key={g} value={g}>
+                    {g} ({students.filter((s) => s.grade === g).length} طالب)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Print calculation breakdown */}
+        <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2 text-xs">
+          <div className="flex items-center justify-between text-slate-300">
+            <span>إجمالي بطاقات الطلبة المستهدفة:</span>
+            <span className="font-bold text-slate-100 font-mono text-sm">{studentCount} بطاقة</span>
+          </div>
+          <div className="flex items-center justify-between text-slate-300">
+            <span>توزيع البطاقات على الصفحات:</span>
+            <span className="font-semibold text-sky-400 font-mono">6 بطاقات / صفحة A4 (2×3)</span>
+          </div>
+          <div className="flex items-center justify-between text-slate-300 border-t border-slate-800/80 pt-2 font-bold">
+            <span>عدد أوراق الطباعة A4 المقدرة:</span>
+            <span className="text-emerald-400 font-mono text-sm">{pageCount} {pageCount === 1 ? 'صفحة' : 'صفحات'}</span>
+          </div>
+        </div>
+
+        {/* Security explanation & actions */}
+        <div className="space-y-3 pt-1">
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            ⚠️ <strong>إرشاد أمني:</strong> لحماية الحسابات وتشفيرها، يُستحسن توليد كلمات مرور عشوائية قوية فورية لكل طالب وطباعتها على البطاقات لتسليمها للطلبة يدوياً.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => onPrintExistingCards(targetStudents)}
+              disabled={studentCount === 0}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              title="طباعة بطاقات بالبيانات الحالية فقط دون إعادة تعيين كلمات المرور"
+            >
+              <Printer className="w-4 h-4 text-sky-400" />
+              <span>طباعة بطاقات قيد (بدون تغيير كلمات السر)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onBatchResetAndPrint(targetStudents.map((s) => s.id))}
+              disabled={isResetting || studentCount === 0}
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-amber-600/30 cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <RotateCcw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
+              <span>{isResetting ? 'جارٍ التوليد والتشفير...' : 'توليد كلمات مرور جديدة والطباعة (A4)'}</span>
             </button>
           </div>
         </div>

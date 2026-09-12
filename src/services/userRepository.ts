@@ -107,31 +107,36 @@ export class UserRepository {
   }
 
   /**
-   * Bulk import student roster (POST /api/v1/users/roster-import)
+    * Bulk import student roster (POST /api/v1/users/roster-import)
    */
   public async bulkImportStudents(roster: StudentRosterRow[]): Promise<{
     success: boolean;
     data?: {
       importedCount: number;
-      generatedCredentials: { name: string; regNumber: string; tempPass: string }[];
+      generatedCredentials: { name: string; regNumber: string; tempPass: string; grade?: string }[];
     };
     error?: ApiError;
   }> {
-    const res = await apiClient.post<{ message: string }>('/users/roster-import', {
+    const res = await apiClient.post<{
+      message: string;
+      importedCount: number;
+      generatedCredentials: Array<{ name: string; registrationNumber: string; grade?: string; password: string; tempPass: string }>;
+    }>('/users/roster-import', {
       students: roster,
     });
 
-    if (res.success) {
-      const generated = roster.map((r) => ({
+    if (res.success && res.data) {
+      const generated = (res.data.generatedCredentials || []).map((r) => ({
         name: r.name,
         regNumber: r.registrationNumber,
-        tempPass: '123456',
+        tempPass: r.tempPass || r.password,
+        grade: r.grade,
       }));
 
       return {
         success: true,
         data: {
-          importedCount: roster.length,
+          importedCount: res.data.importedCount || roster.length,
           generatedCredentials: generated,
         },
       };
@@ -144,6 +149,25 @@ export class UserRepository {
         message: 'تعذر استيراد قائمة الطلبة إلى الخادم المركزي.',
       },
     };
+  }
+
+  /**
+   * Batch reset passwords for multiple students for bulk printing (POST /api/v1/users/batch-reset-passwords)
+   */
+  public async batchResetPasswords(studentIds: string[]): Promise<{
+    success: boolean;
+    data?: {
+      message: string;
+      resetCount: number;
+      students: Array<{ id: string; name: string; registrationNumber: string; grade?: string; password: string }>;
+    };
+    error?: ApiError;
+  }> {
+    return apiClient.post<{
+      message: string;
+      resetCount: number;
+      students: Array<{ id: string; name: string; registrationNumber: string; grade?: string; password: string }>;
+    }>('/users/batch-reset-passwords', { studentIds });
   }
 
   /**

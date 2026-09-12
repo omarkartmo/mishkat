@@ -3,6 +3,7 @@ import request from 'supertest';
 import { Express } from 'express';
 import path from 'path';
 import fs from 'fs';
+import bcrypt from 'bcryptjs';
 import { createExpressApp } from '../server/index';
 import { db } from '../server/db/pool';
 import { isPrivateOrReservedHost, isPrivateOrReservedIp, validateSafeUrl } from '../server/services/portals/securityHttpClient';
@@ -25,6 +26,13 @@ beforeAll(async () => {
     .send({ registrationNumber: 'ADM-001', password: 'admin123' });
   expect(adminLoginRes.status).toBe(200);
   adminToken = adminLoginRes.body.data.token;
+
+  // Ensure development seed passwords are consistently active for test suite
+  const defaultStudentHash = await bcrypt.hash('123456', 10);
+  await db.query(
+    "UPDATE users SET password_hash = $1, token_version = 1 WHERE registration_number IN ('STU-2026-101', 'STU-2026-102')",
+    [defaultStudentHash]
+  );
 
   // 2. Authenticate Student A
   const studentLoginRes = await request(app)
@@ -616,10 +624,126 @@ describe('Security Audit Suite: Student Password Management & Session Invalidati
     }
   });
 
+  it('POST /api/v1/users/roster-import generates unique, random strong passwords and returns them for printing', async () => {
+    const importRes = await request(app)
+      .post('/api/v1/users/roster-import')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        students: [
+          { registrationNumber: 'STU-BULK-001', name: 'طالب استيراد 1', grade: 'الصف العاشر' },
+          { registrationNumber: 'STU-BULK-002', name: 'طالب استيراد 2', grade: 'الصف العاشر' },
+        ],
+      });
+    expect(importRes.status).toBe(200);
+    expect(importRes.body.success).toBe(true);
+    const creds = importRes.body.data.generatedCredentials;
+    expect(creds).toHaveLength(2);
+    expect(creds[0].password).toBeDefined();
+    expect(creds[1].password).toBeDefined();
+    // Must not be predictable defaults
+    expect(creds[0].password).not.toBe('123');
+    expect(creds[0].password).not.toBe('123456');
+    // Must be unique
+    expect(creds[0].password).not.toBe(creds[1].password);
+    expect(creds[0].password.length).toBeGreaterThanOrEqual(8);
+
+    // Clean up
+    await db.query("DELETE FROM users WHERE registration_number IN ('STU-BULK-001', 'STU-BULK-002')");
+  });
+
+  it('POST /api/v1/users/batch-reset-passwords generates strong random passwords and increments token_version', async () => {
+    // Create dedicated student for batch reset test
+    const testStuReg = `STU-BATCH-${Date.now()}`;
+    const createRes = await request(app)
+      .post('/api/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'طالب اختبار التعيين الجماعي',
+        registrationNumber: testStuReg,
+        grade: 'الصف الحادي عشر',
+        role: 'student',
+      });
+    expect(createRes.status).toBe(201);
+    const batchStudentId = createRes.body.data.id;
+    const initialPass = createRes.body.data.generatedPassword;
+
+    // Login to get an active token
+    const loginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ registrationNumber: testStuReg, password: initialPass });
+    expect(loginRes.status).toBe(200);
+    const tempSessionToken = loginRes.body.data.token;
+
+    const batchRes = await request(app)
+      .post('/api/v1/users/batch-reset-passwords')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ studentIds: [batchStudentId] });
+    expect(batchRes.status).toBe(200);
+    expect(batchRes.body.success).toBe(true);
+    const resetUsers = batchRes.body.data.students;
+    expect(resetUsers).toHaveLength(1);
+    const newPass = resetUsers[0].password;
+    expect(newPass).toBeDefined();
+    expect(newPass).not.toBe('123');
+    expect(newPass).not.toBe('123456');
+    expect(newPass).not.toBe(initialPass);
+    expect(newPass.length).toBeGreaterThanOrEqual(8);
+
+    // Check token_version was incremented
+    const afterUser = await db.query('SELECT token_version FROM users WHERE id = $1', [batchStudentId]);
+    expect(afterUser.rows[0].token_version).toBe(2);
+
+    // Old token should now be rejected (revoked)
+    const authRes = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${tempSessionToken}`);
+    expect(authRes.status).toBe(401);
+
+    // Clean up
+    await db.query('DELETE FROM users WHERE id = $1', [batchStudentId]);
+  });
+
+  it('POST /api/v1/users/:id/reset-password rejects predictable "123" / "123456" and enforces strong random password', async () => {
+    // Create dedicated student
+    const testStuReg = `STU-WEAK-${Date.now()}`;
+    const createRes = await request(app)
+      .post('/api/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'طالب اختبار الحماية من كلمات المرور الضعيفة',
+        registrationNumber: testStuReg,
+        grade: 'الصف العاشر',
+        role: 'student',
+      });
+    expect(createRes.status).toBe(201);
+    const weakStudentId = createRes.body.data.id;
+
+    const weakResetRes = await request(app)
+      .post(`/api/v1/users/${weakStudentId}/reset-password`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ newPassword: '123' });
+    expect(weakResetRes.status).toBe(200);
+    expect(weakResetRes.body.success).toBe(true);
+    // Must NOT use 123
+    const actualPass = weakResetRes.body.data.newPassword || weakResetRes.body.data.generatedPassword;
+    expect(actualPass).not.toBe('123');
+    expect(actualPass).not.toBe('123456');
+    expect(actualPass.length).toBeGreaterThanOrEqual(8);
+
+    // Clean up
+    await db.query('DELETE FROM users WHERE id = $1', [weakStudentId]);
+  });
+
   afterAll(async () => {
     if (createdStudentId) {
       await db.query('DELETE FROM users WHERE id = $1', [createdStudentId]);
     }
+    // Restore default development student credentials
+    const defaultStudentHash = await bcrypt.hash('123456', 10);
+    await db.query(
+      "UPDATE users SET password_hash = $1, token_version = 1 WHERE registration_number IN ('STU-2026-101', 'STU-2026-102')",
+      [defaultStudentHash]
+    );
   });
 });
 
