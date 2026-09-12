@@ -991,12 +991,14 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3 & 15.3.1)', () => 
       .send({ registrationNumber: 'ADM-001', password: 'admin123' });
     expect(adminLoginRes.status).toBe(200);
     expect(adminLoginRes.body.data.token).toBeTypeOf('string');
+    adminToken = adminLoginRes.body.data.token;
 
     const studentLoginRes = await request(app)
       .post('/api/v1/auth/login')
       .send({ registrationNumber: 'STU-2026-101', password: '123456' });
     expect(studentLoginRes.status).toBe(200);
     expect(studentLoginRes.body.data.token).toBeTypeOf('string');
+    studentToken = studentLoginRes.body.data.token;
   });
 
   it('Test: should ensure all persistent application database tables are covered by BACKUP_TABLES_ORDER', async () => {

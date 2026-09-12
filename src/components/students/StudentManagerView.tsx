@@ -159,18 +159,6 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
     }
   };
 
-  const handlePrintExistingCards = (studentsToPrint: User[]) => {
-    if (!studentsToPrint || studentsToPrint.length === 0) return;
-    const cardsToPrint: StudentCredentialCardData[] = studentsToPrint.map((s) => ({
-      name: s.name,
-      registrationNumber: s.registrationNumber,
-      password: '••••••••',
-      grade: s.grade,
-    }));
-    printBulkStudentCredentialCards(cardsToPrint);
-    setIsBulkPrintModalOpen(false);
-  };
-
   const handleSaveNewStudent = async (newStudent: any) => {
     const result = await onAddStudent(newStudent);
     setIsAddModalOpen(false);
@@ -560,6 +548,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-600/30 transition-colors"
                 >
                   <KeyRound className="w-4 h-4" />
+                  <span>{isResetting ? 'جارٍ إعادة التعيين...' : 'تأكيد التعيين وتوليد البطاقة (A4)'}</span>
                 </button>
               </div>
             </div>
@@ -699,7 +688,6 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
           isResetting={isBatchResetting}
           onClose={() => setIsBulkPrintModalOpen(false)}
           onBatchResetAndPrint={handleBatchResetAndPrint}
-          onPrintExistingCards={handlePrintExistingCards}
         />
       )}
     </div>
@@ -1123,7 +1111,6 @@ interface BulkPrintCardsModalProps {
   isResetting: boolean;
   onClose: () => void;
   onBatchResetAndPrint: (studentIds: string[]) => Promise<void>;
-  onPrintExistingCards: (students: User[]) => void;
 }
 
 const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
@@ -1134,7 +1121,6 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
   isResetting,
   onClose,
   onBatchResetAndPrint,
-  onPrintExistingCards,
 }) => {
   const [scope, setScope] = useState<'selected' | 'filtered' | 'grade' | 'all'>(
     selectedStudentIds.length > 0 ? 'selected' : 'filtered'
@@ -1273,27 +1259,24 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
 
         {/* Security explanation & actions */}
         <div className="space-y-3 pt-1">
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            ⚠️ <strong>إرشاد أمني:</strong> لحماية الحسابات وتشفيرها، يُستحسن توليد كلمات مرور عشوائية قوية فورية لكل طالب وطباعتها على البطاقات لتسليمها للطلبة يدوياً.
+          <p className="text-[11px] text-slate-300 leading-relaxed bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
+            🔐 <strong>إلزام أمني:</strong> كلمات المرور السابقة مشفرة بنظام Bcrypt ولا يمكن استرجاعها كنص صريح. لطباعة بطاقات بيانات دخول صالحة، سيقوم هذا الإجراء بتوليد كلمات مرور جديدة فريدة وعشوائية لكل طالب فوراً عبر الخادم المركزي، وتحديثها، وإلغاء الجلسات السابقة، ثم فتح محرك الطباعة A4 (6 بطاقات / ورقة) ببيانات الاعتماد الحقيقية.
           </p>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
             <button
               type="button"
-              onClick={() => onPrintExistingCards(targetStudents)}
-              disabled={studentCount === 0}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-              title="طباعة بطاقات بالبيانات الحالية فقط دون إعادة تعيين كلمات المرور"
+              onClick={onClose}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
             >
-              <Printer className="w-4 h-4 text-sky-400" />
-              <span>طباعة بطاقات قيد (بدون تغيير كلمات السر)</span>
+              إلغاء
             </button>
 
             <button
               type="button"
               onClick={() => onBatchResetAndPrint(targetStudents.map((s) => s.id))}
               disabled={isResetting || studentCount === 0}
-              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-amber-600/30 cursor-pointer flex items-center justify-center gap-1.5"
+              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-amber-600/30 cursor-pointer flex items-center justify-center gap-1.5"
             >
               <RotateCcw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
               <span>{isResetting ? 'جارٍ التوليد والتشفير...' : 'توليد كلمات مرور جديدة والطباعة (A4)'}</span>

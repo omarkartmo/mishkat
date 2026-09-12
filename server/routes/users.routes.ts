@@ -120,6 +120,172 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
   }
 });
 
+// PUT /api/v1/users/admin/security (Admin updates their own password and security question)
+// Registered BEFORE /:id to prevent any route interception or ambiguity
+router.put('/admin/security', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const { currentPassword, newPassword, securityQuestion, securityAnswer } = req.body;
+  const adminId = req.user!.id;
+
+  try {
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [adminId]);
+    if (rows.length === 0) return res.status(404).json({ success: false });
+
+    const user = rows[0];
+    const isCurrentValid = await bcrypt.compare(currentPassword, user.password_hash);
+    
+    if (!isCurrentValid) {
+      return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'كلمة المرور الحالية غير صحيحة.' } });
+    }
+
+    let updates: string[] = [];
+    let params: any[] = [];
+    let paramIndex = 1;
+
+    if (newPassword) {
+      updates.push(`password_hash = $${paramIndex++}`);
+      params.push(await bcrypt.hash(newPassword, 10));
+      updates.push('token_version = COALESCE(token_version, 1) + 1');
+    }
+
+    if (securityQuestion && securityAnswer) {
+      updates.push(`security_question = $${paramIndex++}`);
+      params.push(securityQuestion.trim());
+      
+      updates.push(`security_answer_hash = $${paramIndex++}`);
+      params.push(await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10));
+    }
+
+    if (updates.length > 0) {
+      params.push(adminId);
+      const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
+      await db.query(sql, params);
+      await recordAuditLog(adminId, req.user!.name, 'admin', 'UPDATE_ADMIN_SECURITY', 'user', adminId, null, req);
+    }
+
+    res.json({ success: true, data: { message: 'تم تحديث إعدادات الأمان بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/users/roster-import (Batch student import)
+// Registered BEFORE /:id to prevent route interception
+router.post('/roster-import', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const { students } = req.body;
+  if (!Array.isArray(students) || students.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_INPUT', message: 'قائمة الطلاب غير صالحة أو فارغة.' },
+    });
+  }
+
+  try {
+    let imported = 0;
+    const generatedCredentials: Array<{ name: string; registrationNumber: string; grade: string; password: string; tempPass: string }> = [];
+
+    await db.transaction(async (client) => {
+      for (const s of students) {
+        if (!s.registrationNumber || !s.name) continue;
+        const id = `stu-imp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+        
+        // Generate unique cryptographically secure random password for each student
+        const studentPlainPass = generateSecureStudentPassword(8);
+        const passHash = await bcrypt.hash(studentPlainPass, 10);
+
+        await client.query(`
+          INSERT INTO users (
+            id, registration_number, name, role_id, grade,
+            password_hash, token_version, is_active, is_blocked, is_blocked_from_borrowing
+          ) VALUES ($1, $2, $3, 'student', $4, $5, 1, true, false, false)
+          ON CONFLICT (registration_number) DO UPDATE SET
+            name = EXCLUDED.name,
+            grade = EXCLUDED.grade,
+            password_hash = EXCLUDED.password_hash,
+            token_version = COALESCE(users.token_version, 1) + 1;
+        `, [id, s.registrationNumber.trim(), s.name.trim(), s.grade || '', passHash]);
+
+        generatedCredentials.push({
+          name: s.name.trim(),
+          registrationNumber: s.registrationNumber.trim(),
+          grade: s.grade || '',
+          password: studentPlainPass,
+          tempPass: studentPlainPass,
+        });
+        imported++;
+      }
+    });
+
+    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'IMPORT_ROSTER', 'users', null, { count: imported }, req);
+
+    res.json({
+      success: true,
+      data: {
+        message: `تم استيراد ${imported} طالباً بنجاح وتوليد كلمات مرور قوية لكل حساب.`,
+        importedCount: imported,
+        generatedCredentials,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/users/batch-reset-passwords (Batch reset passwords for selected students for bulk printing)
+// Registered BEFORE /:id to prevent route interception
+router.post('/batch-reset-passwords', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { studentIds } = req.body;
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_INPUT', message: 'يرجى تحديد قائمة الطلاب لإعادة تعيين كلمات المرور.' },
+    });
+  }
+
+  try {
+    const updatedStudents: Array<{ id: string; name: string; registrationNumber: string; grade?: string; password: string }> = [];
+
+    await db.transaction(async (client) => {
+      for (const studentId of studentIds) {
+        const { rows } = await client.query(
+          "SELECT id, name, registration_number, role_id, grade FROM users WHERE id = $1 AND role_id = 'student'",
+          [studentId]
+        );
+        if (rows.length === 0) continue;
+
+        const u = rows[0];
+        const studentPlainPass = generateSecureStudentPassword(8);
+        const passHash = await bcrypt.hash(studentPlainPass, 10);
+
+        await client.query(
+          'UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 1) + 1 WHERE id = $2',
+          [passHash, u.id]
+        );
+
+        updatedStudents.push({
+          id: u.id,
+          name: u.name,
+          registrationNumber: u.registration_number,
+          grade: u.grade,
+          password: studentPlainPass,
+        });
+      }
+    });
+
+    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'BATCH_RESET_PASSWORDS', 'users', null, { count: updatedStudents.length }, req);
+
+    res.json({
+      success: true,
+      data: {
+        message: `تمت إعادة تعيين كلمات المرور لـ ${updatedStudents.length} طالباً بنجاح.`,
+        resetCount: updatedStudents.length,
+        students: updatedStudents,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
 // PUT /api/v1/users/:id
 router.put('/:id', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -198,122 +364,6 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req: Reque
   }
 });
 
-// POST /api/v1/users/roster-import (Batch student import)
-router.post('/roster-import', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
-  const { students } = req.body;
-  if (!Array.isArray(students) || students.length === 0) {
-    return res.status(400).json({
-      success: false,
-      error: { code: 'INVALID_INPUT', message: 'قائمة الطلاب غير صالحة أو فارغة.' },
-    });
-  }
-
-  try {
-    let imported = 0;
-    const generatedCredentials: Array<{ name: string; registrationNumber: string; grade: string; password: string; tempPass: string }> = [];
-
-    await db.transaction(async (client) => {
-      for (const s of students) {
-        if (!s.registrationNumber || !s.name) continue;
-        const id = `stu-imp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-        
-        // Generate unique cryptographically secure random password for each student
-        const studentPlainPass = generateSecureStudentPassword(8);
-        const passHash = await bcrypt.hash(studentPlainPass, 10);
-
-        await client.query(`
-          INSERT INTO users (
-            id, registration_number, name, role_id, grade,
-            password_hash, token_version, is_active, is_blocked, is_blocked_from_borrowing
-          ) VALUES ($1, $2, $3, 'student', $4, $5, 1, true, false, false)
-          ON CONFLICT (registration_number) DO UPDATE SET
-            name = EXCLUDED.name,
-            grade = EXCLUDED.grade,
-            password_hash = EXCLUDED.password_hash,
-            token_version = COALESCE(users.token_version, 1) + 1;
-        `, [id, s.registrationNumber.trim(), s.name.trim(), s.grade || '', passHash]);
-
-        generatedCredentials.push({
-          name: s.name.trim(),
-          registrationNumber: s.registrationNumber.trim(),
-          grade: s.grade || '',
-          password: studentPlainPass,
-          tempPass: studentPlainPass,
-        });
-        imported++;
-      }
-    });
-
-    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'IMPORT_ROSTER', 'users', null, { count: imported }, req);
-
-    res.json({
-      success: true,
-      data: {
-        message: `تم استيراد ${imported} طالباً بنجاح وتوليد كلمات مرور قوية لكل حساب.`,
-        importedCount: imported,
-        generatedCredentials,
-      },
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
-  }
-});
-
-// POST /api/v1/users/batch-reset-passwords (Batch reset passwords for selected students for bulk printing)
-router.post('/batch-reset-passwords', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
-  const { studentIds } = req.body;
-  if (!Array.isArray(studentIds) || studentIds.length === 0) {
-    return res.status(400).json({
-      success: false,
-      error: { code: 'INVALID_INPUT', message: 'يرجى تحديد قائمة الطلاب لإعادة تعيين كلمات المرور.' },
-    });
-  }
-
-  try {
-    const updatedStudents: Array<{ id: string; name: string; registrationNumber: string; grade?: string; password: string }> = [];
-
-    await db.transaction(async (client) => {
-      for (const studentId of studentIds) {
-        const { rows } = await client.query(
-          "SELECT id, name, registration_number, role_id, grade FROM users WHERE id = $1 AND role_id = 'student'",
-          [studentId]
-        );
-        if (rows.length === 0) continue;
-
-        const u = rows[0];
-        const studentPlainPass = generateSecureStudentPassword(8);
-        const passHash = await bcrypt.hash(studentPlainPass, 10);
-
-        await client.query(
-          'UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 1) + 1 WHERE id = $2',
-          [passHash, u.id]
-        );
-
-        updatedStudents.push({
-          id: u.id,
-          name: u.name,
-          registrationNumber: u.registration_number,
-          grade: u.grade,
-          password: studentPlainPass,
-        });
-      }
-    });
-
-    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'BATCH_RESET_PASSWORDS', 'users', null, { count: updatedStudents.length }, req);
-
-    res.json({
-      success: true,
-      data: {
-        message: `تمت إعادة تعيين كلمات المرور لـ ${updatedStudents.length} طالباً بنجاح.`,
-        resetCount: updatedStudents.length,
-        students: updatedStudents,
-      },
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
-  }
-});
-
 // POST /api/v1/users/:id/reset-password
 router.post('/:id/reset-password', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -341,7 +391,7 @@ router.post('/:id/reset-password', authenticateToken, requireRole('admin', 'libr
       });
     }
 
-    // Auto-generate strong cryptographically secure password
+    // Server-side authoritative CSPRNG password generation
     // Never allow predictable passwords such as '123', '123456', etc.
     let plainPassword = (req.body && typeof req.body.newPassword === 'string') ? req.body.newPassword.trim() : '';
     const forbidden = ['123', '1234', '12345', '123456', '12345678', 'password', 'student', 'admin', 'admin123'];
@@ -383,53 +433,6 @@ router.post('/:id/reset-password', authenticateToken, requireRole('admin', 'libr
         },
       },
     });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
-  }
-});
-
-// PUT /api/v1/users/admin/security (Admin updates their own password and security question)
-router.put('/admin/security', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
-  const { currentPassword, newPassword, securityQuestion, securityAnswer } = req.body;
-  const adminId = req.user!.id;
-
-  try {
-    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [adminId]);
-    if (rows.length === 0) return res.status(404).json({ success: false });
-
-    const user = rows[0];
-    const isCurrentValid = await bcrypt.compare(currentPassword, user.password_hash);
-    
-    if (!isCurrentValid) {
-      return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'كلمة المرور الحالية غير صحيحة.' } });
-    }
-
-    let updates: string[] = [];
-    let params: any[] = [];
-    let paramIndex = 1;
-
-    if (newPassword) {
-      updates.push(`password_hash = $${paramIndex++}`);
-      params.push(await bcrypt.hash(newPassword, 10));
-      updates.push('token_version = COALESCE(token_version, 1) + 1');
-    }
-
-    if (securityQuestion && securityAnswer) {
-      updates.push(`security_question = $${paramIndex++}`);
-      params.push(securityQuestion.trim());
-      
-      updates.push(`security_answer_hash = $${paramIndex++}`);
-      params.push(await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10));
-    }
-
-    if (updates.length > 0) {
-      params.push(adminId);
-      const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
-      await db.query(sql, params);
-      await recordAuditLog(adminId, req.user!.name, 'admin', 'UPDATE_ADMIN_SECURITY', 'user', adminId, null, req);
-    }
-
-    res.json({ success: true, data: { message: 'تم تحديث إعدادات الأمان بنجاح.' } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }

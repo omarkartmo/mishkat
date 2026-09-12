@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Shield, Key, Save, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
+import { useAuth } from '../../context/AuthContext';
 
 export const AdminSecuritySettings: React.FC = () => {
+  const { logout } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [securityQuestion, setSecurityQuestion] = useState('');
@@ -37,11 +39,19 @@ export const AdminSecuritySettings: React.FC = () => {
       });
 
       if (res.success) {
-        setSuccess('تم تحديث إعدادات الأمان بنجاح.');
-        setCurrentPassword('');
-        setNewPassword('');
-        setSecurityQuestion('');
-        setSecurityAnswer('');
+        if (newPassword) {
+          setSuccess('تم تغيير كلمة المرور بنجاح! تم إنهاء الجلسة الحالية لأسباب أمنية. جارٍ تحويلك لصفحة تسجيل الدخول...');
+          setCurrentPassword('');
+          setNewPassword('');
+          setTimeout(async () => {
+            await logout();
+          }, 2000);
+        } else {
+          setSuccess('تم تحديث سؤال الأمان بنجاح.');
+          setCurrentPassword('');
+          setSecurityQuestion('');
+          setSecurityAnswer('');
+        }
       } else {
         setError(res.error?.message || 'حدث خطأ أثناء التحديث.');
       }

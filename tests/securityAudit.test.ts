@@ -734,6 +734,190 @@ describe('Security Audit Suite: Student Password Management & Session Invalidati
     await db.query('DELETE FROM users WHERE id = $1', [weakStudentId]);
   });
 
+  describe('Security Audit Suite: Admin Password Change & Bulk Credential Printing Verification', () => {
+    it('PUT /api/v1/users/admin/security rejects wrong current password with 401', async () => {
+      const res = await request(app)
+        .put('/api/v1/users/admin/security')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          currentPassword: 'WrongPassword999!',
+          newPassword: 'BrandNewAdminPass#2026',
+        });
+      expect(res.status).toBe(401);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error?.code).toBe('INVALID_CREDENTIALS');
+    });
+
+    it('PUT /api/v1/users/admin/security updates password, revokes old token, and authenticates with new password', async () => {
+      // 1. Admin logs in to get a fresh token
+      const preLogin = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ registrationNumber: 'ADM-001', password: 'admin123' });
+      expect(preLogin.status).toBe(200);
+      const activeAdminToken = preLogin.body.data.token;
+
+      // 2. Change password successfully
+      const newAdminPass = 'SuperSecureAdmin2026!';
+      const updateRes = await request(app)
+        .put('/api/v1/users/admin/security')
+        .set('Authorization', `Bearer ${activeAdminToken}`)
+        .send({
+          currentPassword: 'admin123',
+          newPassword: newAdminPass,
+        });
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.success).toBe(true);
+
+      // 3. Old token should now be revoked (token_version bumped)
+      const testRevoked = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${activeAdminToken}`);
+      expect(testRevoked.status).toBe(401);
+      expect(testRevoked.body.error?.code).toBe('TOKEN_REVOKED');
+
+      // 4. Old password must fail to login
+      const oldLogin = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ registrationNumber: 'ADM-001', password: 'admin123' });
+      expect(oldLogin.status).toBe(401);
+
+      // 5. New password must succeed and yield a working token
+      const newLogin = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ registrationNumber: 'ADM-001', password: newAdminPass });
+      expect(newLogin.status).toBe(200);
+      const newWorkingToken = newLogin.body.data.token;
+      expect(newWorkingToken).toBeDefined();
+
+      const verifyNewAuth = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${newWorkingToken}`);
+      expect(verifyNewAuth.status).toBe(200);
+
+      // 6. Reset admin password back to default development seed (admin123) for test idempotency
+      const restoreRes = await request(app)
+        .put('/api/v1/users/admin/security')
+        .set('Authorization', `Bearer ${newWorkingToken}`)
+        .send({
+          currentPassword: newAdminPass,
+          newPassword: 'admin123',
+        });
+      expect(restoreRes.status).toBe(200);
+
+      // Re-login to update adminToken for other tests
+      const reLogin = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ registrationNumber: 'ADM-001', password: 'admin123' });
+      expect(reLogin.status).toBe(200);
+      adminToken = reLogin.body.data.token;
+    });
+
+    it('POST /api/v1/users/batch-reset-passwords resets multiple students with unique CSPRNG passwords and revokes old sessions', async () => {
+      // Create 3 students
+      const stuA = await request(app)
+        .post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'طالب أ', registrationNumber: `STU-MULTI-A-${Date.now()}`, role: 'student' });
+      const stuB = await request(app)
+        .post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'طالب ب', registrationNumber: `STU-MULTI-B-${Date.now()}`, role: 'student' });
+      const stuC = await request(app)
+        .post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'طالب ج', registrationNumber: `STU-MULTI-C-${Date.now()}`, role: 'student' });
+
+      expect(stuA.status).toBe(201);
+      expect(stuB.status).toBe(201);
+      expect(stuC.status).toBe(201);
+
+      const idA = stuA.body.data.id;
+      const idB = stuB.body.data.id;
+      const idC = stuC.body.data.id;
+
+      // Log them in to verify active sessions
+      const loginA = await request(app).post('/api/v1/auth/login').send({ registrationNumber: stuA.body.data.registrationNumber, password: stuA.body.data.generatedPassword });
+      const loginB = await request(app).post('/api/v1/auth/login').send({ registrationNumber: stuB.body.data.registrationNumber, password: stuB.body.data.generatedPassword });
+      const loginC = await request(app).post('/api/v1/auth/login').send({ registrationNumber: stuC.body.data.registrationNumber, password: stuC.body.data.generatedPassword });
+
+      expect(loginA.status).toBe(200);
+      expect(loginB.status).toBe(200);
+      expect(loginC.status).toBe(200);
+
+      // Perform bulk reset
+      const batchRes = await request(app)
+        .post('/api/v1/users/batch-reset-passwords')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ studentIds: [idA, idB, idC] });
+
+      expect(batchRes.status).toBe(200);
+      expect(batchRes.body.success).toBe(true);
+      expect(batchRes.body.data.resetCount).toBe(3);
+
+      const returnedStudents = batchRes.body.data.students;
+      expect(returnedStudents).toHaveLength(3);
+
+      const passA = returnedStudents.find((s: any) => s.id === idA)?.password;
+      const passB = returnedStudents.find((s: any) => s.id === idB)?.password;
+      const passC = returnedStudents.find((s: any) => s.id === idC)?.password;
+
+      // Assert each password is unique
+      expect(passA).toBeDefined();
+      expect(passB).toBeDefined();
+      expect(passC).toBeDefined();
+      expect(passA).not.toBe(passB);
+      expect(passB).not.toBe(passC);
+      expect(passA).not.toBe(passC);
+      expect(passA!.length).toBeGreaterThanOrEqual(8);
+
+      // Assert old sessions are revoked
+      const testRevokedA = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${loginA.body.data.token}`);
+      const testRevokedB = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${loginB.body.data.token}`);
+      const testRevokedC = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${loginC.body.data.token}`);
+      expect(testRevokedA.status).toBe(401);
+      expect(testRevokedB.status).toBe(401);
+      expect(testRevokedC.status).toBe(401);
+
+      // Assert each student can log in with their newly generated password
+      const newLoginA = await request(app).post('/api/v1/auth/login').send({ registrationNumber: stuA.body.data.registrationNumber, password: passA });
+      const newLoginB = await request(app).post('/api/v1/auth/login').send({ registrationNumber: stuB.body.data.registrationNumber, password: passB });
+      const newLoginC = await request(app).post('/api/v1/auth/login').send({ registrationNumber: stuC.body.data.registrationNumber, password: passC });
+      expect(newLoginA.status).toBe(200);
+      expect(newLoginB.status).toBe(200);
+      expect(newLoginC.status).toBe(200);
+
+      // Verify database does NOT store plaintext password
+      const dbCheck = await db.query('SELECT password_hash FROM users WHERE id = $1', [idA]);
+      expect(dbCheck.rows[0].password_hash).not.toBe(passA);
+      expect(dbCheck.rows[0].password_hash.startsWith('$2')).toBe(true);
+
+      // Clean up
+      await db.query('DELETE FROM users WHERE id IN ($1, $2, $3)', [idA, idB, idC]);
+    });
+
+    it('Credential printing templates conform to A4 landscape for single and 6 cards/A4 portrait for bulk', async () => {
+      const printModule = fs.readFileSync(path.join(process.cwd(), 'src', 'utils', 'printCredentialCard.ts'), 'utf-8');
+      
+      // Single student must use A4 landscape
+      expect(printModule).toContain('size: A4 landscape');
+      expect(printModule).not.toContain('size: A6 landscape');
+
+      // Bulk printing must use A4 portrait and exactly 6 cards per sheet
+      expect(printModule).toContain('size: A4 portrait');
+      expect(printModule).toContain('pageSize = 6');
+      expect(printModule).toContain('grid-template-columns: 1fr 1fr');
+      expect(printModule).toContain('grid-template-rows: 1fr 1fr 1fr');
+
+      // Verify pagination calculation
+      const calculatePages = (studentCount: number) => Math.ceil(studentCount / 6);
+      expect(calculatePages(1)).toBe(1);
+      expect(calculatePages(6)).toBe(1);
+      expect(calculatePages(7)).toBe(2);
+      expect(calculatePages(12)).toBe(2);
+      expect(calculatePages(13)).toBe(3);
+    });
+  });
+
   afterAll(async () => {
     if (createdStudentId) {
       await db.query('DELETE FROM users WHERE id = $1', [createdStudentId]);

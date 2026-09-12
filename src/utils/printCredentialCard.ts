@@ -23,8 +23,8 @@ export function printStudentCredentialCard(data: StudentCredentialCardData): voi
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=JetBrains+Mono:wght@600;700&display=swap');
     
     @page {
-      size: A6 landscape;
-      margin: 8mm;
+      size: A4 landscape;
+      margin: 15mm;
     }
 
     * {
@@ -41,18 +41,22 @@ export function printStudentCredentialCard(data: StudentCredentialCardData): voi
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      padding: 10px;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     .card {
       width: 100%;
-      max-width: 480px;
-      border: 2px solid #0f172a;
-      border-radius: 16px;
-      padding: 24px;
+      max-width: 720px;
+      border: 2.5px solid #0f172a;
+      border-radius: 20px;
+      padding: 32px 36px;
       background: #ffffff;
       position: relative;
       box-shadow: none;
+      box-sizing: border-box;
     }
 
     .header {
@@ -60,63 +64,63 @@ export function printStudentCredentialCard(data: StudentCredentialCardData): voi
       justify-content: space-between;
       align-items: center;
       border-bottom: 2px solid #e2e8f0;
-      padding-bottom: 14px;
-      margin-bottom: 16px;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
 
     .brand-title {
-      font-size: 18px;
+      font-size: 22px;
       font-weight: 800;
       color: #1e293b;
     }
 
     .brand-sub {
-      font-size: 11px;
+      font-size: 13px;
       color: #64748b;
     }
 
     .badge {
       background: #f1f5f9;
-      border: 1px solid #cbd5e1;
-      padding: 4px 10px;
+      border: 1.5px solid #cbd5e1;
+      padding: 6px 14px;
       border-radius: 9999px;
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 700;
       color: #334155;
     }
 
     .field-group {
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
 
     .field-label {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       color: #64748b;
       margin-bottom: 4px;
     }
 
     .field-value {
-      font-size: 15px;
+      font-size: 18px;
       font-weight: 700;
       color: #0f172a;
     }
 
     .creds-box {
       background: #f8fafc;
-      border: 1.5px dashed #94a3b8;
-      border-radius: 12px;
-      padding: 12px 16px;
-      margin: 14px 0;
+      border: 2px dashed #94a3b8;
+      border-radius: 14px;
+      padding: 16px 22px;
+      margin: 18px 0;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 16px;
     }
 
     .cred-item {
@@ -125,15 +129,15 @@ export function printStudentCredentialCard(data: StudentCredentialCardData): voi
     }
 
     .cred-label {
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 600;
       color: #475569;
-      margin-bottom: 2px;
+      margin-bottom: 4px;
     }
 
     .cred-val {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 16px;
+      font-size: 20px;
       font-weight: 700;
       color: #047857;
       letter-spacing: 0.5px;
@@ -144,12 +148,12 @@ export function printStudentCredentialCard(data: StudentCredentialCardData): voi
     }
 
     .footer {
-      margin-top: 14px;
-      padding-top: 10px;
+      margin-top: 18px;
+      padding-top: 12px;
       border-top: 1px solid #f1f5f9;
-      font-size: 9.5px;
+      font-size: 11px;
       color: #64748b;
-      line-height: 1.4;
+      line-height: 1.5;
       text-align: center;
     }
   </style>
