@@ -59,11 +59,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="w-10 h-10 rounded-2xl overflow-hidden bg-white shadow-md shadow-indigo-500/25 cursor-pointer transition-all shrink-0 group relative border border-slate-200 dark:border-slate-800"
+              className="w-10 h-10 rounded-xl overflow-hidden bg-transparent hover:bg-slate-800/50 cursor-pointer transition-all shrink-0 group relative flex items-center justify-center"
               title={isCollapsed ? 'انقر لتوسيع وإظهار أسماء القوائم' : 'انقر لطي القائمة الجانبية وتوفير مساحة العمل'}
               aria-label="تبديل حجم القائمة الجانبية"
             >
-              <img src="/mishkat-logo.png" alt="المشكاة" className="w-full h-full object-contain p-1 group-hover:scale-110 transition-transform" />
+              <img src="/mishkat-logo.png" alt="المشكاة" className="w-full h-full object-contain filter drop-shadow-[0_2px_10px_rgba(212,175,55,0.3)] group-hover:scale-110 transition-transform" />
               {isCollapsed && (
                 <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
               )}
@@ -74,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <h1 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 truncate">
                   <span className="truncate">نظام المشكاة الذكي</span>
                   <span className="text-[10px] bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 font-mono px-1.5 py-0.5 rounded border border-indigo-500/20 shrink-0">
-                    v2.6
+                    v1.0
                   </span>
                 </h1>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">

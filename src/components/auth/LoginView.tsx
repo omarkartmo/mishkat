@@ -103,8 +103,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
 
       {/* Top Header Bar */}
       <header className="relative z-10 w-full mx-auto px-6 py-8 flex flex-col items-center justify-center text-center space-y-4">
-        <div className="w-20 h-20 rounded-3xl overflow-hidden bg-white shadow-xl shadow-black/50 border border-slate-800">
-          <img src="/mishkat-logo.png" alt="المشكاة" className="w-full h-full object-contain p-2" />
+        <div className="w-20 h-20 rounded-3xl overflow-hidden bg-slate-900/70 backdrop-blur-md shadow-xl shadow-black/50 border border-slate-800/80 flex items-center justify-center p-2">
+          <img src="/mishkat-logo.png" alt="المشكاة" className="w-full h-full object-contain filter drop-shadow-[0_4px_12px_rgba(212,175,55,0.3)]" />
         </div>
         <div>
           <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400 tracking-wide">
