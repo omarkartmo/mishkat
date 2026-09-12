@@ -36,10 +36,10 @@ export class UserRepository {
    */
   public async createUser(user: Omit<User, 'id'> & { password?: string }): Promise<{
     success: boolean;
-    data?: User;
+    data?: User & { generatedPassword?: string };
     error?: ApiError;
   }> {
-    const res = await apiClient.post<User>('/users', user);
+    const res = await apiClient.post<User & { generatedPassword?: string }>('/users', user);
     if (res.success && res.data) {
       return {
         success: true,
@@ -154,18 +154,26 @@ export class UserRepository {
     newPassword?: string
   ): Promise<{
     success: boolean;
-    data?: { message: string; newPassword: string };
+    data?: {
+      message: string;
+      newPassword: string;
+      generatedPassword?: string;
+      student?: { id: string; name: string; registrationNumber: string; grade?: string };
+    };
     error?: ApiError;
   }> {
-    const res = await apiClient.post<{ message: string; newPassword: string }>(
-      `/users/${id}/reset-password`,
-      { newPassword: newPassword || '123456' }
-    );
+    const body = newPassword ? { newPassword } : {};
+    const res = await apiClient.post<{
+      message: string;
+      newPassword: string;
+      generatedPassword?: string;
+      student?: { id: string; name: string; registrationNumber: string; grade?: string };
+    }>(`/users/${id}/reset-password`, body);
 
-    if (res.success) {
+    if (res.success && res.data) {
       return {
         success: true,
-        data: res.data || { message: 'تم إعادة تعيين كلمة المرور بنجاح.', newPassword: newPassword || '123456' },
+        data: res.data,
       };
     }
 

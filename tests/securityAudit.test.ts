@@ -445,3 +445,181 @@ describe('Security Audit Suite: VULN-10 Manual File Path Traversal Defense in Su
     await db.query('DELETE FROM pending_submissions WHERE id = $1', [subId]);
   });
 });
+
+describe('Security Audit Suite: Student Password Management & Session Invalidation', () => {
+  let createdStudentId: string;
+  let createdStudentReg: string;
+  let generatedStudentPassword: string;
+  let activeStudentSessionToken: string;
+
+  it('Admin creates student without password: auto-generates secure password, hashes in DB, omits from audit', async () => {
+    createdStudentReg = `STU-SEC-${Date.now()}`;
+    const createRes = await request(app)
+      .post('/api/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        registrationNumber: createdStudentReg,
+        name: 'طالب فحص كلمات المرور',
+        grade: 'الصف الحادي عشر',
+        role: 'student',
+      });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.success).toBe(true);
+    expect(createRes.body.data.generatedPassword).toBeDefined();
+    expect(typeof createRes.body.data.generatedPassword).toBe('string');
+    expect(createRes.body.data.generatedPassword.length).toBeGreaterThanOrEqual(8);
+    
+    // Check no visually ambiguous characters
+    expect(createRes.body.data.generatedPassword).not.toMatch(/[0O1lIo]/);
+
+    createdStudentId = createRes.body.data.id;
+    generatedStudentPassword = createRes.body.data.generatedPassword;
+
+    // Verify DB does NOT store plaintext password
+    const { rows: userRows } = await db.query('SELECT password_hash, token_version FROM users WHERE id = $1', [createdStudentId]);
+    expect(userRows.length).toBe(1);
+    expect(userRows[0].password_hash).not.toBe(generatedStudentPassword);
+    expect(userRows[0].password_hash.startsWith('$2')).toBe(true); // Valid bcrypt hash
+    expect(userRows[0].token_version).toBe(1);
+
+    // Verify Audit Log does NOT store plaintext password
+    const { rows: auditRows } = await db.query(
+      "SELECT metadata FROM audit_logs WHERE action = 'CREATE_USER' AND entity_id = $1 ORDER BY created_at DESC LIMIT 1",
+      [createdStudentId]
+    );
+    expect(auditRows.length).toBe(1);
+    const auditDetails = typeof auditRows[0].metadata === 'string' ? auditRows[0].metadata : JSON.stringify(auditRows[0].metadata);
+    expect(auditDetails).not.toContain(generatedStudentPassword);
+  });
+
+  it('Newly created student logs in successfully with generated password', async () => {
+    const loginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({
+        registrationNumber: createdStudentReg,
+        password: generatedStudentPassword,
+      });
+
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.success).toBe(true);
+    expect(loginRes.body.data.token).toBeDefined();
+    activeStudentSessionToken = loginRes.body.data.token;
+
+    // Verify active session can access /auth/me
+    const meRes = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${activeStudentSessionToken}`);
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.data.user.id).toBe(createdStudentId);
+  });
+
+  let secondGeneratedPassword: string;
+
+  it('Admin resets student password: auto-generates new password, bumps token_version, revokes old session', async () => {
+    const resetRes = await request(app)
+      .post(`/api/v1/users/${createdStudentId}/reset-password`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({});
+
+    expect(resetRes.status).toBe(200);
+    expect(resetRes.body.success).toBe(true);
+    expect(resetRes.body.data.generatedPassword).toBeDefined();
+    expect(resetRes.body.data.student.id).toBe(createdStudentId);
+    expect(resetRes.body.data.student.registrationNumber).toBe(createdStudentReg);
+
+    secondGeneratedPassword = resetRes.body.data.generatedPassword;
+    expect(secondGeneratedPassword).not.toBe(generatedStudentPassword);
+
+    // Verify token_version bumped in DB
+    const { rows: userRows } = await db.query('SELECT token_version FROM users WHERE id = $1', [createdStudentId]);
+    expect(userRows[0].token_version).toBe(2);
+
+    // Verify Old JWT session is immediately revoked (401 TOKEN_REVOKED)
+    const revokedRes = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${activeStudentSessionToken}`);
+    expect(revokedRes.status).toBe(401);
+    expect(revokedRes.body.error.code).toBe('TOKEN_REVOKED');
+  });
+
+  it('Student logs in with newly reset password and gets valid active session', async () => {
+    // Old password now fails
+    const failedLoginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({
+        registrationNumber: createdStudentReg,
+        password: generatedStudentPassword,
+      });
+    expect(failedLoginRes.status).toBe(401);
+
+    // New password succeeds
+    const newLoginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({
+        registrationNumber: createdStudentReg,
+        password: secondGeneratedPassword,
+      });
+    expect(newLoginRes.status).toBe(200);
+    const newSessionToken = newLoginRes.body.data.token;
+
+    const meRes = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${newSessionToken}`);
+    expect(meRes.status).toBe(200);
+  });
+
+  it('Student receives 403 Forbidden when attempting to reset or change any password', async () => {
+    // Student attempts to reset another student password
+    const studentResetOtherRes = await request(app)
+      .post(`/api/v1/users/${studentId}/reset-password`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ newPassword: 'hackedPassword' });
+    expect(studentResetOtherRes.status).toBe(403);
+    expect(studentResetOtherRes.body.error.code).toBe('FORBIDDEN');
+
+    // Student attempts to reset their own password via reset-password endpoint
+    const studentResetSelfRes = await request(app)
+      .post(`/api/v1/users/${studentBId}/reset-password`)
+      .set('Authorization', `Bearer ${studentBToken}`)
+      .send({ newPassword: 'newSelfPassword' });
+    expect(studentResetSelfRes.status).toBe(403);
+    expect(studentResetSelfRes.body.error.code).toBe('FORBIDDEN');
+
+    // Student attempts to update user record via PUT /users/:id
+    const studentPutRes = await request(app)
+      .put(`/api/v1/users/${studentId}`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ password: 'newPasswordViaPut' });
+    expect(studentPutRes.status).toBe(403);
+    expect(studentPutRes.body.error.code).toBe('FORBIDDEN');
+
+    // Student attempts to call admin security route
+    const studentAdminSecRes = await request(app)
+      .put('/api/v1/users/admin/security')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ newPassword: 'hackedPassword' });
+    expect(studentAdminSecRes.status).toBe(403);
+    expect(studentAdminSecRes.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('GET /api/v1/users does not expose password hashes or plaintext passwords', async () => {
+    const listRes = await request(app)
+      .get('/api/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(listRes.status).toBe(200);
+    const users = listRes.body.data;
+    for (const u of users) {
+      expect(u.password).toBeUndefined();
+      expect(u.password_hash).toBeUndefined();
+      expect(u.passwordHash).toBeUndefined();
+    }
+  });
+
+  afterAll(async () => {
+    if (createdStudentId) {
+      await db.query('DELETE FROM users WHERE id = $1', [createdStudentId]);
+    }
+  });
+});
+

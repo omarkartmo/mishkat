@@ -45,7 +45,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     
     // Verify user exists and is active in Central Database
     const { rows } = await db.query(
-      'SELECT id, name, registration_number, role_id, grade, email, is_active, is_blocked FROM users WHERE id = $1',
+      'SELECT id, name, registration_number, role_id, grade, email, is_active, is_blocked, token_version FROM users WHERE id = $1',
       [decoded.userId]
     );
 
@@ -69,6 +69,20 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
         },
       });
     }
+
+    // Verify token version (session revocation on password reset)
+    const currentTokenVersion = u.token_version || 1;
+    const tokenVersionInJwt = decoded.tokenVersion || 1;
+    if (tokenVersionInJwt !== currentTokenVersion) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'TOKEN_REVOKED',
+          message: 'تم إنهاء صلاحية هذه الجلسة بسبب تغيير كلمة المرور. يرجى تسجيل الدخول مجدداً.',
+        },
+      });
+    }
+
     req.user = {
       id: u.id,
       name: u.name,
@@ -98,19 +112,23 @@ export function optionalAuth(req: Request, res: Response, next: NextFunction) {
 
   try {
     const decoded = jwt.verify(token, serverConfig.jwtSecret) as any;
-    db.query('SELECT id, name, registration_number, role_id, grade, email, is_active, is_blocked FROM users WHERE id = $1', [decoded.userId])
+    db.query('SELECT id, name, registration_number, role_id, grade, email, is_active, is_blocked, token_version FROM users WHERE id = $1', [decoded.userId])
       .then(({ rows }) => {
-        if (rows.length > 0 && rows[0].is_active) {
+        if (rows.length > 0 && rows[0].is_active && !rows[0].is_blocked) {
           const u = rows[0];
-          req.user = {
-            id: u.id,
-            name: u.name,
-            registrationNumber: u.registration_number,
-            role: u.role_id || 'student',
-            grade: u.grade,
-            email: u.email,
-            isBlocked: u.is_blocked || false,
-          };
+          const currentTokenVersion = u.token_version || 1;
+          const tokenVersionInJwt = decoded.tokenVersion || 1;
+          if (tokenVersionInJwt === currentTokenVersion) {
+            req.user = {
+              id: u.id,
+              name: u.name,
+              registrationNumber: u.registration_number,
+              role: u.role_id || 'student',
+              grade: u.grade,
+              email: u.email,
+              isBlocked: u.is_blocked || false,
+            };
+          }
         }
         next();
       })

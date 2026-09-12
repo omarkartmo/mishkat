@@ -25,7 +25,7 @@ router.post('/login', authRateLimiter(15), async (req: Request, res: Response) =
   try {
     const { rows } = await db.query(
       `SELECT id, registration_number, name, email, phone, role_id, grade, avatar_url,
-              password_hash, is_active, is_blocked, is_blocked_from_borrowing, block_reason
+              password_hash, is_active, is_blocked, is_blocked_from_borrowing, block_reason, token_version
        FROM users WHERE registration_number = $1 OR username = $1 LIMIT 1`,
       [cleanReg]
     );
@@ -73,12 +73,13 @@ router.post('/login', authRateLimiter(15), async (req: Request, res: Response) =
     // Update last login
     await db.query('UPDATE users SET last_login_at = $1 WHERE id = $2', [new Date().toISOString(), user.id]);
 
-    // Generate JWT Token
+    // Generate JWT Token with tokenVersion for session revocation
     const token = jwt.sign(
       {
         userId: user.id,
         registrationNumber: user.registration_number,
         role: user.role_id,
+        tokenVersion: user.token_version || 1,
       },
       serverConfig.jwtSecret,
       { expiresIn: '7d' }
@@ -247,7 +248,7 @@ router.post('/recover', authRateLimiter(5), async (req: Request, res: Response) 
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
     
-    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newPasswordHash, user.id]);
+    await db.query('UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 1) + 1 WHERE id = $2', [newPasswordHash, user.id]);
     await recordAuditLog(user.id, 'Admin', 'admin', 'PASSWORD_RECOVERED', 'user', user.id, null, req);
 
     res.json({

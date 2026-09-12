@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at TIMESTAMP WITH TIME ZONE,
     security_question TEXT,
     security_answer_hash VARCHAR(255),
+    token_version INT DEFAULT 1,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

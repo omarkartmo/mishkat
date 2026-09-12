@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Key, Save, CheckCircle2 } from 'lucide-react';
+import { apiClient } from '../../services/apiClient';
 
 export const AdminSecuritySettings: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -28,32 +29,21 @@ export const AdminSecuritySettings: React.FC = () => {
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('almanara_token');
-      if (!token) throw new Error('غير مصرح');
-
-      const res = await fetch('http://localhost:3000/api/v1/users/admin/security', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-          securityQuestion,
-          securityAnswer,
-        })
+      const res = await apiClient.put<{ message: string }>('/users/admin/security', {
+        currentPassword,
+        newPassword,
+        securityQuestion,
+        securityAnswer,
       });
 
-      const data = await res.json();
-      if (data.success) {
+      if (res.success) {
         setSuccess('تم تحديث إعدادات الأمان بنجاح.');
         setCurrentPassword('');
         setNewPassword('');
         setSecurityQuestion('');
         setSecurityAnswer('');
       } else {
-        setError(data.error?.message || 'حدث خطأ أثناء التحديث.');
+        setError(res.error?.message || 'حدث خطأ أثناء التحديث.');
       }
     } catch (err: any) {
       setError('حدث خطأ في الاتصال بالخادم.');

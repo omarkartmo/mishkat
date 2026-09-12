@@ -4,6 +4,7 @@ import { db } from '../db/pool';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
+import { generateSecureStudentPassword } from '../utils/passwordGenerator';
 
 const router = Router();
 
@@ -51,8 +52,8 @@ router.get('/', authenticateToken, requireRole('admin', 'librarian'), async (req
 });
 
 // POST /api/v1/users (Create student/user)
-router.post('/', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
-  const { registrationNumber, name, grade, email, phone, role = 'student', password = '123' } = req.body;
+router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  const { registrationNumber, name, grade, email, phone, role = 'student', password } = req.body;
 
   if (!registrationNumber || !name) {
     return res.status(400).json({
@@ -61,15 +62,29 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
     });
   }
 
+  // Prevent librarian from creating admin accounts
+  if (req.user!.role === 'librarian' && role === 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'لا يمكن لأمين المكتبة إنشاء حساب مشرف عام.' },
+    });
+  }
+
   try {
     const id = `stu-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const passHash = await bcrypt.hash(password, 10);
+    
+    // Auto-generate strong cryptographically secure password if not provided by admin
+    const effectivePassword = (password && typeof password === 'string' && password.trim().length >= 6 && req.user!.role === 'admin')
+      ? password.trim()
+      : generateSecureStudentPassword(8);
+
+    const passHash = await bcrypt.hash(effectivePassword, 10);
 
     await db.query(`
       INSERT INTO users (
         id, registration_number, name, role_id, grade, email, phone,
-        password_hash, is_active, is_blocked, is_blocked_from_borrowing
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, false, false)
+        password_hash, token_version, is_active, is_blocked, is_blocked_from_borrowing
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, true, false, false)
     `, [
       id,
       registrationNumber.trim(),
@@ -81,6 +96,7 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
       passHash,
     ]);
 
+    // Omit password from audit log completely
     await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'CREATE_USER', 'user', id, { registrationNumber, name, grade }, req);
 
     res.status(201).json({
@@ -96,6 +112,7 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: Request, r
         isBlocked: false,
         isBlockedFromBorrowing: false,
         createdAt: new Date().toISOString(),
+        generatedPassword: effectivePassword, // Returned ONLY here to allow immediate printing of credential card
       },
     });
   } catch (err: any) {
@@ -115,7 +132,7 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req: Request,
     if (password) {
       const passHash = await bcrypt.hash(password, 10);
       params.splice(7, 0, passHash);
-      passUpdateSql = `, password_hash = $8`;
+      passUpdateSql = `, password_hash = $8, token_version = COALESCE(token_version, 1) + 1`;
     }
 
     const sql = `
@@ -224,18 +241,70 @@ router.post('/roster-import', authenticateToken, requireRole('admin'), async (re
 });
 
 // POST /api/v1/users/:id/reset-password
-router.post('/:id/reset-password', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/:id/reset-password', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { newPassword = '123' } = req.body || {};
 
   try {
-    const passHash = await bcrypt.hash(newPassword, 10);
-    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passHash, id]);
-    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'RESET_PASSWORD', 'user', id, null, req);
+    const targetRes = await db.query(
+      'SELECT id, name, registration_number, role_id, grade FROM users WHERE id = $1',
+      [id]
+    );
+
+    if (targetRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'المستخدم غير موجود بالخادم المركزي.' },
+      });
+    }
+
+    const targetUser = targetRes.rows[0];
+
+    // Librarian cannot reset admin passwords
+    if (req.user!.role === 'librarian' && targetUser.role_id === 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'لا يمكن لأمين المكتبة إعادة تعيين كلمة مرور المشرف العام.' },
+      });
+    }
+
+    // Auto-generate strong cryptographically secure password
+    const plainPassword = (req.body && req.body.newPassword && typeof req.body.newPassword === 'string' && req.body.newPassword.trim().length >= 6 && req.user!.role === 'admin')
+      ? req.body.newPassword.trim()
+      : generateSecureStudentPassword(8);
+
+    const passHash = await bcrypt.hash(plainPassword, 10);
+
+    // Invalidate existing sessions by incrementing token_version
+    await db.query(
+      'UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 1) + 1 WHERE id = $2',
+      [passHash, id]
+    );
+
+    // Audit log records event with metadata only — NEVER records plaintext password
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'RESET_PASSWORD',
+      'user',
+      id,
+      { targetRegistrationNumber: targetUser.registration_number, targetName: targetUser.name },
+      req
+    );
 
     res.json({
       success: true,
-      data: { message: 'تمت إعادة تعيين كلمة المرور بنجاح في الخادم المركزي.', newPassword },
+      data: {
+        message: 'تمت إعادة تعيين كلمة المرور بنجاح في الخادم المركزي.',
+        newPassword: plainPassword,
+        generatedPassword: plainPassword,
+        student: {
+          id: targetUser.id,
+          name: targetUser.name,
+          registrationNumber: targetUser.registration_number,
+          grade: targetUser.grade,
+        },
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
@@ -265,6 +334,7 @@ router.put('/admin/security', authenticateToken, requireRole('admin'), async (re
     if (newPassword) {
       updates.push(`password_hash = $${paramIndex++}`);
       params.push(await bcrypt.hash(newPassword, 10));
+      updates.push('token_version = COALESCE(token_version, 1) + 1');
     }
 
     if (securityQuestion && securityAnswer) {

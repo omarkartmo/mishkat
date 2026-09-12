@@ -1152,8 +1152,9 @@ export default function App() {
   const handleAddStudent = async (newStudent: Omit<User, 'id'>) => {
     try {
       const res = await userRepository.createUser(newStudent);
-      if (res.success) {
+      if (res.success && res.data) {
         await loadUsers();
+        return res.data;
       } else {
         alert(res.error?.message || 'تعذر إضافة الطالب في الخادم المركزي.');
       }
@@ -1181,7 +1182,7 @@ export default function App() {
       const res = await userRepository.resetPassword(studentId, newPassword);
       if (res.success && res.data) {
         await loadUsers();
-        return res.data.newPassword;
+        return res.data.generatedPassword || res.data.newPassword;
       } else {
         alert(res.error?.message || 'تعذر إعادة تعيين كلمة المرور في الخادم المركزي.');
       }
