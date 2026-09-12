@@ -98,8 +98,17 @@ class PostgresDatabaseEngine implements IDatabase {
       this.engineType = 'embedded_pg';
       console.log(`✅ [Database] Embedded Central PostgreSQL Engine (PGlite) Connected. Storage: ${serverConfig.dirs.pgdata}`);
     } catch (pgliteErr: any) {
-      console.warn('⚠️ [Database] Embedded PostgreSQL engine encountered corrupted storage or unrecoverable WAL:', pgliteErr.message);
-      console.log('🔄 [Database] Attempting automatic self-healing recovery: backing up corrupted store and re-initializing clean database...');
+      console.error('❌ [Database] Embedded PostgreSQL engine failed to initialize:', pgliteErr.message);
+
+      // Fail closed by default to prevent catastrophic silent data loss and unauthorized database wipes
+      if (process.env.ALLOW_DB_AUTO_RECOVERY !== 'true') {
+        this.isConnected = false;
+        this.engineType = null;
+        console.error('⛔ [Database] Automatic database discard/replacement is DISABLED to protect school records. Server startup aborted.');
+        throw new DatabaseUnavailableError();
+      }
+
+      console.warn('⚠️ [Database] ALLOW_DB_AUTO_RECOVERY is enabled: Attempting backup and clean database initialization...');
       try {
         if (this.pgliteInstance) {
           await this.pgliteInstance.close().catch(() => {});

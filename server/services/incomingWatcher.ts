@@ -15,6 +15,7 @@ import crypto from 'crypto';
 import { serverConfig } from '../config';
 import { db } from '../db/pool';
 import { logger } from '../utils/logger';
+import { computeFileSha256, verifyFileMagicBytes } from '../utils/pathSafety';
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.epub']);
 const DEBOUNCE_MS = 3000; // 3-second stability window
@@ -48,10 +49,9 @@ let watcherStatus: WatcherStatus = {
   lastScanResult: null,
 };
 
-// ---- SHA-256 hash computation ----
-function computeFileHash(filePath: string): string {
-  const buffer = fs.readFileSync(filePath);
-  return crypto.createHash('sha256').update(buffer).digest('hex');
+// ---- SHA-256 hash computation (streaming to prevent memory exhaustion) ----
+async function computeFileHash(filePath: string): Promise<string> {
+  return computeFileSha256(filePath);
 }
 
 // ---- Check for duplicate in books table or staging_queue ----
@@ -99,6 +99,12 @@ async function queueStableFile(filePath: string): Promise<void> {
     return;
   }
 
+  // Magic bytes check to ensure file is legitimate PDF or EPUB
+  if (!verifyFileMagicBytes(filePath, ext)) {
+    logger.warn(`[IncomingWatcher] File magic bytes mismatch for ${filename}. File skipped.`);
+    return;
+  }
+
   try {
     // Move file from incoming/ to staging dir for safety
     const stagingDir = path.join(serverConfig.dirs.temp, 'staging');
@@ -106,7 +112,7 @@ async function queueStableFile(filePath: string): Promise<void> {
       fs.mkdirSync(stagingDir, { recursive: true });
     }
 
-    const fileHash = computeFileHash(filePath);
+    const fileHash = await computeFileHash(filePath);
     const fileStat = fs.statSync(filePath);
     const fileSizeMb = Number((fileStat.size / (1024 * 1024)).toFixed(2));
 
@@ -286,7 +292,7 @@ export async function manualScanIncoming(): Promise<{ found: number; queued: num
     const filePath = path.join(incomingDir, entry.name);
 
     try {
-      const hash = computeFileHash(filePath);
+      const hash = await computeFileHash(filePath);
       const { isDup } = await isDuplicate(hash);
       if (isDup) {
         // Still stage it as DUPLICATE so admin can see and clean up

@@ -53,6 +53,16 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
   const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
   try {
+    if (note.id) {
+      const existing = await db.query('SELECT student_id FROM student_notes WHERE id = $1', [note.id]);
+      if (existing.rows.length > 0 && req.user!.role === 'student' && existing.rows[0].student_id !== req.user!.id) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'ليس لديك الصلاحية لتعديل فوائد طالب آخر.' },
+        });
+      }
+    }
+
     await db.query(`
       INSERT INTO student_notes (
         id, student_id, book_id, book_title, book_medium, page_number,
@@ -65,7 +75,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
         chapter = EXCLUDED.chapter,
         color_tag = EXCLUDED.color_tag,
         category = EXCLUDED.category,
-        tags = EXCLUDED.tags;
+        tags = EXCLUDED.tags
+      WHERE student_notes.student_id = EXCLUDED.student_id;
     `, [
       id,
       studentId,
@@ -87,7 +98,45 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       data: { id, studentId, ...note, createdAt: nowStr },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ في حفظ الفائدة في الخادم المركزي.' } });
+  }
+});
+
+// PUT /api/v1/notes/:id
+router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const note = req.body;
+  try {
+    const { rows } = await db.query('SELECT student_id FROM student_notes WHERE id = $1', [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'الفائدة غير موجودة.' } });
+    }
+    if (req.user!.role === 'student' && rows[0].student_id !== req.user!.id) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'ليس لديك الصلاحية لتعديل فوائد طالب آخر.' } });
+    }
+
+    await db.query(`
+      UPDATE student_notes SET
+        content = COALESCE($1, content),
+        quote = COALESCE($2, quote),
+        page_number = COALESCE($3, page_number),
+        chapter = COALESCE($4, chapter),
+        color_tag = COALESCE($5, color_tag),
+        category = COALESCE($6, category)
+      WHERE id = $7;
+    `, [
+      note.content || null,
+      note.quote || null,
+      note.pageNumber || null,
+      note.chapter || null,
+      note.colorTag || null,
+      note.category || null,
+      id,
+    ]);
+
+    res.json({ success: true, data: { message: 'تم تحديث الفائدة بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء تحديث الفائدة.' } });
   }
 });
 
@@ -96,13 +145,17 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
   const { id } = req.params;
   try {
     if (req.user!.role === 'student') {
+      const { rows } = await db.query('SELECT student_id FROM student_notes WHERE id = $1', [id]);
+      if (rows.length > 0 && rows[0].student_id !== req.user!.id) {
+        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'لا يمكنك حذف فائدة طالب آخر.' } });
+      }
       await db.query('DELETE FROM student_notes WHERE id = $1 AND student_id = $2', [id, req.user!.id]);
     } else {
       await db.query('DELETE FROM student_notes WHERE id = $1', [id]);
     }
     res.json({ success: true, data: { message: 'تم حذف الفائدة بنجاح.' } });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء حذف الفائدة.' } });
   }
 });
 

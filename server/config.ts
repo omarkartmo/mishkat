@@ -39,6 +39,22 @@ if (!envJwtSecret || envJwtSecret.trim().length < 32) {
   process.exit(1);
 }
 
+const FORBIDDEN_SECRETS = [
+  'CHANGE_ME_TO_A_CRYPTOGRAPHICALLY_SECURE_SECRET_AT_LEAST_32_CHARS_LONG',
+  'CHANGE_ME_TO_A_CRYPTOGRAPHICALLY_SECURE_SECRET',
+  'your-super-secret-jwt-token-key-change-in-production',
+  '12345678901234567890123456789012',
+  'abcdefghijklmnopqrstuvwxyz123456',
+];
+
+if (FORBIDDEN_SECRETS.includes(envJwtSecret.trim()) && process.env.NODE_ENV === 'production') {
+  console.error(
+    'FATAL: JWT_SECRET is set to an insecure default placeholder string. ' +
+    'You must generate a unique cryptographically secure secret (≥ 32 characters) before running in production.'
+  );
+  process.exit(1);
+}
+
 const jwtSecret: string = envJwtSecret.trim();
 
 const rawPort = process.env.PORT;

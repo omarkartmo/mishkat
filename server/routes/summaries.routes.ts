@@ -46,7 +46,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     res.json({ success: true, data: formatted });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    console.error('Error fetching summaries:', err);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء جلب الملخصات' } });
   }
 });
 
@@ -58,6 +59,16 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
   const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
   try {
+    if (req.user!.role === 'student' && summary.id) {
+      const existing = await db.query('SELECT student_id FROM book_summaries WHERE id = $1', [summary.id]);
+      if (existing.rows.length > 0 && existing.rows[0].student_id !== req.user!.id) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'غير مصرح لك بتعديل هذا الملخص' },
+        });
+      }
+    }
+
     await db.query(`
       INSERT INTO book_summaries (
         id, student_id, book_id, book_title, book_author, book_medium, title,
@@ -74,7 +85,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
         actionable_insights = EXCLUDED.actionable_insights,
         tags = EXCLUDED.tags,
         rating = EXCLUDED.rating,
-        updated_at = $16;
+        updated_at = $16
+      WHERE book_summaries.student_id = EXCLUDED.student_id;
     `, [
       id,
       studentId,
@@ -101,7 +113,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       data: { id, studentId, ...summary, createdAt: nowStr },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    console.error('Error saving summary:', err);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء حفظ الملخص' } });
   }
 });
 
@@ -110,14 +123,26 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
   const { id } = req.params;
   try {
     if (req.user!.role === 'student') {
+      const existing = await db.query('SELECT student_id FROM book_summaries WHERE id = $1', [id]);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'الملخص غير موجود' } });
+      }
+      if (existing.rows[0].student_id !== req.user!.id) {
+        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'غير مصرح لك بحذف هذا الملخص' } });
+      }
       await db.query('DELETE FROM book_summaries WHERE id = $1 AND student_id = $2', [id, req.user!.id]);
     } else {
+      const existing = await db.query('SELECT id FROM book_summaries WHERE id = $1', [id]);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'الملخص غير موجود' } });
+      }
       await db.query('DELETE FROM book_summaries WHERE id = $1', [id]);
     }
     await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'DELETE_SUMMARY', 'summary', id, null, req);
     res.json({ success: true, data: { message: 'تم حذف الملخص بنجاح.' } });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    console.error('Error deleting summary:', err);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء حذف الملخص' } });
   }
 });
 

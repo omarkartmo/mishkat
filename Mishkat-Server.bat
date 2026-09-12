@@ -35,9 +35,10 @@ if %errorlevel% neq 0 (
 :: 3. التحقق من وجود ملف الإعدادات .env
 if not exist ".env" (
     if exist ".env.example" (
-        echo [تنبيه] ملف .env غير موجود. جاري إنشاء نسخة أولية من .env.example...
+        echo [تنبيه] ملف .env غير موجود. جاري إنشاء نسخة أولية وتوليد مفتاح تشفير عشوائي آمن...
         copy ".env.example" ".env" >nul
-        echo [مهم] يرجى تعديل قيمة JWT_SECRET في ملف .env بقيمة عشوائية سرية قوية (32 حرفاً على الأقل).
+        node -e "const fs=require('fs'), crypto=require('crypto'); let c=fs.readFileSync('.env','utf8'); c=c.replace(/JWT_SECRET=.*/, 'JWT_SECRET=' + crypto.randomBytes(32).toString('hex')); fs.writeFileSync('.env', c);"
+        echo [نجاح] تم توليد مفتاح تشفير JWT_SECRET عشوائي فريد وحفظه في ملف .env بنجاح.
         echo.
     ) else (
         echo [تحذير] لم يتم العثور على ملف .env أو .env.example. يرجى التأكد من ضبط المتغيرات المطلوبة.
@@ -48,7 +49,11 @@ if not exist ".env" (
 :: 4. التثبيت الأولي للمكتبات إذا لم تكن موجودة
 if not exist "node_modules" (
     echo [1/3] جاري تثبيت الحزم والتبعيات لأول مرة، يرجى الانتظار قليلاً...
-    call npm install
+    if exist "package-lock.json" (
+        call npm ci
+    ) else (
+        call npm install
+    )
     if %errorlevel% neq 0 (
         color 0C
         echo [خطأ] فشل تثبيت المكتبات. يرجى التحقق من اتصال الإنترنت وحساب الصلاحيات.

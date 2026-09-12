@@ -196,11 +196,15 @@ const handleReturnLoan = async (req: Request, res: Response) => {
 
   try {
     await db.transaction(async (client) => {
-      const { rows: loanRows } = await client.query('SELECT * FROM loans WHERE id = $1', [id]);
+      const { rows: loanRows } = await client.query('SELECT * FROM loans WHERE id = $1 FOR UPDATE', [id]);
       if (loanRows.length === 0) {
         throw new Error('سجل الإعارة غير موجود.');
       }
       const loan = loanRows[0];
+
+      if (loan.status === 'returned') {
+        throw new Error('تم إرجاع هذا الكتاب مسبقاً.');
+      }
 
       // Update loan status
       await client.query("UPDATE loans SET status = 'returned', return_date = $1, returned_by = $2 WHERE id = $3", [returnDate, req.user!.id, id]);
@@ -218,7 +222,8 @@ const handleReturnLoan = async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { message: 'تم إرجاع الكتاب وإعادة النسخة إلى الرصيد المركزي بنجاح.' } });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: { code: 'RETURN_FAILED', message: err.message } });
+    console.error('Error in handleReturnLoan:', err);
+    res.status(400).json({ success: false, error: { code: 'RETURN_FAILED', message: err.message || 'فشل إرجاع الكتاب.' } });
   }
 };
 
@@ -231,11 +236,21 @@ const handleExtendLoan = async (req: Request, res: Response) => {
   const { additionalDays = 7 } = req.body;
 
   try {
+    const days = parseInt(additionalDays, 10);
+    if (isNaN(days) || days <= 0 || days > 60) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_DAYS', message: 'عدد أيام التمديد غير صالح (يجب أن يكون بين 1 و 60 يوماً).' } });
+    }
+
     const { rows: loanRows } = await db.query('SELECT * FROM loans WHERE id = $1', [id]);
     if (loanRows.length === 0) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'سجل الإعارة غير موجود.' } });
     }
     const loan = loanRows[0];
+
+    // Check if loan is already returned
+    if (loan.status === 'returned') {
+      return res.status(400).json({ success: false, error: { code: 'ALREADY_RETURNED', message: 'لا يمكن تمديد إعارة تم إرجاعها مسبقاً.' } });
+    }
 
     // Authorization check
     if (req.user!.role === 'student' && loan.student_id !== req.user!.id) {
@@ -247,7 +262,7 @@ const handleExtendLoan = async (req: Request, res: Response) => {
     }
 
     const currentDue = new Date(loan.due_date);
-    currentDue.setDate(currentDue.getDate() + additionalDays);
+    currentDue.setDate(currentDue.getDate() + days);
     const newDueDate = currentDue.toISOString().split('T')[0];
 
     await db.query(`
@@ -262,7 +277,8 @@ const handleExtendLoan = async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { message: 'تم تمديد الإعارة بنجاح.', newDueDate } });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    console.error('Error in handleExtendLoan:', err);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء تمديد الإعارة.' } });
   }
 };
 

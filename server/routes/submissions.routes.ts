@@ -5,6 +5,8 @@ import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
 import fs from 'fs';
 import path from 'path';
+import { serverConfig } from '../config';
+import { isWithinDirectory, isSystemDangerousPath, verifyFileMagicBytes } from '../utils/pathSafety';
 import { DigitalDownloadService } from '../services/portals/digitalDownloadService';
 
 const router = Router();
@@ -265,6 +267,37 @@ router.post('/:id/review', authenticateToken, requireRole('admin', 'librarian'),
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ success: false, error: { code: 'INVALID_STATUS', message: 'حالة المراجعة غير صالحة.' } });
+  }
+
+  // Validate manualFilePath if supplied
+  if (manualFilePath) {
+    if (typeof manualFilePath !== 'string' || !manualFilePath.trim()) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_PATH', message: 'مسار الملف اليدوي غير صالح.' } });
+    }
+    const resolvedPath = path.resolve(manualFilePath.trim());
+    const allowedDirs = [
+      path.resolve(serverConfig.dirs.digital),
+      path.resolve(serverConfig.dirs.books),
+      path.resolve(serverConfig.dirs.temp),
+      path.resolve(serverConfig.dirs.incoming),
+    ];
+    const isAllowed = allowedDirs.some((dir) => isWithinDirectory(resolvedPath, dir));
+    if (!isAllowed || isSystemDangerousPath(resolvedPath)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'ACCESS_DENIED', message: 'مسار الملف اليدوي غير مصرح به أو خارج مستودع الكتب الرقمية المسموح به.' },
+      });
+    }
+
+    if (fs.existsSync(resolvedPath)) {
+      const ext = path.extname(resolvedPath).toLowerCase().replace(/^\./, '');
+      if (['pdf', 'epub'].includes(ext) && !verifyFileMagicBytes(resolvedPath, ext)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_FILE_HEADER', message: 'محتوى الملف لا يتطابق مع ترويسة الامتداد المصرح به (PDF أو EPUB).' },
+        });
+      }
+    }
   }
 
   const normalizedActionStatus = normalizeStatus(status);

@@ -9,6 +9,7 @@ import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
 import { extractAuthorFromDocument, extractDocumentMetadata, isValidArabicSentence, normalizeArabicForSearch, stripDiacritics, synthesizeBookSummary } from '../utils/authorExtractor';
+import { isSystemDangerousPath, verifyFileMagicBytes, computeFileSha256 } from '../utils/pathSafety';
 
 const router = Router();
 
@@ -104,14 +105,19 @@ async function getDigitalStorageContext(): Promise<{
         const rootPath = path.isAbsolute(trimmed)
           ? trimmed
           : path.join(process.cwd(), trimmed);
-        customRoot = path.resolve(rootPath);
-        allowedDirs.push(customRoot);
+        const resolved = path.resolve(rootPath);
+        if (!isSystemDangerousPath(resolved)) {
+          customRoot = resolved;
+          allowedDirs.push(customRoot);
+        } else {
+          console.warn('[SECURITY] Rejected dangerous digitalBookRootUrl configuration:', trimmed);
+        }
       }
       if (Array.isArray(val?.allowedRoots)) {
         for (const r of val.allowedRoots) {
           if (typeof r === 'string' && r.trim()) {
             const resolvedRoot = path.resolve(r.trim());
-            if (!allowedDirs.some((d) => d.toLowerCase() === resolvedRoot.toLowerCase())) {
+            if (!isSystemDangerousPath(resolvedRoot) && !allowedDirs.some((d) => d.toLowerCase() === resolvedRoot.toLowerCase())) {
               allowedDirs.push(resolvedRoot);
             }
           }
@@ -626,9 +632,14 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
       const ext = path.extname(file.originalname).toLowerCase().replace('.', '') as 'pdf' | 'epub';
       const stagedFilePath = file.path;
 
-      // Calculate SHA-256
-      const buffer = fs.readFileSync(stagedFilePath);
-      const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+      // Verify magic bytes
+      if (!verifyFileMagicBytes(stagedFilePath, ext)) {
+        try { fs.unlinkSync(stagedFilePath); } catch {}
+        continue;
+      }
+
+      // Calculate SHA-256 via streaming
+      const hash = await computeFileSha256(stagedFilePath);
       const sizeMb = Number((file.size / (1024 * 1024)).toFixed(2));
 
       // Check if relative path was provided (e.g. from folder upload) and has a meaningful parent folder
@@ -1507,16 +1518,35 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
       });
     }
 
-    // Verify format
+    // Verify format and magic bytes
     const ext = path.extname(uploadedFile.originalname).toLowerCase().replace('.', '');
-    if (!['pdf', 'epub'].includes(ext)) {
+    if (!['pdf', 'epub'].includes(ext) || !verifyFileMagicBytes(uploadedFile.path, ext)) {
       if (fs.existsSync(uploadedFile.path)) {
         try { fs.unlinkSync(uploadedFile.path); } catch {}
       }
+      if (uploadedCover && fs.existsSync(uploadedCover.path)) {
+        try { fs.unlinkSync(uploadedCover.path); } catch {}
+      }
       return res.status(400).json({
         success: false,
-        error: { code: 'UPLOAD_UNSUPPORTED_FORMAT', message: 'صيغة الملف غير مدعومة. يُسمح فقط بملفات PDF و EPUB.' }
+        error: { code: 'UPLOAD_UNSUPPORTED_FORMAT', message: 'صيغة الملف غير مدعومة أو محتوى الملف لا يتطابق مع ترويسة الامتداد. يُسمح فقط بملفات PDF و EPUB الأصلية.' }
       });
+    }
+
+    if (uploadedCover) {
+      const coverExt = path.extname(uploadedCover.originalname).toLowerCase().replace('.', '');
+      if (!['jpg', 'jpeg', 'png', 'webp'].includes(coverExt) || !verifyFileMagicBytes(uploadedCover.path, coverExt)) {
+        if (fs.existsSync(uploadedFile.path)) {
+          try { fs.unlinkSync(uploadedFile.path); } catch {}
+        }
+        if (fs.existsSync(uploadedCover.path)) {
+          try { fs.unlinkSync(uploadedCover.path); } catch {}
+        }
+        return res.status(400).json({
+          success: false,
+          error: { code: 'UPLOAD_INVALID_COVER', message: 'صيغة صورة الغلاف غير مدعومة أو تالفة. يُسمح فقط بصور JPG و PNG و WEBP.' }
+        });
+      }
     }
 
     // Verify file exists on disk and is non-empty
@@ -1527,9 +1557,8 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
       });
     }
 
-    // Compute SHA-256 of uploaded digital file for integrity and duplicate detection
-    const buffer = fs.readFileSync(uploadedFile.path);
-    const fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
+    // Compute SHA-256 of uploaded digital file via streaming for integrity and duplicate detection
+    const fileHash = await computeFileSha256(uploadedFile.path);
 
     // Duplicate Check: check if identical digital book already exists in catalog
     const { rows: existing } = await db.query(
@@ -1800,6 +1829,18 @@ async function getDigitalBookContent(req: Request, res: Response) {
       return res.status(403).json({ success: false, error: { code: 'ACCESS_DENIED', message: 'مسار الملف غير مصرح به.' } });
     }
 
+    const stat = fs.statSync(resolvedPath);
+    const MAX_BASE64_CONTENT_SIZE = 15 * 1024 * 1024; // 15MB
+    if (stat.size > MAX_BASE64_CONTENT_SIZE) {
+      return res.status(413).json({
+        success: false,
+        error: {
+          code: 'PAYLOAD_TOO_LARGE',
+          message: 'حجم ملف الكتاب الرقمي يتجاوز 15 ميجابايت ولا يمكن نقله في استجابة JSON واحدة تجنباً لإنهاك الذاكرة. يرجى استخدام القراءة المباشرة عبر البث.',
+        },
+      });
+    }
+
     const buffer = fs.readFileSync(resolvedPath);
     const base64 = buffer.toString('base64');
     const format = (book.format || 'pdf').toLowerCase();
@@ -1815,7 +1856,8 @@ async function getDigitalBookContent(req: Request, res: Response) {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    console.error('Error reading digital book content:', err);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء قراءة ملف الكتاب الرقمي.' } });
   }
 }
 

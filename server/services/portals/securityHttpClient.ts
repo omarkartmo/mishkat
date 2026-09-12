@@ -1,11 +1,14 @@
 /**
  * MISHKAT — Hardened Security HTTP Client
  * Phase 15.4-D: SSRF Guard, Safe Redirect Follower, and Protocol Enforcement
+ * Hardened against: DNS Rebinding, Decimal/Hex IP encodings, IPv6 mappings, and internal subnet traversal.
  */
 
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
+import net from 'net';
+import dns from 'dns';
 
 export interface SecurityFetchOptions {
   method?: string;
@@ -41,14 +44,93 @@ const PRIVATE_IP_REGEXES = [
   /^fe80:/i,                        // IPv6 link-local
 ];
 
+/**
+ * Checks if a given IP address is in a private, loopback, link-local, or reserved range (RFC 1918 / RFC 3927 / RFC 4291)
+ */
+export function isPrivateOrReservedIp(ip: string): boolean {
+  if (!ip) return true;
+  const clean = ip.trim().toLowerCase();
+
+  // IPv4 check
+  if (net.isIPv4(clean)) {
+    const parts = clean.split('.').map((p) => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) return true;
+
+    // 0.0.0.0/8 (Current network)
+    if (parts[0] === 0) return true;
+    // 127.0.0.0/8 (Loopback)
+    if (parts[0] === 127) return true;
+    // 10.0.0.0/8 (Private class A)
+    if (parts[0] === 10) return true;
+    // 172.16.0.0/12 (Private class B: 172.16.0.0 - 172.31.255.255)
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    // 192.168.0.0/16 (Private class C)
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    // 169.254.0.0/16 (Link-local & AWS/GCP metadata)
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    // 100.64.0.0/10 (Shared address space / Carrier-grade NAT)
+    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true;
+    // 192.0.0.0/24 (IETF Protocol Assignments)
+    if (parts[0] === 192 && parts[1] === 0 && parts[2] === 0) return true;
+    // 198.18.0.0/15 (Benchmarking)
+    if (parts[0] === 198 && (parts[1] === 18 || parts[1] === 19)) return true;
+    // 224.0.0.0/4 (Multicast)
+    if (parts[0] >= 224 && parts[0] <= 239) return true;
+    // 240.0.0.0/4 (Reserved / Future use)
+    if (parts[0] >= 240) return true;
+
+    return false;
+  }
+
+  // IPv6 check
+  if (net.isIPv6(clean)) {
+    // Loopback and unspecified
+    if (clean === '::1' || clean === '::' || clean === '0:0:0:0:0:0:0:1' || clean === '0:0:0:0:0:0:0:0') return true;
+
+    // IPv4-mapped IPv6 (e.g. ::ffff:192.168.1.1)
+    if (clean.includes('::ffff:') || clean.includes(':ffff:')) {
+      const parts = clean.split(':');
+      const lastPart = parts[parts.length - 1];
+      if (net.isIPv4(lastPart)) {
+        return isPrivateOrReservedIp(lastPart);
+      }
+      return true;
+    }
+
+    // Unique Local Addresses (fc00::/7 -> fc.. or fd..)
+    if (clean.startsWith('fc') || clean.startsWith('fd')) return true;
+
+    // Link-Local (fe80::/10 -> fe80.. to febf..)
+    if (clean.startsWith('fe8') || clean.startsWith('fe9') || clean.startsWith('fea') || clean.startsWith('feb')) return true;
+
+    return false;
+  }
+
+  return false;
+}
+
 export function isPrivateOrReservedHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().trim();
-  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+  const raw = hostname.toLowerCase().trim();
+  // Strip IPv6 brackets if present (e.g. [::1])
+  const host = raw.startsWith('[') && raw.endsWith(']') ? raw.slice(1, -1) : raw;
+
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0') {
     return true;
   }
   if (host === 'metadata.google.internal' || host === '169.254.169.254') {
     return true;
   }
+
+  // Check if string is an IP address directly
+  if (net.isIP(host)) {
+    return isPrivateOrReservedIp(host);
+  }
+
+  // Check for decimal integer, hex, or octal encoded IPs (e.g., 2130706433, 0x7f000001, 017700000001)
+  if (/^0x[0-9a-f]+$/i.test(host) || /^\d+$/.test(host)) {
+    return true;
+  }
+
   for (const regex of PRIVATE_IP_REGEXES) {
     if (regex.test(host)) {
       return true;
@@ -107,6 +189,7 @@ export async function securityFetch(
   const timeoutMs = options.timeoutMs ?? 8000;
   const maxRedirects = options.maxRedirects ?? 5;
   const maxBodySizeBytes = options.maxBodySizeBytes ?? 5 * 1024 * 1024; // 5MB
+  const allowLocalhost = options.allowLocalhost ?? (process.env.NODE_ENV === 'test');
   const redirectChain: string[] = [];
 
   let currentUrlStr = targetUrl;
@@ -116,8 +199,25 @@ export async function securityFetch(
     // Validate target URL against SSRF and allowed domains
     const parsed = validateSafeUrl(currentUrlStr, {
       allowedDomains: options.allowedDomains,
-      allowLocalhost: options.allowLocalhost ?? (process.env.NODE_ENV === 'test'),
+      allowLocalhost,
     });
+
+    // 4. DNS Resolution & Rebinding Check: ensure domain does not resolve to a private internal IP
+    if (!allowLocalhost && !net.isIP(parsed.hostname)) {
+      try {
+        const addresses = await dns.promises.lookup(parsed.hostname, { all: true });
+        for (const addr of addresses) {
+          if (isPrivateOrReservedIp(addr.address)) {
+            throw new Error(`SSRF_BLOCKED: Host '${parsed.hostname}' resolves to private/internal IP address '${addr.address}'.`);
+          }
+        }
+      } catch (dnsErr: any) {
+        if (dnsErr.message && dnsErr.message.startsWith('SSRF_BLOCKED:')) {
+          throw dnsErr;
+        }
+        // If DNS lookup fails (e.g., host unreachable), allow http client to fail naturally
+      }
+    }
 
     const isHttps = parsed.protocol === 'https:';
     const client = isHttps ? https : http;
@@ -236,5 +336,5 @@ export async function securityFetch(
     };
   }
 
-  throw new Error(`REQUEST_FAILED: Could not complete request to ${targetUrl}.`);
+  throw new Error(`MAX_REDIRECTS_EXCEEDED: Exceeded max allowed redirects of ${maxRedirects}.`);
 }

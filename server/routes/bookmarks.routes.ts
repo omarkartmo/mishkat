@@ -44,7 +44,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     res.json({ success: true, data: formatted });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    console.error('Error fetching bookmarks:', err);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء جلب الفواصل' } });
   }
 });
 
@@ -56,6 +57,16 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
   const sessionDate = bookmark.lastSessionDate || new Date().toISOString().split('T')[0];
 
   try {
+    if (req.user!.role === 'student' && bookmark.id) {
+      const existing = await db.query('SELECT student_id FROM physical_bookmarks WHERE id = $1', [bookmark.id]);
+      if (existing.rows.length > 0 && existing.rows[0].student_id !== req.user!.id) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'غير مصرح لك بتعديل هذا الفاصل' },
+        });
+      }
+    }
+
     await db.query(`
       INSERT INTO physical_bookmarks (
         id, student_id, book_id, book_title, book_author, cabinet, shelf, section,
@@ -66,7 +77,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
         chapter_or_topic = EXCLUDED.chapter_or_topic,
         last_session_date = EXCLUDED.last_session_date,
         quick_note = EXCLUDED.quick_note,
-        is_completed = EXCLUDED.is_completed;
+        is_completed = EXCLUDED.is_completed
+      WHERE physical_bookmarks.student_id = EXCLUDED.student_id;
     `, [
       id,
       studentId,
@@ -89,7 +101,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       data: { id, studentId, ...bookmark, lastSessionDate: sessionDate },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    console.error('Error saving bookmark:', err);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء حفظ الفاصل' } });
   }
 });
 
@@ -98,13 +111,25 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
   const { id } = req.params;
   try {
     if (req.user!.role === 'student') {
+      const existing = await db.query('SELECT student_id FROM physical_bookmarks WHERE id = $1', [id]);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'الفاصل غير موجود' } });
+      }
+      if (existing.rows[0].student_id !== req.user!.id) {
+        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'غير مصرح لك بحذف هذا الفاصل' } });
+      }
       await db.query('DELETE FROM physical_bookmarks WHERE id = $1 AND student_id = $2', [id, req.user!.id]);
     } else {
+      const existing = await db.query('SELECT id FROM physical_bookmarks WHERE id = $1', [id]);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'الفاصل غير موجود' } });
+      }
       await db.query('DELETE FROM physical_bookmarks WHERE id = $1', [id]);
     }
     res.json({ success: true, data: { message: 'تم حذف الفاصل بنجاح.' } });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+    console.error('Error deleting bookmark:', err);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'حدث خطأ أثناء حذف الفاصل' } });
   }
 });
 

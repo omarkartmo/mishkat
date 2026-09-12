@@ -352,9 +352,9 @@ healthRouter.get('/', async (req: Request, res: Response) => {
         environment: process.env.NODE_ENV || 'development',
         databaseEngine: isPg ? 'PostgreSQL Central Pool' : 'Relational Engine with WAL',
         storagePaths: {
-          centralDirectory: serverConfig.dirs.root,
-          booksStorage: serverConfig.dirs.books,
-          backupsStorage: serverConfig.dirs.backups,
+          centralDirectory: 'LibraryData',
+          booksStorage: 'LibraryData/books',
+          backupsStorage: 'LibraryData/backups',
         },
         counts: {
           books: parseInt(bookCount[0]?.count || '0', 10),
