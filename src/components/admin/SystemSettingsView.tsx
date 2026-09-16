@@ -15,6 +15,9 @@ import {
   ListPlus,
   Plus,
   Trash2,
+  Lock,
+  FileText,
+  Info,
 } from 'lucide-react';
 import { SystemConfig } from '../../types/library';
 import { settingsRepository } from '../../services/settingsRepository';
@@ -25,6 +28,8 @@ interface SystemSettingsViewProps {
   onSaveConfig: (updated: SystemConfig) => void;
   onExportData: () => void;
   onResetData: () => void;
+  onCreateBackup?: () => void;
+  onExportInstitutionalData?: () => void;
 }
 
 export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
@@ -32,6 +37,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   onSaveConfig,
   onExportData,
   onResetData,
+  onCreateBackup,
+  onExportInstitutionalData,
 }) => {
   const [form, setForm] = useState<SystemConfig>({
     ...config,
@@ -47,10 +54,12 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Backup & Restore State
-  const [backups, setBackups] = useState<Array<{ fileName: string; type: 'manual' | 'pre_restore'; sizeFormatted: string; createdAt: string }>>([]);
+  const [backups, setBackups] = useState<Array<{ fileName: string; type: 'manual' | 'pre_restore'; isEncrypted?: boolean; sizeFormatted: string; createdAt: string }>>([]);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [restoringFile, setRestoringFile] = useState<string | null>(null);
   const [showBackupsList, setShowBackupsList] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
 
   const fetchBackups = async () => {
     setLoadingBackups(true);
@@ -63,6 +72,55 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       // ignore
     } finally {
       setLoadingBackups(false);
+    }
+  };
+
+  const handleCreateEncryptedBackup = async () => {
+    if (onCreateBackup) {
+      onCreateBackup();
+      return;
+    }
+    setCreatingBackup(true);
+    try {
+      const res = await settingsRepository.createBackup();
+      if (res.success && res.data) {
+        alert(`✨ ${res.data.message}\nاسم الملف: ${res.data.fileName}\nعدد الجداول: ${res.data.tablesCount}`);
+        fetchBackups();
+      } else {
+        alert(`❌ فشل إنشاء النسخة: ${res.error?.message || 'خطأ غير معروف'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
+  const handleExportInstitutionalDataAction = async () => {
+    if (onExportInstitutionalData) {
+      onExportInstitutionalData();
+      return;
+    }
+    setExportingData(true);
+    try {
+      const res = await settingsRepository.exportInstitutionalData();
+      if (res.success && res.data) {
+        const dataStr = JSON.stringify(res.data, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `mishkat_institutional_export_${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        alert('✨ تم تصدير وتنزيل بيانات المؤسسة بنجاح بصيغة JSON مفتوحة خالية من كلمات المرور.');
+      } else {
+        alert(`❌ فشل تصدير البيانات: ${res.error?.message || 'خطأ غير معروف'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    } finally {
+      setExportingData(false);
     }
   };
 
@@ -412,51 +470,61 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       <AdminSecuritySettings />
 
       {/* Database Maintenance & Backup Section */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
-        <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-3">
-          <HardDrive className="w-4 h-4 text-amber-400" />
-          النسخ الاحتياطي وصيانة قاعدة البيانات المحلية
-        </h3>
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-slate-400">
-            تصدير نسخة احتياطية كاملة من سجلات الكتب، الإعارات، التصنيفات، والمستخدمين كملف JSON آمن.
+      <div className="space-y-4">
+        {/* Notice on Digital Files / Media Storage */}
+        <div className="bg-slate-900/60 border border-indigo-500/20 rounded-2xl p-4 flex items-start gap-3 text-xs text-slate-300">
+          <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold text-indigo-300">تنبيه تقني هام بخصوص ملفات الكتب الرقمية والأغلفة:</span>
+            <p className="text-slate-400 leading-relaxed">
+              عمليات النسخ الاحتياطي وتصدير البيانات تغطي قاعدة البيانات المركزية بكامل سجلاتها وبياناتها الوصفية وعلاقات الإعارة والقراءة. أما الملفات الرقمية الأصلية (<code className="text-indigo-300 font-mono">PDF</code> و <code className="text-indigo-300 font-mono">EPUB</code>) والأغلفة فمحفوظة محلياً في المجلد <code className="text-amber-300 font-mono">LibraryData/books/</code> على خادم مشكاة. للحفظ الشامل الكامل للمؤسسة، يُنصح بنسخ مجلد <code className="text-slate-200 font-mono">LibraryData</code> دورياً إلى وحدة تخزين خارجية.
+            </p>
           </div>
-          <button
-            onClick={onExportData}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-emerald-400" />
-            <span>تصدير نسخة احتياطية (JSON)</span>
-          </button>
         </div>
 
-        <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-slate-400">
-            إعادة تعيين البيانات واستعادة البيانات النموذجية الأولية للمكتبة.
+        {/* Card 1: Encrypted Disaster Recovery Backup */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <Lock className="w-4 h-4 text-emerald-400" />
+              <span>النسخ الاحتياطي المشفر لقاعدة البيانات (Disaster Recovery)</span>
+            </h3>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+              AES-256-GCM AEAD
+            </span>
           </div>
-          <button
-            onClick={() => {
-              if (
-                window.confirm(
-                  'هل أنت متأكد من رغبتك في إعادة تعيين البيانات واسترجاع النسخة النموذجية الأصلية؟'
-                )
-              ) {
-                onResetData();
-              }
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>استعادة البيانات النموذجية</span>
-          </button>
-        </div>
 
-        {/* Restore from Server Backup Section */}
-        <div className="pt-3 border-t border-slate-800 space-y-3">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-slate-400">
-              استرجاع قاعدة البيانات من نسخة احتياطية محفوظة على الخادم (مع إنشاء نسخة أمان تلقائية).
+            <div className="text-slate-400 leading-relaxed">
+              إنشاء نسخة احتياطية محلية متكاملة ومشفرة بالكامل لقاعدة البيانات لحمايتها من التلف أو الكوارث. النسخة مشفرة وموقعة برمز تحقق أمني (<span className="text-slate-300 font-mono">AuthTag</span>) وتُحفظ تلقائياً في مجلد النسخ الاحتياطية على الخادم المركزي مع تطبيق سياسة تدوير النسخ.
+            </div>
+            <button
+              type="button"
+              onClick={handleCreateEncryptedBackup}
+              disabled={creatingBackup}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all shrink-0 cursor-pointer"
+            >
+              <Lock className={`w-4 h-4 ${creatingBackup ? 'animate-spin' : ''}`} />
+              <span>{creatingBackup ? 'جاري التشفير والحفظ...' : 'إنشاء نسخة مشفرة الآن'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: Restore from Backup */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <HardDrive className="w-4 h-4 text-amber-400" />
+              <span>استرجاع قاعدة البيانات المركزية (Database Restore)</span>
+            </h3>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/60 text-amber-300 border border-amber-800/60">
+              معاملة ذرية ACID Transaction
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-slate-400 leading-relaxed">
+              استرجاع قاعدة البيانات من نسخة احتياطية سابقة. يقوم النظام تلقائياً بإنشاء نسخة أمان احتياطية قبل الاسترجاع، وفحص سلامة التشفير ومطابقة الجداول قبل لمس أي بيانات، مع إمكانية التراجع الكامل التلقائي في حال أي خطأ.
             </div>
             <button
               type="button"
@@ -465,7 +533,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 setShowBackupsList(nextState);
                 if (nextState) fetchBackups();
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
             >
               <HardDrive className="w-4 h-4" />
               <span>{showBackupsList ? 'إخفاء قائمة النسخ' : 'إدارة واسترجاع النسخ'}</span>
@@ -483,7 +551,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                   className="text-indigo-400 hover:text-indigo-300 text-xs flex items-center gap-1 cursor-pointer"
                 >
                   <RotateCcw className={`w-3 h-3 ${loadingBackups ? 'animate-spin' : ''}`} />
-                  تحديث
+                  تحديث القائمة
                 </button>
               </div>
 
@@ -506,6 +574,9 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                           }`}>
                             {b.type === 'pre_restore' ? 'نسخة أمان تلقائية' : 'نسخة يدوية'}
                           </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-slate-700">
+                            {b.isEncrypted !== false ? 'AES-256-GCM' : 'v1.0.0 عادي'}
+                          </span>
                         </div>
                         <div className="text-[11px] text-slate-500">
                           الحجم: {b.sizeFormatted} • التاريخ: {new Date(b.createdAt).toLocaleString('ar-SA')}
@@ -526,6 +597,69 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               )}
             </div>
           )}
+        </div>
+
+        {/* Card 3: Institutional Data Export (Migration & Open JSON) */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-cyan-400" />
+              <span>تصدير بيانات المؤسسة (ترحيل البيانات المفتوحة)</span>
+            </h3>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/60 text-cyan-300 border border-cyan-800/60">
+              JSON مفتوح • خالي من الأسرار
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-slate-400 leading-relaxed">
+              تصدير بيانات المؤسسة بصيغة JSON مقروءة وقياسية لأغراض الترحيل لأنظمة أخرى أو المراجعة الخارجية. يتم استبعاد كلمات المرور، أسئلة الأمان، ورموز الجلسات بالكامل حفاظاً على سرية وخصوصية النظام.
+            </div>
+            <button
+              type="button"
+              onClick={handleExportInstitutionalDataAction}
+              disabled={exportingData}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
+            >
+              <Download className={`w-4 h-4 text-cyan-400 ${exportingData ? 'animate-bounce' : ''}`} />
+              <span>{exportingData ? 'جاري تصدير البيانات...' : 'تصدير بيانات المؤسسة (JSON)'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 4: Reset Demo Data */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-rose-400" />
+              <span>إعادة تعيين قاعدة البيانات المركزية</span>
+            </h3>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-950/60 text-rose-300 border border-rose-800/60">
+              إجراء جذري
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-slate-400 leading-relaxed">
+              إعادة تعيين قاعدة البيانات المركزية واسترجاع السجلات النموذجية الافتراضية الأولية للنظام.
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    '⚠️ تحذير: هل أنت متأكد من رغبتك في إعادة تعيين كافة البيانات واسترجاع النسخة النموذجية الأصلية؟'
+                  )
+                ) {
+                  onResetData();
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>استعادة البيانات النموذجية</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

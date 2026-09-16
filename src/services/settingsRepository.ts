@@ -161,6 +161,27 @@ export class SettingsRepository {
       },
     };
   }
+
+  /**
+   * Export unencrypted institutional data for system migration / auditing (POST /api/v1/system/export-data)
+   */
+  public async exportInstitutionalData(): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<any>('/system/export-data', { confirm: true });
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'EXPORT_DATA_FAILED',
+        message: 'تعذر تصدير بيانات المؤسسة من الخادم المركزي.',
+      },
+    };
+  }
 }
 
 export const settingsRepository = new SettingsRepository();

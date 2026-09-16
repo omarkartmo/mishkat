@@ -12,8 +12,10 @@ import {
   createDatabaseBackup,
   validateBackupPayload,
   restoreDatabaseFromBackup,
+  parseAndDecryptBackup,
   BackupData,
 } from '../services/backupService';
+import { generateInstitutionalExport } from '../services/exportService';
 import { logger } from '../utils/logger';
 import {
   getWatcherStatus,
@@ -55,7 +57,7 @@ export const backupRouter = Router();
 // POST /api/v1/backups/create (Admin only manual backup)
 backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { fileName, tablesCount, data } = await createDatabaseBackup(req.user!.name, 'manual');
+    const { fileName, tablesCount, data, envelope } = await createDatabaseBackup(req.user!.name, 'manual');
 
     await recordAuditLog(
       req.user!.id,
@@ -64,18 +66,19 @@ backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req
       'CREATE_BACKUP',
       'system',
       fileName,
-      null,
+      { tablesCount, encrypted: true, algorithm: envelope.algorithm },
       req
     );
 
     res.json({
       success: true,
       data: {
-        message: 'تم إنشاء النسخة الاحتياطية بنجاح على الخادم المركزي.',
+        message: 'تم إنشاء النسخة الاحتياطية بنجاح وتشفيرها محلياً (AES-256-GCM).',
         fileName,
         createdAt: data.meta.exportedAt,
         tablesCount,
         backup: data,
+        envelope,
       },
     });
   } catch (err: any) {
@@ -94,11 +97,27 @@ backupRouter.get('/', authenticateToken, requireRole('admin'), async (req: Reque
     const files = fs.readdirSync(serverConfig.dirs.backups)
       .filter((f) => f.endsWith('.json'))
       .map((fileName) => {
-        const stats = fs.statSync(path.join(serverConfig.dirs.backups, fileName));
+        const fullPath = path.join(serverConfig.dirs.backups, fileName);
+        const stats = fs.statSync(fullPath);
         const isPreRestore = fileName.startsWith('mishkat_pre_restore_');
+        let isEncrypted = true;
+        let tablesCount = 16;
+        try {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const parsed = JSON.parse(content);
+          if (parsed.format === 'mishkat_encrypted_backup') {
+            isEncrypted = true;
+            tablesCount = parsed.meta?.tablesCount || 16;
+          } else if (parsed.meta && parsed.data) {
+            isEncrypted = false;
+          }
+        } catch {}
+
         return {
           fileName,
           type: isPreRestore ? 'pre_restore' : 'manual',
+          isEncrypted,
+          tablesCount,
           sizeBytes: stats.size,
           sizeFormatted: `${(stats.size / 1024).toFixed(1)} KB`,
           createdAt: stats.birthtime.toISOString(),
@@ -161,17 +180,30 @@ backupRouter.post('/:fileName/restore', authenticateToken, requireRole('admin'),
     });
   }
 
-  // 2. Read and parse file
+  // 2. Read and parse/decrypt file
   let parsedBackup: any;
+  let isEncrypted = false;
   try {
     const rawContent = fs.readFileSync(resolvedTarget, 'utf8');
-    parsedBackup = JSON.parse(rawContent);
+    const decrypted = parseAndDecryptBackup(rawContent);
+    parsedBackup = decrypted.data;
+    isEncrypted = decrypted.isEncrypted;
   } catch (err: any) {
+    const isCorruptedJson = err.message.includes('JSON');
+    const isTampered =
+      err.message.includes('Authentication Tag') ||
+      err.message.includes('SHA-256') ||
+      err.message.includes('التلاعب') ||
+      err.message.includes('المصادقة');
     return res.status(400).json({
       success: false,
       error: {
-        code: 'INVALID_BACKUP_FILE',
-        message: 'تعذر قراءة ملف النسخة الاحتياطية (تنسيق JSON تالف أو غير صالح).',
+        code: isTampered
+          ? 'INVALID_BACKUP_TAMPERED'
+          : isCorruptedJson
+          ? 'INVALID_BACKUP_FILE'
+          : 'INVALID_BACKUP_SCHEMA',
+        message: err.message,
       },
     });
   }
@@ -215,6 +247,7 @@ backupRouter.post('/:fileName/restore', authenticateToken, requireRole('admin'),
       restoredBy: req.user!.name,
       preRestoreBackup: preRestoreFileName,
       counts: result.restoredCounts,
+      isEncrypted,
     });
 
     await recordAuditLog(
@@ -228,6 +261,7 @@ backupRouter.post('/:fileName/restore', authenticateToken, requireRole('admin'),
         backupFileName: safeFileName,
         preRestoreBackup: preRestoreFileName,
         restoredCounts: result.restoredCounts,
+        isEncrypted,
       },
       req
     );
@@ -239,6 +273,7 @@ backupRouter.post('/:fileName/restore', authenticateToken, requireRole('admin'),
         backupFileName: safeFileName,
         preRestoreBackup: preRestoreFileName,
         restoredCounts: result.restoredCounts,
+        isEncrypted,
       },
     });
   } catch (restoreErr: any) {
@@ -255,6 +290,54 @@ backupRouter.post('/:fileName/restore', authenticateToken, requireRole('admin'),
 
 export const systemRouter = Router();
 
+// POST /api/v1/system/export-data (Admin only with explicit confirmation)
+systemRouter.post('/export-data', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const { confirm } = req.body || {};
+  if (!confirm) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'CONFIRMATION_REQUIRED',
+        message: 'يرجى تأكيد طلب تصدير بيانات المؤسسة صراحة (confirm: true).',
+      },
+    });
+  }
+
+  try {
+    const exportData = await generateInstitutionalExport({
+      id: req.user!.id,
+      name: req.user!.name,
+      role: req.user!.role,
+    });
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'EXPORT_INSTITUTIONAL_DATA',
+      'system',
+      'institutional_export',
+      {
+        entitiesCount: exportData.entities_count,
+        exportVersion: exportData.export_version,
+      },
+      req
+    );
+
+    res.json({
+      success: true,
+      data: exportData,
+      message: 'تم تصدير بيانات المؤسسة بنجاح بصيغة قياسية خالية من الأسرار.',
+    });
+  } catch (err: any) {
+    logger.error(`[Export] Institutional export failed: ${err.message}`);
+    res.status(500).json({
+      success: false,
+      error: { code: 'EXPORT_FAILED', message: err.message },
+    });
+  }
+});
+
 // POST /api/v1/system/reset-demo (Admin only with explicit confirmation)
 systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   const { confirm } = req.body || {};
@@ -269,6 +352,7 @@ systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async 
     await db.transaction(async (client) => {
       await client.query(`
         TRUNCATE TABLE
+          staging_queue,
           student_notes,
           book_summaries,
           physical_bookmarks,

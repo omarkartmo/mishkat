@@ -17,7 +17,9 @@ body,
   body {
     font-family: 'Tajawal', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }
-  code, pre {
+
+  code,
+  pre {
     font-family: 'JetBrains Mono', monospace;
   }
 }
@@ -74,5 +76,3 @@ html.light {
 .light ::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 116, 139, 0.5);
 }
-
-

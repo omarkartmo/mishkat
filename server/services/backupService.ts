@@ -3,10 +3,17 @@ import path from 'path';
 import { db, IDatabaseClient } from '../db/pool';
 import { serverConfig } from '../config';
 import { logger } from '../utils/logger';
+import {
+  encryptBackupPayload,
+  decryptBackupEnvelope,
+  isEncryptedBackupEnvelope,
+  EncryptedBackupEnvelope,
+} from './backupCrypto';
 
 export const BACKUP_FORMAT_VERSION = '1.0.0';
+export const ENCRYPTED_BACKUP_VERSION = '2.0.0';
 
-// 15 persistent application data tables in strict dependency order
+// 16 persistent application data tables in strict dependency order
 export const BACKUP_TABLES_ORDER = [
   'users',
   'categories',
@@ -131,6 +138,7 @@ export interface BackupMetadata {
   version: string;
   application?: string;
   type?: 'manual' | 'pre_restore';
+  [key: string]: any;
 }
 
 export interface BackupData {
@@ -171,7 +179,7 @@ export function validateBackupPayload(parsed: any): ValidationResult {
   }
 
   const version = parsed.meta.version || parsed.meta.formatVersion;
-  if (!version || (version !== '1.0.0' && version !== 1)) {
+  if (!version || (version !== '1.0.0' && version !== '2.0.0' && version !== 1 && version !== 2)) {
     return { valid: false, error: `إصدار النسخة الاحتياطية (${version}) غير مدعوم من قبل هذا النظام.` };
   }
 
@@ -180,9 +188,12 @@ export function validateBackupPayload(parsed: any): ValidationResult {
     return { valid: false, error: 'قسم البيانات (data) مفقود أو غير صالح في النسخة الاحتياطية.' };
   }
 
-  // Backward-compatibility: if notifications is missing from older 14-table backup, default to empty array
+  // Backward-compatibility: default missing tables to empty arrays
   if (!parsed.data.notifications) {
     parsed.data.notifications = [];
+  }
+  if (!parsed.data.staging_queue) {
+    parsed.data.staging_queue = [];
   }
 
   // 3. Verify all expected tables exist and are arrays
@@ -302,7 +313,19 @@ export function validateBackupPayload(parsed: any): ValidationResult {
     notificationIds.add(n.id);
   }
 
-  // 10. Calculate table counts
+  // 10. Validate Staging Queue
+  const stagingIds = new Set<string>();
+  for (const sq of parsed.data.staging_queue) {
+    if (!sq.id || !sq.original_filename || !sq.status) {
+      return { valid: false, error: 'سجل قائمة الانتظار (staging_queue) غير مكتمل في النسخة الاحتياطية.' };
+    }
+    if (stagingIds.has(sq.id)) {
+      return { valid: false, error: `تكرار في معرف سجل قائمة الانتظار: ${sq.id}` };
+    }
+    stagingIds.add(sq.id);
+  }
+
+  // 11. Calculate table counts
   const tableCounts: Record<string, number> = {};
   for (const table of BACKUP_TABLES_ORDER) {
     tableCounts[table] = (parsed.data[table] || []).length;
@@ -315,12 +338,20 @@ export function validateBackupPayload(parsed: any): ValidationResult {
 }
 
 /**
- * Creates a complete database snapshot in memory and writes to a file.
+ * Creates a complete database snapshot in memory, encrypts it using AES-256-GCM,
+ * and writes the authenticated envelope to a file.
  */
 export async function createDatabaseBackup(
   exportedBy: string,
-  backupType: 'manual' | 'pre_restore' = 'manual'
-): Promise<{ fileName: string; filePath: string; tablesCount: number; data: BackupData }> {
+  backupType: 'manual' | 'pre_restore' = 'manual',
+  customPassphrase?: string
+): Promise<{
+  fileName: string;
+  filePath: string;
+  tablesCount: number;
+  data: BackupData;
+  envelope: EncryptedBackupEnvelope;
+}> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const prefix = backupType === 'pre_restore' ? 'mishkat_pre_restore' : 'mishkat_backup';
   const fileName = `${prefix}_${timestamp}.json`;
@@ -346,7 +377,23 @@ export async function createDatabaseBackup(
     fs.mkdirSync(serverConfig.dirs.backups, { recursive: true });
   }
 
-  fs.writeFileSync(filePath, JSON.stringify(backupDump, null, 2), 'utf8');
+  // Encrypt the complete backup dump into an authenticated envelope (AES-256-GCM)
+  const envelope = encryptBackupPayload(
+    backupDump,
+    {
+      exportedAt: backupDump.meta.exportedAt,
+      exportedBy: backupDump.meta.exportedBy,
+      version: ENCRYPTED_BACKUP_VERSION,
+      application: 'MISHKAT',
+      type: backupType,
+      tablesCount: BACKUP_TABLES_ORDER.length,
+    },
+    customPassphrase
+  );
+
+  // Write the authenticated envelope to the encrypted backup file
+  fs.writeFileSync(filePath, JSON.stringify(envelope, null, 2), 'utf8');
+  logger.info(`[BackupService] Encrypted backup created: ${fileName}`);
 
   // Apply backup retention policy
   pruneOldBackups();
@@ -356,7 +403,47 @@ export async function createDatabaseBackup(
     filePath,
     tablesCount: BACKUP_TABLES_ORDER.length,
     data: backupDump,
+    envelope,
   };
+}
+
+/**
+ * Parses and, if encrypted, decrypts and authenticates a backup file.
+ * Supports:
+ * - v2.0.0 Encrypted Authenticated Envelopes (AES-256-GCM)
+ * - Legacy v1.0.0 unencrypted JSON dumps (backward compatibility)
+ */
+export function parseAndDecryptBackup(
+  rawContent: string,
+  customPassphrase?: string
+): { isEncrypted: boolean; data: BackupData; meta: any } {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(rawContent);
+  } catch (err: any) {
+    throw new Error('تعذر قراءة ملف النسخة الاحتياطية (تنسيق JSON تالف أو غير صالح).');
+  }
+
+  if (isEncryptedBackupEnvelope(parsed)) {
+    const decrypted = decryptBackupEnvelope<BackupData>(parsed, customPassphrase);
+    return {
+      isEncrypted: true,
+      data: decrypted.data,
+      meta: decrypted.meta,
+    };
+  }
+
+  // Legacy unencrypted v1.0.0 format
+  if (parsed && typeof parsed === 'object' && parsed.meta && parsed.data) {
+    logger.warn('[BackupService] Restoring from legacy unencrypted backup (v1.0.0).');
+    return {
+      isEncrypted: false,
+      data: parsed as BackupData,
+      meta: parsed.meta,
+    };
+  }
+
+  throw new Error('ملف النسخة الاحتياطية غير صالح أو لا يتطابق مع بنية النسخ الاحتياطية لنظام مشكاة.');
 }
 
 /**
@@ -401,15 +488,17 @@ export function pruneOldBackups(): void {
 }
 
 /**
- * Restores database from a validated backup JSON payload within a single ACID transaction.
+ * Restores database from a validated backup payload within a single ACID transaction.
+ * Includes staging_queue in the clean cascading truncate and restores all records.
  */
 export async function restoreDatabaseFromBackup(
   backup: BackupData,
   client: IDatabaseClient
 ): Promise<{ restoredCounts: Record<string, number> }> {
-  // 1. Truncate all 15 dynamic relational tables in clean CASCADE
+  // 1. Truncate all 16 dynamic relational tables in clean CASCADE (including staging_queue)
   await client.query(`
     TRUNCATE TABLE
+      staging_queue,
       notifications,
       student_notes,
       book_summaries,

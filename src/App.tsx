@@ -1221,27 +1221,53 @@ export default function App() {
     }
   };
 
-  // Export Server Database Backup (Phase 6.3 - Backup Migration)
-  const handleExportData = async () => {
+  // Encrypted Database Backup (AES-256-GCM AEAD)
+  const handleCreateBackup = async () => {
     try {
       const res = await settingsRepository.createBackup();
       if (res.success && res.data) {
-        const backupData = res.data.backup || res.data;
-        const dataStr = JSON.stringify(backupData, null, 2);
+        const envelope = (res.data as any).envelope || res.data;
+        const dataStr = JSON.stringify(envelope, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = res.data.fileName || `mishkat_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        link.download = res.data.fileName || `mishkat_encrypted_backup_${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
         URL.revokeObjectURL(url);
+        alert(`✨ ${res.data.message}\nاسم الملف: ${res.data.fileName}\nتم حفظ النسخة المشفرة على الخادم وتنزيل نسخة للحفظ الخارجي.`);
       } else {
-        alert(res.error?.message || 'تعذر إنشاء وتصدير النسخة الاحتياطية من الخادم المركزي.');
+        alert(res.error?.message || 'تعذر إنشاء وتشفير النسخة الاحتياطية من الخادم المركزي.');
       }
     } catch (err: any) {
-      alert(err?.message || 'حدث خطأ أثناء تصدير النسخة الاحتياطية.');
+      alert(err?.message || 'حدث خطأ أثناء إنشاء النسخة الاحتياطية المشفرة.');
     }
   };
+
+  // Export Institutional Data (Portable unencrypted JSON without secrets)
+  const handleExportInstitutionalData = async () => {
+    try {
+      const res = await settingsRepository.exportInstitutionalData();
+      if (res.success && res.data) {
+        const dataStr = JSON.stringify(res.data, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `mishkat_institutional_export_${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        alert('✨ تم تصدير بيانات المؤسسة بنجاح وتنزيل الملف بصيغة JSON مفتوحة خالية من كلمات المرور والأسرار.');
+      } else {
+        alert(res.error?.message || 'تعذر تصدير بيانات المؤسسة من الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'حدث خطأ أثناء تصدير بيانات المؤسسة.');
+    }
+  };
+
+  // Backward-compatible alias
+  const handleExportData = handleExportInstitutionalData;
 
   // Reset Server Database to Defaults (Phase 6.3 - Reset Migration)
   const handleResetData = async () => {
@@ -1643,6 +1669,8 @@ export default function App() {
               onSaveConfig={handleSaveConfig}
               onExportData={handleExportData}
               onResetData={handleResetData}
+              onCreateBackup={handleCreateBackup}
+              onExportInstitutionalData={handleExportInstitutionalData}
             />
           )}
         </main>
