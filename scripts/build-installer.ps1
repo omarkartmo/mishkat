@@ -47,6 +47,7 @@ if ($NodeExe -and (Test-Path $NodeExe)) {
 Write-Host "[4/5] Checking for NSIS Compiler..." -ForegroundColor Yellow
 $MakeNsisPaths = @(
     "makensis",
+    (Join-Path $ProjectRoot "bin\nsis\nsis-3.10\makensis.exe"),
     "C:\Program Files (x86)\NSIS\makensis.exe",
     "C:\Program Files\NSIS\makensis.exe"
 )
@@ -63,28 +64,50 @@ foreach ($path in $MakeNsisPaths) {
     }
 }
 
+# If not found, download portable NSIS automatically (Zero external dependency requirement)
+if (-not $MakeNsis) {
+    Write-Host "  -> Downloading portable NSIS compiler automatically..." -ForegroundColor DarkCyan
+    $NsisZip = Join-Path $ProjectRoot "bin\nsis.zip"
+    $NsisDir = Join-Path $ProjectRoot "bin\nsis"
+    curl.exe -s -L -o $NsisZip "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10.zip"
+    if (Test-Path $NsisZip) {
+        Expand-Archive -Path $NsisZip -DestinationPath $NsisDir -Force
+        Remove-Item $NsisZip -Force
+        $PortableMakensis = Join-Path $NsisDir "nsis-3.10\makensis.exe"
+        if (Test-Path $PortableMakensis) {
+            $MakeNsis = $PortableMakensis
+            Write-Host "  ✓ Portable NSIS ready: $MakeNsis" -ForegroundColor Green
+        }
+    }
+}
+
 # 5. Compile Installer if makensis is available
 Write-Host "[5/5] Compiling Unified Installer (MISHKAT-Setup.exe)..." -ForegroundColor Yellow
 $NsiScript = Join-Path $ProjectRoot "installer\mishkat-setup.nsi"
 $OutputInstaller = Join-Path $ProjectRoot "MISHKAT-Setup.exe"
+$DistInstallerDir = Join-Path $ProjectRoot "dist\installer"
+$DistInstaller = Join-Path $DistInstallerDir "MISHKAT-Setup.exe"
 
 if ($MakeNsis) {
-    & $MakeNsis $NsiScript
+    & $MakeNsis /INPUTCHARSET UTF8 $NsiScript
     if (Test-Path $OutputInstaller) {
+        if (-not (Test-Path $DistInstallerDir)) {
+            New-Item -ItemType Directory -Path $DistInstallerDir -Force | Out-Null
+        }
+        Copy-Item $OutputInstaller $DistInstaller -Force
+
         $Hash = (Get-FileHash $OutputInstaller -Algorithm SHA256).Hash
         $Size = (Get-Item $OutputInstaller).Length / 1MB
         Write-Host ""
         Write-Host "✨ MISHKAT-Setup.exe successfully compiled!" -ForegroundColor Green
-        Write-Host "   Path:   $OutputInstaller" -ForegroundColor White
-        Write-Host "   Size:   $([Math]::Round($Size, 2)) MB" -ForegroundColor White
-        Write-Host "   SHA256: $Hash" -ForegroundColor White
+        Write-Host "   Root Path: $OutputInstaller" -ForegroundColor White
+        Write-Host "   Dist Path: $DistInstaller" -ForegroundColor White
+        Write-Host "   Size:      $([Math]::Round($Size, 2)) MB" -ForegroundColor White
+        Write-Host "   SHA256:    $Hash" -ForegroundColor White
     }
 } else {
-    Write-Host "ℹ️ NSIS compiler (makensis.exe) not found on PATH." -ForegroundColor DarkYellow
-    Write-Host "   To compile MISHKAT-Setup.exe:" -ForegroundColor White
-    Write-Host "   1. Install NSIS from: https://nsis.sourceforge.io/Download" -ForegroundColor White
-    Write-Host "   2. Run: makensis installer\mishkat-setup.nsi" -ForegroundColor White
-    Write-Host "   All production assets and runtime are staged and ready in dist/ and bin/." -ForegroundColor Green
+    Write-Host "ℹ️ NSIS compiler (makensis.exe) could not be retrieved." -ForegroundColor DarkYellow
+    Write-Host "   Please ensure internet connectivity or install NSIS manually from https://nsis.sourceforge.io" -ForegroundColor White
 }
 
 Write-Host ""

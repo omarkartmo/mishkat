@@ -11,6 +11,7 @@
 !include "FileFunc.nsh"
 
 ; --- General Attributes ---
+Unicode true
 Name "MISHKAT - نظام المشكاة للمكتبات المدرسية"
 OutFile "..\MISHKAT-Setup.exe"
 InstallDir "$PROGRAMFILES64\MISHKAT"
@@ -22,8 +23,6 @@ BrandingText "MISHKAT Commercial Distribution v1.0.0"
 
 ; --- Interface Settings ---
 !define MUI_ABORTWARNING
-!define MUI_ICON "..\public\favicon.ico"
-!define MUI_UNICON "..\public\favicon.ico"
 
 ; --- Variables ---
 Var Dialog
@@ -173,12 +172,9 @@ Section "MISHKAT Core Installation" SecCore
 
     ; Copy bundled Node.js portable runtime (Zero external dependencies)
     SetOutPath "$INSTDIR\bin"
-    ${If} ${FileExists} "..\bin\node.exe"
-      File "..\bin\node.exe"
-    ${EndIf}
-    ${If} ${FileExists} "..\nssm.exe"
-      File "..\nssm.exe"
-    ${EndIf}
+    File /nonfatal "..\bin\node.exe"
+    File /nonfatal "..\bin\nssm.exe"
+    File /nonfatal "..\nssm.exe"
 
     ; Copy root package and configuration
     SetOutPath "$INSTDIR"
@@ -213,8 +209,8 @@ Section "MISHKAT Core Installation" SecCore
 
     ; Server Shortcuts
     CreateDirectory "$SMPROGRAMS\MISHKAT"
-    CreateShortCut "$SMPROGRAMS\MISHKAT\إدارة نظام المشكاة المركزي.lnk" "http://localhost:3000" "" "$INSTDIR\public\favicon.ico"
-    CreateShortCut "$DESKTOP\MISHKAT Server Administration.lnk" "http://localhost:3000" "" "$INSTDIR\public\favicon.ico"
+    CreateShortCut "$SMPROGRAMS\MISHKAT\إدارة نظام المشكاة المركزي.lnk" "http://localhost:3000"
+    CreateShortCut "$DESKTOP\MISHKAT Server Administration.lnk" "http://localhost:3000"
   ${EndIf}
 
   ; 3. Install Student Components if Role is STUDENT or COMBINED
@@ -223,18 +219,16 @@ Section "MISHKAT Core Installation" SecCore
     DetailPrint "تثبيت تطبيق الطالب المكتبي (MISHKAT Student)..."
 
     SetOutPath "$INSTDIR"
-    ${If} ${FileExists} "..\src-tauri\target\release\mishkat-student.exe"
-      File "..\src-tauri\target\release\mishkat-student.exe"
-    ${EndIf}
+    File /nonfatal "..\src-tauri\target\release\mishkat-student.exe"
 
     ; Student Shortcuts
     CreateDirectory "$SMPROGRAMS\MISHKAT"
     ${If} ${FileExists} "$INSTDIR\mishkat-student.exe"
-      CreateShortCut "$SMPROGRAMS\MISHKAT\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe" "" "$INSTDIR\public\favicon.ico"
-      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe" "" "$INSTDIR\public\favicon.ico"
+      CreateShortCut "$SMPROGRAMS\MISHKAT\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe"
+      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe"
     ${Else}
       ; Fallback shortcut to web kiosk if desktop binary built separately
-      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "http://localhost:3000" "" "$INSTDIR\public\favicon.ico"
+      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "http://localhost:3000"
     ${EndIf}
   ${EndIf}
 
@@ -244,7 +238,6 @@ Section "MISHKAT Core Installation" SecCore
   WriteRegStr HKLM "Software\MISHKAT" "Version" "1.0.0"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "DisplayName" "MISHKAT School Library System"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "DisplayIcon" "$INSTDIR\public\favicon.ico"
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "NoModify" 1
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "NoRepair" 1
 
