@@ -87,10 +87,9 @@ class GoogleDriveService {
       }
     }
 
-    // Default configuration placeholder
     return {
-      clientId: '',
-      clientSecret: '',
+      clientId: envClientId || '',
+      clientSecret: envClientSecret || '',
       redirectUri: `http://localhost:${serverConfig.port}/api/v1/backups/drive/callback`,
     };
   }
