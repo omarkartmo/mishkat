@@ -28,6 +28,7 @@ import submissionsRoutes from './routes/submissions.routes';
 import settingsRoutes from './routes/settings.routes';
 import { auditRouter, backupRouter, healthRouter, systemRouter, incomingRouter } from './routes/system.routes';
 import { startIncomingWatcher, stopIncomingWatcher } from './services/incomingWatcher';
+import { backupScheduler } from './services/backupScheduler';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 
@@ -108,6 +109,15 @@ export async function createExpressApp() {
     startIncomingWatcher();
   } catch (watchErr: any) {
     logger.warn(`[IncomingWatcher] Could not start watcher: ${watchErr.message}`);
+  }
+
+  // Start automatic backup scheduler in non-test mode
+  if (process.env.NODE_ENV !== 'test') {
+    try {
+      backupScheduler.start();
+    } catch (schedErr: any) {
+      logger.warn(`[BackupScheduler] Could not start scheduler: ${schedErr.message}`);
+    }
   }
 
   // Mount API v1 Routes

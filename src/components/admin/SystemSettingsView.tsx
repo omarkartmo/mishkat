@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Clock,
@@ -18,6 +18,14 @@ import {
   Lock,
   FileText,
   Info,
+  Cloud,
+  CloudOff,
+  UploadCloud,
+  RefreshCw,
+  ExternalLink,
+  Check,
+  AlertCircle,
+  Database,
 } from 'lucide-react';
 import { SystemConfig } from '../../types/library';
 import { settingsRepository } from '../../services/settingsRepository';
@@ -61,6 +69,46 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [exportingData, setExportingData] = useState(false);
 
+  // Google Drive & Automatic Backup Status State
+  const [backupStatus, setBackupStatus] = useState<{
+    local: {
+      status: 'successful' | 'failed' | 'idle';
+      lastBackupTime: string | null;
+      lastBackupFile: string | null;
+      error: string | null;
+      count: number;
+      maxRetention: number;
+    };
+    cloud: {
+      status: 'successful' | 'waiting' | 'failed' | 'not_connected';
+      connected: boolean;
+      lastUploadTime: string | null;
+      error: string | null;
+      count: number | null;
+      maxRetention: number;
+      pendingFile: string | null;
+    };
+  } | null>(null);
+
+  const [driveBackups, setDriveBackups] = useState<Array<{ id: string; name: string; sizeFormatted: string; createdAt: string }>>([]);
+  const [loadingDriveBackups, setLoadingDriveBackups] = useState(false);
+  const [activeBackupTab, setActiveBackupTab] = useState<'local' | 'cloud'>('local');
+  const [showDriveConnectModal, setShowDriveConnectModal] = useState(false);
+  const [authCodeInput, setAuthCodeInput] = useState('');
+  const [connectingDrive, setConnectingDrive] = useState(false);
+  const [retryingUpload, setRetryingUpload] = useState(false);
+
+  const fetchBackupStatus = async () => {
+    try {
+      const res = await settingsRepository.getBackupStatus();
+      if (res.success && res.data) {
+        setBackupStatus(res.data);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchBackups = async () => {
     setLoadingBackups(true);
     try {
@@ -75,7 +123,25 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
     }
   };
 
-  const handleCreateEncryptedBackup = async () => {
+  const fetchDriveBackups = async () => {
+    setLoadingDriveBackups(true);
+    try {
+      const res = await settingsRepository.listDriveBackups();
+      if (res.success && res.data) {
+        setDriveBackups(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingDriveBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBackupStatus();
+  }, []);
+
+  const handleCreateUnifiedBackup = async () => {
     if (onCreateBackup) {
       onCreateBackup();
       return;
@@ -86,6 +152,10 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       if (res.success && res.data) {
         alert(`✨ ${res.data.message}\nاسم الملف: ${res.data.fileName}\nعدد الجداول: ${res.data.tablesCount}`);
         fetchBackups();
+        fetchBackupStatus();
+        if (backupStatus?.cloud.connected) {
+          fetchDriveBackups();
+        }
       } else {
         alert(`❌ فشل إنشاء النسخة: ${res.error?.message || 'خطأ غير معروف'}`);
       }
@@ -93,6 +163,121 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       alert(`❌ خطأ: ${err.message}`);
     } finally {
       setCreatingBackup(false);
+    }
+  };
+
+  const handleConnectDrive = async () => {
+    try {
+      const res = await settingsRepository.getGoogleDriveAuthUrl();
+      if (res.success && res.data?.url) {
+        window.open(res.data.url, '_blank');
+        setShowDriveConnectModal(true);
+      } else {
+        alert(`❌ تعذر جلب رابط Google Drive: ${res.error?.message || 'تأكد من إعداد GOOGLE_CLIENT_ID'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    }
+  };
+
+  const handleConfirmDriveCode = async () => {
+    if (!authCodeInput.trim()) return;
+    setConnectingDrive(true);
+    try {
+      const res = await settingsRepository.connectGoogleDrive(authCodeInput.trim());
+      if (res.success) {
+        alert('✨ تم ربط حساب Google Drive بنجاح وتأكيد مجلد MISHKAT Backups.');
+        setShowDriveConnectModal(false);
+        setAuthCodeInput('');
+        fetchBackupStatus();
+        fetchDriveBackups();
+      } else {
+        alert(`❌ فشل ربط Google Drive: ${res.error?.message || 'رمز غير صالح'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    } finally {
+      setConnectingDrive(false);
+    }
+  };
+
+  const handleDisconnectDrive = async () => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في إلغاء ربط Google Drive؟')) return;
+    try {
+      const res = await settingsRepository.disconnectGoogleDrive();
+      if (res.success) {
+        alert('✨ تم إلغاء ربط Google Drive.');
+        fetchBackupStatus();
+        setDriveBackups([]);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    }
+  };
+
+  const handleRetryUpload = async () => {
+    setRetryingUpload(true);
+    try {
+      const res = await settingsRepository.retryDriveUpload();
+      if (res.success && res.data?.uploaded) {
+        alert('✨ تم رفع النسخة المعلقة بنجاح إلى Google Drive.');
+        fetchBackupStatus();
+        fetchDriveBackups();
+      } else {
+        alert(`ℹ️ ${res.data?.message || 'لم يكتمل الرفع بعد.'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    } finally {
+      setRetryingUpload(false);
+    }
+  };
+
+  const handleRestore = async (fileName: string) => {
+    const confirmed = window.confirm(
+      `⚠️ تحذير شديد الأهمية:\n\nاسترجاع النسخة (${fileName}) سيستبدل بيانات قاعدة البيانات الحالية بالكامل.\nسيقوم الخادم تلقائياً بإنشاء نسخة أمان احتياطية قبل الاستبدال.\n\nهل أنت متأكد تماماً من رغبتك في الاستمرار؟`
+    );
+    if (!confirmed) return;
+
+    setRestoringFile(fileName);
+    try {
+      const res = await settingsRepository.restoreBackup(fileName);
+      if (res.success && res.data) {
+        alert(`✨ ${res.data.message}\nتم حفظ نسخة أمان في: ${res.data.preRestoreBackup}`);
+        await onResetData();
+        fetchBackups();
+        fetchBackupStatus();
+      } else {
+        alert(`❌ فشل استرجاع النسخة: ${res.error?.message || 'خطأ غير معروف'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    } finally {
+      setRestoringFile(null);
+    }
+  };
+
+  const handleRestoreDrive = async (fileId: string, name: string) => {
+    const confirmed = window.confirm(
+      `⚠️ تحذير شديد الأهمية:\n\nاسترجاع النسخة السحابية (${name}) من Google Drive سيستبدل بيانات قاعدة البيانات الحالية بالكامل.\nسيقوم النظام تلقائياً بإنشاء نسخة أمان احتياطية قبل الاستبدال.\n\nهل أنت متأكد تماماً من رغبتك في الاستمرار؟`
+    );
+    if (!confirmed) return;
+
+    setRestoringFile(fileId);
+    try {
+      const res = await settingsRepository.restoreDriveBackup(fileId);
+      if (res.success && res.data) {
+        alert(`✨ ${res.data.message}\nتم حفظ نسخة أمان في: ${res.data.preRestoreBackup}`);
+        await onResetData();
+        fetchBackups();
+        fetchBackupStatus();
+      } else {
+        alert(`❌ فشل استرجاع النسخة السحابية: ${res.error?.message || 'خطأ غير معروف'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ خطأ: ${err.message}`);
+    } finally {
+      setRestoringFile(null);
     }
   };
 
@@ -121,29 +306,6 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       alert(`❌ خطأ: ${err.message}`);
     } finally {
       setExportingData(false);
-    }
-  };
-
-  const handleRestore = async (fileName: string) => {
-    const confirmed = window.confirm(
-      `⚠️ تحذير شديد الأهمية:\n\nاسترجاع النسخة (${fileName}) سيستبدل بيانات قاعدة البيانات الحالية بالكامل.\nسيقوم الخادم تلقائياً بإنشاء نسخة أمان احتياطية قبل الاستبدال.\n\nهل أنت متأكد تماماً من رغبتك في الاستمرار؟`
-    );
-    if (!confirmed) return;
-
-    setRestoringFile(fileName);
-    try {
-      const res = await settingsRepository.restoreBackup(fileName);
-      if (res.success && res.data) {
-        alert(`✨ ${res.data.message}\nتم حفظ نسخة أمان في: ${res.data.preRestoreBackup}`);
-        await onResetData();
-        fetchBackups();
-      } else {
-        alert(`❌ فشل استرجاع النسخة: ${res.error?.message || 'خطأ غير معروف'}`);
-      }
-    } catch (err: any) {
-      alert(`❌ خطأ: ${err.message}`);
-    } finally {
-      setRestoringFile(null);
     }
   };
 
@@ -482,41 +644,229 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Card 1: Encrypted Disaster Recovery Backup */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-              <Lock className="w-4 h-4 text-emerald-400" />
-              <span>النسخ الاحتياطي المشفر لقاعدة البيانات (Disaster Recovery)</span>
-            </h3>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
-              AES-256-GCM AEAD
-            </span>
+        {/* Card 1: Unified Backup & Google Drive Status */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-5 text-xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <Database className="w-4 h-4 text-emerald-400" />
+                <span>منظومة النسخ الاحتياطي التلقائي (محلي وسحابي)</span>
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1">
+                نسخ احتياطي يومي موثوق لقاعدة البيانات مع الاحتفاظ التلقائي بآخر 7 نسخ محلياً وعلى Google Drive الخاص بالمؤسسة
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchBackupStatus}
+                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all cursor-pointer"
+                title="تحديث حالة النسخ"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-slate-400 leading-relaxed">
-              إنشاء نسخة احتياطية محلية متكاملة ومشفرة بالكامل لقاعدة البيانات لحمايتها من التلف أو الكوارث. النسخة مشفرة وموقعة برمز تحقق أمني (<span className="text-slate-300 font-mono">AuthTag</span>) وتُحفظ تلقائياً في مجلد النسخ الاحتياطية على الخادم المركزي مع تطبيق سياسة تدوير النسخ.
+          {/* Backup Status Overview Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Local Backup Panel */}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                  <HardDrive className="w-4 h-4 text-emerald-400" />
+                  النسخ الاحتياطي المحلي (Local Backup)
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  backupStatus?.local.status === 'successful'
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    : backupStatus?.local.status === 'failed'
+                    ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                }`}>
+                  {backupStatus?.local.status === 'successful' ? '✓ ناجح' : backupStatus?.local.status === 'failed' ? '✗ خطأ' : 'جاهز'}
+                </span>
+              </div>
+              <div className="space-y-1 text-slate-400 text-[11px] pt-1">
+                <div className="flex justify-between">
+                  <span>آخر نسخة ناجحة:</span>
+                  <span className="font-mono text-slate-200">
+                    {backupStatus?.local.lastBackupTime
+                      ? new Date(backupStatus.local.lastBackupTime).toLocaleString('ar-SA')
+                      : 'لا توجد بعد'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>النسخ المحفوظة محلياً:</span>
+                  <span className="font-mono text-slate-200">
+                    {backupStatus?.local.count ?? 0} / 7
+                  </span>
+                </div>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleCreateEncryptedBackup}
-              disabled={creatingBackup}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all shrink-0 cursor-pointer"
-            >
-              <Lock className={`w-4 h-4 ${creatingBackup ? 'animate-spin' : ''}`} />
-              <span>{creatingBackup ? 'جاري التشفير والحفظ...' : 'إنشاء نسخة مشفرة الآن'}</span>
-            </button>
+
+            {/* Cloud Backup Panel */}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                  <Cloud className="w-4 h-4 text-sky-400" />
+                  النسخ الاحتياطي السحابي (Google Drive)
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  backupStatus?.cloud.connected && backupStatus?.cloud.status === 'successful'
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    : backupStatus?.cloud.status === 'waiting'
+                    ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                }`}>
+                  {backupStatus?.cloud.connected
+                    ? backupStatus.cloud.status === 'waiting'
+                      ? '⚠ بانتظار الرفع'
+                      : '✓ متصل بـ Drive'
+                    : 'غير متصل'}
+                </span>
+              </div>
+              <div className="space-y-1 text-slate-400 text-[11px] pt-1">
+                <div className="flex justify-between">
+                  <span>آخر رفع سحابي:</span>
+                  <span className="font-mono text-slate-200">
+                    {backupStatus?.cloud.lastUploadTime
+                      ? new Date(backupStatus.cloud.lastUploadTime).toLocaleString('ar-SA')
+                      : 'لا يوجد بعد'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>النسخ على Google Drive:</span>
+                  <span className="font-mono text-slate-200">
+                    {backupStatus?.cloud.count !== null ? `${backupStatus?.cloud.count} / 7` : 'غير معروف'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Create Unified Backup */}
+              <button
+                type="button"
+                onClick={handleCreateUnifiedBackup}
+                disabled={creatingBackup}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+              >
+                <Database className={`w-4 h-4 ${creatingBackup ? 'animate-spin' : ''}`} />
+                <span>{creatingBackup ? 'جاري إنشاء النسخة...' : 'إنشاء نسخة احتياطية الآن'}</span>
+              </button>
+
+              {/* Retry pending upload button if waiting */}
+              {backupStatus?.cloud.status === 'waiting' && (
+                <button
+                  type="button"
+                  onClick={handleRetryUpload}
+                  disabled={retryingUpload}
+                  className="flex items-center gap-2 px-3 py-2 bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-600/40 rounded-xl font-semibold transition-all cursor-pointer"
+                >
+                  <UploadCloud className={`w-4 h-4 ${retryingUpload ? 'animate-spin' : ''}`} />
+                  <span>{retryingUpload ? 'جاري إعادة المحاولة...' : 'إعادة رفع النسخة المعلقة الآن'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Google Drive Connect / Disconnect */}
+            <div>
+              {backupStatus?.cloud.connected ? (
+                <button
+                  type="button"
+                  onClick={handleDisconnectDrive}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 border border-slate-700 rounded-xl transition-all cursor-pointer"
+                >
+                  <CloudOff className="w-3.5 h-3.5" />
+                  <span>فصل Google Drive</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleConnectDrive}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-semibold shadow-lg shadow-sky-600/20 transition-all cursor-pointer"
+                >
+                  <Cloud className="w-4 h-4" />
+                  <span>ربط Google Drive المؤسسة</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Card 2: Restore from Backup */}
+        {/* Modal for Google Drive OAuth confirmation */}
+        {showDriveConnectModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl text-xs">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                  <Cloud className="w-4 h-4 text-sky-400" />
+                  ربط Google Drive الخاص بالمؤسسة
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setShowDriveConnectModal(false)}
+                  className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p className="text-slate-300 leading-relaxed">
+                تم فتح صفحة تسجيل الدخول إلى حساب Google في نافذة جديدة. يرجى تسجيل الدخول بحساب المؤسسة ومنح الإذن، ثم نسخ <strong>رمز التفويض (Authorization Code)</strong> ولصقه هنا:
+              </p>
+
+              <div>
+                <label className="block text-slate-400 font-medium mb-1">
+                  رمز التفويض (Authorization Code) *
+                </label>
+                <input
+                  type="text"
+                  value={authCodeInput}
+                  onChange={(e) => setAuthCodeInput(e.target.value)}
+                  placeholder="4/0AWtgk..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-sky-500 text-xs"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDriveConnectModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDriveCode}
+                  disabled={connectingDrive || !authCodeInput.trim()}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  {connectingDrive && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{connectingDrive ? 'جاري التحقق والربط...' : 'تأكيد الربط الآن'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Card 2: Restore from Local or Google Drive */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-              <HardDrive className="w-4 h-4 text-amber-400" />
-              <span>استرجاع قاعدة البيانات المركزية (Database Restore)</span>
-            </h3>
+            <div>
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-amber-400" />
+                <span>استرجاع قاعدة البيانات المركزية (Database Restore)</span>
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                استعادة النظام من النسخ المحلية أو مباشرة من Google Drive عند تعطل أو استبدال جهاز الكمبيوتر
+              </p>
+            </div>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/60 text-amber-300 border border-amber-800/60">
               معاملة ذرية ACID Transaction
             </span>
@@ -524,75 +874,178 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-slate-400 leading-relaxed">
-              استرجاع قاعدة البيانات من نسخة احتياطية سابقة. يقوم النظام تلقائياً بإنشاء نسخة أمان احتياطية قبل الاسترجاع، وفحص سلامة التشفير ومطابقة الجداول قبل لمس أي بيانات، مع إمكانية التراجع الكامل التلقائي في حال أي خطأ.
+              يقوم النظام تلقائياً بإنشاء نسخة أمان احتياطية قبل الاسترجاع، وفحص سلامة الملف ومطابقة الجداول قبل لمس أي بيانات، مع إمكانية التراجع الكامل التلقائي في حال أي خطأ.
             </div>
             <button
               type="button"
               onClick={() => {
                 const nextState = !showBackupsList;
                 setShowBackupsList(nextState);
-                if (nextState) fetchBackups();
+                if (nextState) {
+                  fetchBackups();
+                  if (backupStatus?.cloud.connected) fetchDriveBackups();
+                }
               }}
               className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
             >
-              <HardDrive className="w-4 h-4" />
+              <RotateCcw className="w-4 h-4" />
               <span>{showBackupsList ? 'إخفاء قائمة النسخ' : 'إدارة واسترجاع النسخ'}</span>
             </button>
           </div>
 
           {showBackupsList && (
-            <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between text-slate-300 font-bold text-xs pb-2 border-b border-slate-800">
-                <span>ملفات النسخ الاحتياطية المتوفرة على الخادم المركزي</span>
+            <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+              {/* Tabs for Local vs Google Drive */}
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
                 <button
                   type="button"
-                  onClick={fetchBackups}
-                  disabled={loadingBackups}
-                  className="text-indigo-400 hover:text-indigo-300 text-xs flex items-center gap-1 cursor-pointer"
+                  onClick={() => setActiveBackupTab('local')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeBackupTab === 'local'
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                  }`}
                 >
-                  <RotateCcw className={`w-3 h-3 ${loadingBackups ? 'animate-spin' : ''}`} />
-                  تحديث القائمة
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>النسخ المحلية على هذا الجهاز ({backups.length} / 7)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveBackupTab('cloud');
+                    fetchDriveBackups();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeBackupTab === 'cloud'
+                      ? 'bg-sky-600 text-white shadow-md'
+                      : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Cloud className="w-3.5 h-3.5" />
+                  <span>نسخ Google Drive السحابية ({driveBackups.length} / 7)</span>
                 </button>
               </div>
 
-              {loadingBackups ? (
-                <div className="text-center py-4 text-slate-500">جاري تحميل قائمة النسخ...</div>
-              ) : backups.length === 0 ? (
-                <div className="text-center py-4 text-slate-500">لا توجد نسخ احتياطية محفوظة حالياً في الخادم.</div>
-              ) : (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {backups.map((b) => (
-                    <div
-                      key={b.fileName}
-                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 hover:border-slate-700 transition-colors"
+              {/* Local Backups Tab */}
+              {activeBackupTab === 'local' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-slate-400 text-xs pb-1">
+                    <span>النسخ الاحتياطية المتوفرة على القرص الصلب المحلي</span>
+                    <button
+                      type="button"
+                      onClick={fetchBackups}
+                      disabled={loadingBackups}
+                      className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
                     >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-slate-200 text-xs">{b.fileName}</span>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            b.type === 'pre_restore' ? 'bg-indigo-950 text-indigo-300 border border-indigo-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                          }`}>
-                            {b.type === 'pre_restore' ? 'نسخة أمان تلقائية' : 'نسخة يدوية'}
-                          </span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-slate-700">
-                            {b.isEncrypted !== false ? 'AES-256-GCM' : 'v1.0.0 عادي'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          الحجم: {b.sizeFormatted} • التاريخ: {new Date(b.createdAt).toLocaleString('ar-SA')}
-                        </div>
-                      </div>
+                      <RefreshCw className={`w-3 h-3 ${loadingBackups ? 'animate-spin' : ''}`} />
+                      تحديث
+                    </button>
+                  </div>
 
+                  {loadingBackups ? (
+                    <div className="text-center py-4 text-slate-500">جاري تحميل قائمة النسخ المحلية...</div>
+                  ) : backups.length === 0 ? (
+                    <div className="text-center py-4 text-slate-500">لا توجد نسخ احتياطية محفوظة محلياً.</div>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {backups.map((b) => (
+                        <div
+                          key={b.fileName}
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-slate-200 text-xs">{b.fileName}</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                b.type === 'pre_restore' ? 'bg-indigo-950 text-indigo-300 border border-indigo-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                              }`}>
+                                {b.type === 'pre_restore' ? 'نسخة أمان' : 'نسخة دورية'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              الحجم: {b.sizeFormatted} • التاريخ: {new Date(b.createdAt).toLocaleString('ar-SA')}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRestore(b.fileName)}
+                            disabled={restoringFile === b.fileName}
+                            className="px-3 py-1.5 bg-rose-900/30 hover:bg-rose-700 text-rose-300 hover:text-white border border-rose-800/60 rounded-lg text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                          >
+                            {restoringFile === b.fileName ? 'جاري الاسترجاع...' : 'استرجاع هذه النسخة'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Cloud Backups Tab (Google Drive) */}
+              {activeBackupTab === 'cloud' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-slate-400 text-xs pb-1">
+                    <span>النسخ المحفوظة على Google Drive في مجلد MISHKAT Backups</span>
+                    <button
+                      type="button"
+                      onClick={fetchDriveBackups}
+                      disabled={loadingDriveBackups}
+                      className="text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${loadingDriveBackups ? 'animate-spin' : ''}`} />
+                      تحديث السحابة
+                    </button>
+                  </div>
+
+                  {!backupStatus?.cloud.connected ? (
+                    <div className="text-center py-6 space-y-3 bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
+                      <p className="text-slate-400">حساب Google Drive غير مربوط حالياً.</p>
                       <button
                         type="button"
-                        onClick={() => handleRestore(b.fileName)}
-                        disabled={restoringFile === b.fileName}
-                        className="px-3 py-1.5 bg-rose-900/30 hover:bg-rose-700 text-rose-300 hover:text-white border border-rose-800/60 rounded-lg text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                        onClick={handleConnectDrive}
+                        className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
                       >
-                        {restoringFile === b.fileName ? 'جاري الاسترجاع...' : 'استرجاع هذه النسخة'}
+                        ربط Google Drive الآن للاسترجاع
                       </button>
                     </div>
-                  ))}
+                  ) : loadingDriveBackups ? (
+                    <div className="text-center py-4 text-slate-500">جاري الاتصال بـ Google Drive وجلب قائمة النسخ...</div>
+                  ) : driveBackups.length === 0 ? (
+                    <div className="text-center py-4 text-slate-500">لا توجد نسخ احتياطية على Google Drive حتى الآن.</div>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {driveBackups.map((db) => (
+                        <div
+                          key={db.id}
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-slate-200 text-xs">{db.name}</span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-950 text-sky-300 border border-sky-800">
+                                Google Drive
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              الحجم: {db.sizeFormatted} • التاريخ: {new Date(db.createdAt).toLocaleString('ar-SA')}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRestoreDrive(db.id, db.name)}
+                            disabled={restoringFile === db.id}
+                            className="px-3 py-1.5 bg-sky-900/30 hover:bg-sky-700 text-sky-300 hover:text-white border border-sky-800/60 rounded-lg text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shrink-0 flex items-center gap-1.5"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>{restoringFile === db.id ? 'جاري التنزيل والاسترجاع...' : 'تنزيل واسترجاع فوري'}</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

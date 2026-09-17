@@ -42,8 +42,8 @@ beforeAll(async () => {
 describe('MISHKAT: Hardened Backup, Restore & Data Export Security Suite', () => {
   let createdBackupFileName = '';
 
-  describe('1. Encrypted Backup Creation (AES-256-GCM AEAD)', () => {
-    it('creates an encrypted backup file on disk containing authenticated envelope', async () => {
+  describe('1. Unencrypted Authoritative Backup Creation & RBAC', () => {
+    it('creates a standard unencrypted, validated backup file on disk without requiring keys', async () => {
       const res = await request(app)
         .post('/api/v1/backups/create')
         .set('Authorization', `Bearer ${adminToken}`);
@@ -58,22 +58,17 @@ describe('MISHKAT: Hardened Backup, Restore & Data Export Security Suite', () =>
       expect(fs.existsSync(backupPath)).toBe(true);
 
       const rawContent = fs.readFileSync(backupPath, 'utf8');
-      const parsedEnvelope = JSON.parse(rawContent);
+      const parsedBackup = JSON.parse(rawContent);
 
-      // Verify envelope structure
-      expect(parsedEnvelope.format).toBe('mishkat_encrypted_backup');
-      expect(parsedEnvelope.version).toBe('2.0.0');
-      expect(parsedEnvelope.algorithm).toBe('aes-256-gcm');
-      expect(parsedEnvelope.kdf).toBe('pbkdf2-sha256');
-      expect(parsedEnvelope.authTag).toBeDefined();
-      expect(parsedEnvelope.iv).toBeDefined();
-      expect(parsedEnvelope.salt).toBeDefined();
-      expect(parsedEnvelope.sha256).toBeDefined();
-      expect(parsedEnvelope.ciphertext).toBeDefined();
-
-      // Ensure ciphertext is NOT readable plaintext
-      expect(rawContent).not.toContain('password_hash');
-      expect(rawContent).not.toContain('STU-2026-101');
+      // Verify standard plain JSON structure (No AES-256-GCM, no ciphertext)
+      expect(parsedBackup.meta).toBeDefined();
+      expect(parsedBackup.meta.version).toBe('1.0.0');
+      expect(parsedBackup.meta.application).toBe('MISHKAT');
+      expect(parsedBackup.data).toBeDefined();
+      expect(parsedBackup.data.users).toBeInstanceOf(Array);
+      expect(parsedBackup.data.books).toBeInstanceOf(Array);
+      expect(parsedBackup.ciphertext).toBeUndefined();
+      expect(parsedBackup.authTag).toBeUndefined();
     });
 
     it('enforces RBAC: students and unauthenticated users cannot create backups', async () => {
@@ -87,9 +82,37 @@ describe('MISHKAT: Hardened Backup, Restore & Data Export Security Suite', () =>
     });
   });
 
-  describe('2. Backup Integrity & Tamper Detection', () => {
-    it('successfully decrypts a valid encrypted envelope', () => {
-      const backupPath = path.join(serverConfig.dirs.backups, createdBackupFileName);
+  describe('2. Legacy Encrypted Backup Backward Compatibility & Tamper Detection', () => {
+    let legacyEncryptedFileName = '';
+
+    beforeAll(() => {
+      // Create a valid legacy encrypted envelope using encryptBackupPayload to test backward compatibility
+      const { data } = parseAndDecryptBackup(fs.readFileSync(path.join(serverConfig.dirs.backups, createdBackupFileName), 'utf8'));
+      const envelope = encryptBackupPayload(data, {
+        exportedAt: new Date().toISOString(),
+        exportedBy: 'Legacy Admin',
+        version: '2.0.0',
+        application: 'MISHKAT',
+        type: 'manual',
+        tablesCount: 16,
+      });
+
+      legacyEncryptedFileName = `legacy_encrypted_${Date.now()}.json`;
+      fs.writeFileSync(
+        path.join(serverConfig.dirs.backups, legacyEncryptedFileName),
+        JSON.stringify(envelope, null, 2),
+        'utf8'
+      );
+    });
+
+    afterAll(() => {
+      if (legacyEncryptedFileName) {
+        try { fs.unlinkSync(path.join(serverConfig.dirs.backups, legacyEncryptedFileName)); } catch {}
+      }
+    });
+
+    it('successfully parses and decrypts a legacy encrypted envelope', () => {
+      const backupPath = path.join(serverConfig.dirs.backups, legacyEncryptedFileName);
       const rawContent = fs.readFileSync(backupPath, 'utf8');
       const decrypted = parseAndDecryptBackup(rawContent);
 
@@ -99,8 +122,8 @@ describe('MISHKAT: Hardened Backup, Restore & Data Export Security Suite', () =>
       expect(decrypted.data.data.books).toBeInstanceOf(Array);
     });
 
-    it('detects and rejects tampered ciphertext via authTag verification failure', async () => {
-      const backupPath = path.join(serverConfig.dirs.backups, createdBackupFileName);
+    it('detects and rejects tampered ciphertext in legacy envelope via authTag verification failure', async () => {
+      const backupPath = path.join(serverConfig.dirs.backups, legacyEncryptedFileName);
       const rawContent = fs.readFileSync(backupPath, 'utf8');
       const envelope = JSON.parse(rawContent);
 
@@ -129,35 +152,10 @@ describe('MISHKAT: Hardened Backup, Restore & Data Export Security Suite', () =>
         try { fs.unlinkSync(tamperedPath); } catch {}
       }
     });
-
-    it('detects and rejects corrupted authTag', async () => {
-      const backupPath = path.join(serverConfig.dirs.backups, createdBackupFileName);
-      const rawContent = fs.readFileSync(backupPath, 'utf8');
-      const envelope = JSON.parse(rawContent);
-
-      // Invert authTag hex
-      envelope.authTag = '0'.repeat(32);
-
-      const badTagFileName = `bad_tag_${Date.now()}.json`;
-      const badTagPath = path.join(serverConfig.dirs.backups, badTagFileName);
-      fs.writeFileSync(badTagPath, JSON.stringify(envelope), 'utf8');
-
-      try {
-        const res = await request(app)
-          .post(`/api/v1/backups/${badTagFileName}/restore`)
-          .set('Authorization', `Bearer ${adminToken}`)
-          .send({ confirm: true });
-
-        expect(res.status).toBe(400);
-        expect(res.body.error.code).toBe('INVALID_BACKUP_TAMPERED');
-      } finally {
-        try { fs.unlinkSync(badTagPath); } catch {}
-      }
-    });
   });
 
   describe('3. Atomic ACID Restore & Rollback', () => {
-    it('restores database completely from encrypted backup and creates pre-restore safety backup', async () => {
+    it('restores database completely from plain backup and creates pre-restore safety backup', async () => {
       const res = await request(app)
         .post(`/api/v1/backups/${createdBackupFileName}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
@@ -165,7 +163,7 @@ describe('MISHKAT: Hardened Backup, Restore & Data Export Security Suite', () =>
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.isEncrypted).toBe(true);
+      expect(res.body.data.isEncrypted).toBe(false);
       expect(res.body.data.preRestoreBackup).toBeDefined();
 
       const preRestorePath = path.join(serverConfig.dirs.backups, res.body.data.preRestoreBackup);

@@ -4,10 +4,8 @@ import { db, IDatabaseClient } from '../db/pool';
 import { serverConfig } from '../config';
 import { logger } from '../utils/logger';
 import {
-  encryptBackupPayload,
   decryptBackupEnvelope,
   isEncryptedBackupEnvelope,
-  EncryptedBackupEnvelope,
 } from './backupCrypto';
 
 export const BACKUP_FORMAT_VERSION = '1.0.0';
@@ -337,25 +335,28 @@ export function validateBackupPayload(parsed: any): ValidationResult {
   };
 }
 
+export const LOCAL_BACKUP_RETENTION_LIMIT = 7;
+export const PRE_RESTORE_RETENTION_LIMIT = 3;
+
 /**
- * Creates a complete database snapshot in memory, encrypts it using AES-256-GCM,
- * and writes the authenticated envelope to a file.
+ * Creates a complete database snapshot in memory, writes to a temporary file,
+ * thoroughly validates the payload, and atomically renames to final backup file.
+ * Creates standard, unencrypted, clean JSON backups without encryption keys.
  */
 export async function createDatabaseBackup(
   exportedBy: string,
-  backupType: 'manual' | 'pre_restore' = 'manual',
-  customPassphrase?: string
+  backupType: 'manual' | 'pre_restore' = 'manual'
 ): Promise<{
   fileName: string;
   filePath: string;
   tablesCount: number;
   data: BackupData;
-  envelope: EncryptedBackupEnvelope;
 }> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const prefix = backupType === 'pre_restore' ? 'mishkat_pre_restore' : 'mishkat_backup';
   const fileName = `${prefix}_${timestamp}.json`;
-  const filePath = path.join(serverConfig.dirs.backups, fileName);
+  const finalFilePath = path.join(serverConfig.dirs.backups, fileName);
+  const tempFilePath = path.join(serverConfig.dirs.backups, `${fileName}.tmp`);
 
   const backupDump: BackupData = {
     meta: {
@@ -364,6 +365,7 @@ export async function createDatabaseBackup(
       version: BACKUP_FORMAT_VERSION,
       application: 'MISHKAT',
       type: backupType,
+      tablesCount: BACKUP_TABLES_ORDER.length,
     },
     data: {} as Record<BackupTableName, any[]>,
   };
@@ -377,41 +379,47 @@ export async function createDatabaseBackup(
     fs.mkdirSync(serverConfig.dirs.backups, { recursive: true });
   }
 
-  // Encrypt the complete backup dump into an authenticated envelope (AES-256-GCM)
-  const envelope = encryptBackupPayload(
-    backupDump,
-    {
-      exportedAt: backupDump.meta.exportedAt,
-      exportedBy: backupDump.meta.exportedBy,
-      version: ENCRYPTED_BACKUP_VERSION,
-      application: 'MISHKAT',
-      type: backupType,
+  try {
+    // 1. Write to temporary backup file first
+    const content = JSON.stringify(backupDump, null, 2);
+    fs.writeFileSync(tempFilePath, content, 'utf8');
+
+    // 2. Validate the written temporary backup payload before finalizing
+    const verifyContent = fs.readFileSync(tempFilePath, 'utf8');
+    const parsedVerification = JSON.parse(verifyContent);
+    const validation = validateBackupPayload(parsedVerification);
+    if (!validation.valid) {
+      throw new Error(`فشل التحقق من سلامة النسخة الاحتياطية المؤقتة: ${validation.error}`);
+    }
+
+    // 3. Atomically rename/move to final backup file
+    fs.renameSync(tempFilePath, finalFilePath);
+    logger.info(`[BackupService] Plain local backup created successfully: ${fileName}`);
+
+    // 4. Apply retention policy (keep strictly latest 7 backups)
+    pruneOldBackups();
+
+    return {
+      fileName,
+      filePath: finalFilePath,
       tablesCount: BACKUP_TABLES_ORDER.length,
-    },
-    customPassphrase
-  );
-
-  // Write the authenticated envelope to the encrypted backup file
-  fs.writeFileSync(filePath, JSON.stringify(envelope, null, 2), 'utf8');
-  logger.info(`[BackupService] Encrypted backup created: ${fileName}`);
-
-  // Apply backup retention policy
-  pruneOldBackups();
-
-  return {
-    fileName,
-    filePath,
-    tablesCount: BACKUP_TABLES_ORDER.length,
-    data: backupDump,
-    envelope,
-  };
+      data: backupDump,
+    };
+  } catch (err: any) {
+    // If disk is full, interrupted, or writing failed, clean up any incomplete/temp file
+    if (fs.existsSync(tempFilePath)) {
+      try { fs.unlinkSync(tempFilePath); } catch {}
+    }
+    logger.error(`[BackupService] Backup creation failed: ${err.message}`);
+    throw new Error(`تعذر إتمام النسخ الاحتياطي بأمان: ${err.message}`);
+  }
 }
 
 /**
  * Parses and, if encrypted, decrypts and authenticates a backup file.
  * Supports:
- * - v2.0.0 Encrypted Authenticated Envelopes (AES-256-GCM)
- * - Legacy v1.0.0 unencrypted JSON dumps (backward compatibility)
+ * - Authoritative unencrypted JSON dumps (v1.0.0)
+ * - Legacy v2.0.0 Encrypted Envelopes (for backward compatibility if user provides one)
  */
 export function parseAndDecryptBackup(
   rawContent: string,
@@ -433,9 +441,8 @@ export function parseAndDecryptBackup(
     };
   }
 
-  // Legacy unencrypted v1.0.0 format
+  // Standard unencrypted format
   if (parsed && typeof parsed === 'object' && parsed.meta && parsed.data) {
-    logger.warn('[BackupService] Restoring from legacy unencrypted backup (v1.0.0).');
     return {
       isEncrypted: false,
       data: parsed as BackupData,
@@ -448,8 +455,8 @@ export function parseAndDecryptBackup(
 
 /**
  * Prunes older backups to maintain healthy storage:
- * - Keeps the 10 most recent manual backups
- * - Keeps the 5 most recent pre-restore safety backups
+ * - Keeps exactly the 7 most recent manual/daily backups
+ * - Keeps the 3 most recent pre-restore safety backups
  * - Never deletes the only remaining backup
  */
 export function pruneOldBackups(): void {
@@ -469,16 +476,16 @@ export function pruneOldBackups(): void {
       .map((f) => ({ name: f, time: fs.statSync(path.join(dir, f)).mtimeMs }))
       .sort((a, b) => b.time - a.time);
 
-    // Keep top 10 manual backups
-    if (manualBackups.length > 10) {
-      for (let i = 10; i < manualBackups.length; i++) {
+    // Keep exactly the top 7 manual backups
+    if (manualBackups.length > LOCAL_BACKUP_RETENTION_LIMIT) {
+      for (let i = LOCAL_BACKUP_RETENTION_LIMIT; i < manualBackups.length; i++) {
         try { fs.unlinkSync(path.join(dir, manualBackups[i].name)); } catch {}
       }
     }
 
-    // Keep top 5 pre-restore backups
-    if (preRestoreBackups.length > 5) {
-      for (let i = 5; i < preRestoreBackups.length; i++) {
+    // Keep top 3 pre-restore backups
+    if (preRestoreBackups.length > PRE_RESTORE_RETENTION_LIMIT) {
+      for (let i = PRE_RESTORE_RETENTION_LIMIT; i < preRestoreBackups.length; i++) {
         try { fs.unlinkSync(path.join(dir, preRestoreBackups[i].name)); } catch {}
       }
     }

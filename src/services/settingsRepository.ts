@@ -137,7 +137,7 @@ export class SettingsRepository {
   }
 
   /**
-   * Restore database from a backup file (POST /api/v1/backups/:fileName/restore)
+   * Restore database from a local backup file (POST /api/v1/backups/:fileName/restore)
    */
   public async restoreBackup(fileName: string): Promise<{
     success: boolean;
@@ -158,6 +158,203 @@ export class SettingsRepository {
       error: res.error || {
         code: 'RESTORE_BACKUP_FAILED',
         message: 'تعذر استرجاع النسخة الاحتياطية على الخادم المركزي.',
+      },
+    };
+  }
+
+  /**
+   * Get overall backup status (local and cloud) (GET /api/v1/backups/status)
+   */
+  public async getBackupStatus(): Promise<{
+    success: boolean;
+    data?: {
+      local: {
+        status: 'successful' | 'failed' | 'idle';
+        lastBackupTime: string | null;
+        lastBackupFile: string | null;
+        error: string | null;
+        count: number;
+        maxRetention: number;
+      };
+      cloud: {
+        status: 'successful' | 'waiting' | 'failed' | 'not_connected';
+        connected: boolean;
+        lastUploadTime: string | null;
+        error: string | null;
+        count: number | null;
+        maxRetention: number;
+        pendingFile: string | null;
+      };
+    };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.get<any>('/backups/status');
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'GET_STATUS_FAILED',
+        message: 'تعذر جلب حالة النسخ الاحتياطي من الخادم المركزي.',
+      },
+    };
+  }
+
+  /**
+   * Get Google Drive authorization URL (GET /api/v1/backups/drive/auth-url)
+   */
+  public async getGoogleDriveAuthUrl(): Promise<{
+    success: boolean;
+    data?: { url: string };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.get<{ url: string }>('/backups/drive/auth-url');
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'AUTH_URL_FAILED',
+        message: 'تعذر الحصول على رابط المصادقة من Google Drive.',
+      },
+    };
+  }
+
+  /**
+   * Save Google Drive OAuth configuration (POST /api/v1/backups/drive/config)
+   */
+  public async saveGoogleDriveConfig(config: { clientId: string; clientSecret: string; redirectUri?: string }): Promise<{
+    success: boolean;
+    data?: { message: string };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<any>('/backups/drive/config', config);
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'CONFIG_FAILED',
+        message: 'تعذر حفظ إعدادات Google Drive.',
+      },
+    };
+  }
+
+  /**
+   * Connect Google Drive with authorization code (POST /api/v1/backups/drive/connect)
+   */
+  public async connectGoogleDrive(code: string): Promise<{
+    success: boolean;
+    data?: { message: string };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<any>('/backups/drive/connect', { code });
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'CONNECT_FAILED',
+        message: 'تعذر إتمام ربط حساب Google Drive.',
+      },
+    };
+  }
+
+  /**
+   * Disconnect Google Drive (POST /api/v1/backups/drive/disconnect)
+   */
+  public async disconnectGoogleDrive(): Promise<{
+    success: boolean;
+    data?: { message: string };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<any>('/backups/drive/disconnect', {});
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'DISCONNECT_FAILED',
+        message: 'تعذر إلغاء ربط حساب Google Drive.',
+      },
+    };
+  }
+
+  /**
+   * List cloud backups on Google Drive (GET /api/v1/backups/drive/backups)
+   */
+  public async listDriveBackups(): Promise<{
+    success: boolean;
+    data?: Array<{
+      id: string;
+      name: string;
+      sizeBytes: number;
+      sizeFormatted: string;
+      createdAt: string;
+    }>;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.get<any[]>('/backups/drive/backups');
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'LIST_DRIVE_BACKUPS_FAILED',
+        message: 'تعذر جلب قائمة النسخ السحابية من Google Drive.',
+      },
+    };
+  }
+
+  /**
+   * Restore database from Google Drive cloud backup (POST /api/v1/backups/drive/:fileId/restore)
+   */
+  public async restoreDriveBackup(fileId: string): Promise<{
+    success: boolean;
+    data?: {
+      message: string;
+      fileId: string;
+      preRestoreBackup: string;
+      restoredCounts: Record<string, number>;
+    };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<any>(`/backups/drive/${encodeURIComponent(fileId)}/restore`, { confirm: true });
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'RESTORE_DRIVE_BACKUP_FAILED',
+        message: 'تعذر استرجاع النسخة السحابية من Google Drive.',
+      },
+    };
+  }
+
+  /**
+   * Retry pending cloud upload to Google Drive (POST /api/v1/backups/drive/retry)
+   */
+  public async retryDriveUpload(): Promise<{
+    success: boolean;
+    data?: { retried: boolean; uploaded: boolean; message: string };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post<any>('/backups/drive/retry', {});
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'RETRY_FAILED',
+        message: 'تعذر إعادة محاولة الرفع السحابي.',
       },
     };
   }

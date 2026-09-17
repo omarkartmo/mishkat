@@ -33,7 +33,7 @@ export async function seedInitialData(): Promise<void> {
   // Check if Admin exists
   const { rows: adminRows } = await db.query('SELECT id FROM users WHERE registration_number = $1', [INITIAL_ADMIN.registrationNumber]);
   if (adminRows.length === 0) {
-    console.log('🌱 [Seeder] Seeding initial admin and students accounts with secure password hashes...');
+    console.log('🌱 [Seeder] Seeding initial admin account...');
     // Seed Admin
     const adminPassHash = await bcrypt.hash('admin123', 10);
     await db.query(`
@@ -48,36 +48,32 @@ export async function seedInitialData(): Promise<void> {
       'admin',
       adminPassHash,
     ]);
-
-    // Seed Students
-    for (const student of INITIAL_STUDENTS) {
-      const studentPass = '123456';
-      const studentPassHash = await bcrypt.hash(studentPass, 10);
-      await db.query(`
-        INSERT INTO users (id, registration_number, name, role_id, grade, password_hash, is_active, is_blocked, is_blocked_from_borrowing)
-        VALUES ($1, $2, $3, 'student', $4, $5, true, false, false)
-        ON CONFLICT (registration_number) DO NOTHING;
-      `, [
-        student.id,
-        student.registrationNumber,
-        student.name,
-        student.grade || 'الصف العاشر',
-        studentPassHash,
-      ]);
-    }
   }
 
-  // Categories
-  const { rows: catRows } = await db.query('SELECT id FROM categories LIMIT 1');
-  if (catRows.length === 0) {
-    console.log('🌱 [Seeder] Seeding initial categories...');
-    for (const cat of INITIAL_CATEGORIES) {
-      await db.query(`
-        INSERT INTO categories (id, name, name_en, description, color, icon_name)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO NOTHING;
-      `, [cat.id, cat.name, cat.nameEn || null, cat.description, cat.color, cat.iconName]);
-    }
+  // Ensure Initial Students exist
+  for (const student of INITIAL_STUDENTS) {
+    const studentPass = '123456';
+    const studentPassHash = await bcrypt.hash(studentPass, 10);
+    await db.query(`
+      INSERT INTO users (id, registration_number, name, role_id, grade, password_hash, is_active, is_blocked, is_blocked_from_borrowing)
+      VALUES ($1, $2, $3, 'student', $4, $5, true, false, false)
+      ON CONFLICT (registration_number) DO NOTHING;
+    `, [
+      student.id,
+      student.registrationNumber,
+      student.name,
+      student.grade || 'الصف العاشر',
+      studentPassHash,
+    ]);
+  }
+
+  // Categories: ensure all initial categories exist
+  for (const cat of INITIAL_CATEGORIES) {
+    await db.query(`
+      INSERT INTO categories (id, name, name_en, description, color, icon_name)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (id) DO NOTHING;
+    `, [cat.id, cat.name, cat.nameEn || null, cat.description, cat.color, cat.iconName]);
   }
 
   // Physical Books & Copies
@@ -143,6 +139,9 @@ export async function seedInitialData(): Promise<void> {
   const { rows: existingDigital } = await db.query("SELECT id FROM books WHERE type = 'digital' LIMIT 1");
   if (existingDigital.length === 0) {
     console.log('🌱 [Seeder] Seeding initial digital books catalog...');
+    const { rows: adminUser } = await db.query("SELECT id FROM users WHERE registration_number = $1 OR role_id = 'admin' LIMIT 1", [INITIAL_ADMIN.registrationNumber]);
+    const fallbackUploaderId = adminUser[0]?.id || INITIAL_ADMIN.id;
+
     for (const book of INITIAL_DIGITAL_BOOKS) {
       const filename = book.fileUrl ? path.basename(decodeURIComponent(book.fileUrl)) : `${book.id}.pdf`;
       const filePath = path.join(serverConfig.dirs.digital, filename);
@@ -175,7 +174,7 @@ export async function seedInitialData(): Promise<void> {
         book.summary,
         book.coverImage || null,
         book.sourceOrigin || null,
-        book.uploadedBy || INITIAL_ADMIN.id,
+        book.uploadedBy || fallbackUploaderId,
         book.tags,
         book.downloadCount,
         book.readCount,

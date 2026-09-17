@@ -15,6 +15,8 @@ import {
   parseAndDecryptBackup,
   BackupData,
 } from '../services/backupService';
+import { googleDriveService } from '../services/googleDriveService';
+import { backupScheduler } from '../services/backupScheduler';
 import { generateInstitutionalExport } from '../services/exportService';
 import { logger } from '../utils/logger';
 import {
@@ -54,10 +56,26 @@ auditRouter.get('/', authenticateToken, requireRole('admin'), async (req: Reques
 
 export const backupRouter = Router();
 
-// POST /api/v1/backups/create (Admin only manual backup)
+// GET /api/v1/backups/status (Admin only overall backup status)
+backupRouter.get('/status', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const status = await backupScheduler.getOverallStatus();
+    res.json({ success: true, data: status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/backups/create (Admin only backup with atomic local creation and Drive upload)
 backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { fileName, tablesCount, data, envelope } = await createDatabaseBackup(req.user!.name, 'manual');
+    const cycle = await backupScheduler.runBackupCycle(req.user!.name);
+    if (!cycle.localSuccess) {
+      return res.status(500).json({
+        success: false,
+        error: { code: 'BACKUP_FAILED', message: cycle.error || 'فشل إنشاء النسخة الاحتياطية المحلية.' },
+      });
+    }
 
     await recordAuditLog(
       req.user!.id,
@@ -65,25 +83,237 @@ backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req
       req.user!.role,
       'CREATE_BACKUP',
       'system',
-      fileName,
-      { tablesCount, encrypted: true, algorithm: envelope.algorithm },
+      cycle.fileName!,
+      {
+        tablesCount: 16,
+        encrypted: false,
+        cloudSuccess: cycle.cloudSuccess,
+        cloudStatus: cycle.cloudStatus,
+      },
       req
     );
 
     res.json({
       success: true,
       data: {
-        message: 'تم إنشاء النسخة الاحتياطية بنجاح وتشفيرها محلياً (AES-256-GCM).',
-        fileName,
-        createdAt: data.meta.exportedAt,
-        tablesCount,
-        backup: data,
-        envelope,
+        message: cycle.cloudSuccess
+          ? 'تم إنشاء النسخة الاحتياطية محلياً ورفعها بنجاح إلى Google Drive.'
+          : cycle.cloudStatus === 'waiting'
+          ? 'تم إنشاء النسخة الاحتياطية محلياً بنجاح، وتأجل الرفع السحابي لإعادة المحاولة لاحقاً.'
+          : 'تم إنشاء النسخة الاحتياطية بنجاح وحفظها محلياً.',
+        fileName: cycle.fileName,
+        localSuccess: true,
+        cloudSuccess: cycle.cloudSuccess,
+        cloudStatus: cycle.cloudStatus,
+        tablesCount: 16,
+        backup: cycle.data,
       },
     });
   } catch (err: any) {
     logger.error(`[Backup] Creation failed: ${err.message}`);
     res.status(500).json({ success: false, error: { code: 'BACKUP_FAILED', message: err.message } });
+  }
+});
+
+// GET /api/v1/backups/drive/auth-url
+backupRouter.get('/drive/auth-url', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    if (!googleDriveService.isConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'DRIVE_NOT_CONFIGURED',
+          message: 'يرجى إعداد معرف العميل (Google Client ID) والسر أولاً.',
+        },
+      });
+    }
+    const url = googleDriveService.getAuthUrl();
+    res.json({ success: true, data: { url } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'AUTH_URL_FAILED', message: err.message } });
+  }
+});
+
+// POST /api/v1/backups/drive/config
+backupRouter.post('/drive/config', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { clientId, clientSecret, redirectUri } = req.body || {};
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'يرجى تزويد Client ID و Client Secret.' },
+      });
+    }
+    googleDriveService.saveConfig({ clientId, clientSecret, redirectUri });
+    res.json({ success: true, data: { message: 'تم حفظ إعدادات Google Drive بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'CONFIG_FAILED', message: err.message } });
+  }
+});
+
+// POST /api/v1/backups/drive/connect
+backupRouter.post('/drive/connect', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { code } = req.body || {};
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'CODE_REQUIRED', message: 'رمز التفويض (code) مطلوب لإتمام الربط.' },
+      });
+    }
+    await googleDriveService.exchangeCodeForTokens(code);
+    await googleDriveService.ensureBackupsFolder();
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'CONNECT_GOOGLE_DRIVE',
+      'system',
+      'google_drive',
+      { status: 'connected' },
+      req
+    );
+
+    res.json({ success: true, data: { message: 'تم ربط حساب Google Drive بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'CONNECT_FAILED', message: err.message } });
+  }
+});
+
+// POST /api/v1/backups/drive/disconnect
+backupRouter.post('/drive/disconnect', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    googleDriveService.disconnect();
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'DISCONNECT_GOOGLE_DRIVE',
+      'system',
+      'google_drive',
+      { status: 'disconnected' },
+      req
+    );
+
+    res.json({ success: true, data: { message: 'تم إلغاء ربط Google Drive بنجاح.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'DISCONNECT_FAILED', message: err.message } });
+  }
+});
+
+// GET /api/v1/backups/drive/backups
+backupRouter.get('/drive/backups', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const backups = await googleDriveService.listCloudBackups();
+    res.json({ success: true, data: backups });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'LIST_DRIVE_BACKUPS_FAILED', message: err.message } });
+  }
+});
+
+// POST /api/v1/backups/drive/retry
+backupRouter.post('/drive/retry', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const success = await backupScheduler.retryPendingUpload();
+    res.json({
+      success: true,
+      data: {
+        retried: true,
+        uploaded: success,
+        message: success ? 'تم رفع النسخة المعلقة بنجاح إلى Google Drive.' : 'لم يتم الرفع أو لا توجد نسخ معلقة.',
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'RETRY_FAILED', message: err.message } });
+  }
+});
+
+// POST /api/v1/backups/drive/:fileId/restore
+backupRouter.post('/drive/:fileId/restore', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  const { fileId } = req.params;
+  const { confirm } = req.body || {};
+
+  if (!confirm) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'CONFIRMATION_REQUIRED',
+        message: 'يرجى تأكيد طلب استرجاع قاعدة البيانات صراحة (confirm: true).',
+      },
+    });
+  }
+
+  const tempRestoreFile = path.join(serverConfig.dirs.backups, `cloud_restore_${Date.now()}.json`);
+
+  try {
+    // 1. Download file from Google Drive
+    await googleDriveService.downloadCloudBackup(fileId, tempRestoreFile);
+
+    // 2. Read and parse/decrypt
+    const rawContent = fs.readFileSync(tempRestoreFile, 'utf8');
+    const { data: parsedBackup, isEncrypted } = parseAndDecryptBackup(rawContent);
+
+    // 3. Validate backup payload
+    const validation = validateBackupPayload(parsedBackup);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_BACKUP_SCHEMA',
+          message: `ملف النسخة الاحتياطية السحابية غير متوافق: ${validation.error}`,
+        },
+      });
+    }
+
+    // 4. Create pre-restore safety backup
+    const safetyBackup = await createDatabaseBackup(req.user!.name, 'pre_restore');
+
+    // 5. Transactional restore with rollback
+    const result = await db.transaction(async (client) => {
+      return await restoreDatabaseFromBackup(parsedBackup, client);
+    });
+
+    await recordAuditLog(
+      req.user!.id,
+      req.user!.name,
+      req.user!.role,
+      'RESTORE_DATABASE',
+      'system',
+      fileId,
+      {
+        source: 'google_drive',
+        preRestoreBackup: safetyBackup.fileName,
+        restoredCounts: result.restoredCounts,
+        isEncrypted,
+      },
+      req
+    );
+
+    res.json({
+      success: true,
+      data: {
+        message: 'تم استرجاع قاعدة البيانات المركزية بنجاح من Google Drive واستعادة كافة السجلات.',
+        fileId,
+        preRestoreBackup: safetyBackup.fileName,
+        restoredCounts: result.restoredCounts,
+        isEncrypted,
+      },
+    });
+  } catch (err: any) {
+    logger.error(`[Backup] Cloud restore failed: ${err.message}`);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'RESTORE_FAILED',
+        message: `فشلت عملية استرجاع النسخة السحابية وتم إلغاء التغييرات (Rollback): ${err.message}`,
+      },
+    });
+  } finally {
+    if (fs.existsSync(tempRestoreFile)) {
+      try { fs.unlinkSync(tempRestoreFile); } catch {}
+    }
   }
 });
 
