@@ -244,6 +244,27 @@ export class SettingsRepository {
   }
 
   /**
+   * Get Google Drive configuration (GET /api/v1/backups/drive/config)
+   */
+  public async getGoogleDriveConfig(): Promise<{
+    success: boolean;
+    data?: { configured: boolean; clientId: string; hasSecret: boolean };
+    error?: ApiError;
+  }> {
+    const res = await apiClient.get<any>('/backups/drive/config');
+    if (res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'GET_CONFIG_FAILED',
+        message: 'تعذر جلب إعدادات Google Drive.',
+      },
+    };
+  }
+
+  /**
    * Connect Google Drive with authorization code (POST /api/v1/backups/drive/connect)
    */
   public async connectGoogleDrive(code: string): Promise<{

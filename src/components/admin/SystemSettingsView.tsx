@@ -26,6 +26,7 @@ import {
   Check,
   AlertCircle,
   Database,
+  Key,
 } from 'lucide-react';
 import { SystemConfig } from '../../types/library';
 import { settingsRepository } from '../../services/settingsRepository';
@@ -94,6 +95,11 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   const [loadingDriveBackups, setLoadingDriveBackups] = useState(false);
   const [activeBackupTab, setActiveBackupTab] = useState<'local' | 'cloud'>('local');
   const [showDriveConnectModal, setShowDriveConnectModal] = useState(false);
+  const [driveClientId, setDriveClientId] = useState('');
+  const [driveClientSecret, setDriveClientSecret] = useState('');
+  const [driveConfigured, setDriveConfigured] = useState(false);
+  const [driveAuthUrl, setDriveAuthUrl] = useState<string | null>(null);
+  const [savingDriveConfig, setSavingDriveConfig] = useState(false);
   const [authCodeInput, setAuthCodeInput] = useState('');
   const [connectingDrive, setConnectingDrive] = useState(false);
   const [retryingUpload, setRetryingUpload] = useState(false);
@@ -139,6 +145,19 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
   useEffect(() => {
     fetchBackupStatus();
+
+    // Listen for automatic OAuth completion from the popup callback
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'MISHKAT_DRIVE_CONNECTED') {
+        alert('✨ تم ربط حساب Google Drive بنجاح ومزامنة مجلد MISHKAT Backups.');
+        setShowDriveConnectModal(false);
+        setAuthCodeInput('');
+        fetchBackupStatus();
+        fetchDriveBackups();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   const handleCreateUnifiedBackup = async () => {
@@ -167,16 +186,59 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   };
 
   const handleConnectDrive = async () => {
+    setShowDriveConnectModal(true);
+    setAuthCodeInput('');
     try {
-      const res = await settingsRepository.getGoogleDriveAuthUrl();
-      if (res.success && res.data?.url) {
-        window.open(res.data.url, '_blank');
-        setShowDriveConnectModal(true);
+      const configRes = await settingsRepository.getGoogleDriveConfig();
+      if (configRes.success && configRes.data) {
+        setDriveClientId(configRes.data.clientId || '');
+        setDriveConfigured(configRes.data.configured);
+        if (configRes.data.configured) {
+          const urlRes = await settingsRepository.getGoogleDriveAuthUrl();
+          if (urlRes.success && urlRes.data?.url) {
+            setDriveAuthUrl(urlRes.data.url);
+          } else {
+            setDriveAuthUrl(null);
+          }
+        } else {
+          setDriveAuthUrl(null);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSaveDriveCredentials = async () => {
+    const trimmedId = driveClientId.trim();
+    const trimmedSecret = driveClientSecret.trim();
+    if (!trimmedId || !trimmedSecret) {
+      alert('⚠️ يرجى إدخال كل من Google Client ID و Client Secret أولاً.');
+      return;
+    }
+    setSavingDriveConfig(true);
+    try {
+      const saveRes = await settingsRepository.saveGoogleDriveConfig({
+        clientId: trimmedId,
+        clientSecret: trimmedSecret,
+        redirectUri: `http://localhost:3000/api/v1/backups/drive/callback`,
+      });
+      if (!saveRes.success) {
+        alert(`❌ فشل حفظ الإعدادات: ${saveRes.error?.message || 'خطأ غير معروف'}`);
+        return;
+      }
+      setDriveConfigured(true);
+      const urlRes = await settingsRepository.getGoogleDriveAuthUrl();
+      if (urlRes.success && urlRes.data?.url) {
+        setDriveAuthUrl(urlRes.data.url);
+        window.open(urlRes.data.url, '_blank');
       } else {
-        alert(`❌ تعذر جلب رابط Google Drive: ${res.error?.message || 'تأكد من إعداد GOOGLE_CLIENT_ID'}`);
+        alert(`❌ تم حفظ الإعدادات ولكن تعذر إنشاء رابط التفويض: ${urlRes.error?.message}`);
       }
     } catch (err: any) {
       alert(`❌ خطأ: ${err.message}`);
+    } finally {
+      setSavingDriveConfig(false);
     }
   };
 
@@ -798,57 +860,158 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Modal for Google Drive OAuth confirmation */}
+        {/* Modal for Google Drive OAuth configuration and connection wizard */}
         {showDriveConnectModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl text-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in overflow-y-auto">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full space-y-5 shadow-2xl text-xs my-8">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                   <Cloud className="w-4 h-4 text-sky-400" />
-                  ربط Google Drive الخاص بالمؤسسة
+                  <span>ربط حساب Google Drive المؤسسي (النسخ السحابي التلقائي)</span>
                 </h4>
                 <button
                   type="button"
                   onClick={() => setShowDriveConnectModal(false)}
-                  className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                  className="text-slate-400 hover:text-slate-200 cursor-pointer text-base"
                 >
                   ✕
                 </button>
               </div>
 
-              <p className="text-slate-300 leading-relaxed">
-                تم فتح صفحة تسجيل الدخول إلى حساب Google في نافذة جديدة. يرجى تسجيل الدخول بحساب المؤسسة ومنح الإذن، ثم نسخ <strong>رمز التفويض (Authorization Code)</strong> ولصقه هنا:
-              </p>
-
-              <div>
-                <label className="block text-slate-400 font-medium mb-1">
-                  رمز التفويض (Authorization Code) *
-                </label>
-                <input
-                  type="text"
-                  value={authCodeInput}
-                  onChange={(e) => setAuthCodeInput(e.target.value)}
-                  placeholder="4/0AWtgk..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-sky-500 text-xs"
-                />
+              {/* Instructions Callout */}
+              <div className="p-3.5 bg-sky-950/40 border border-sky-800/60 rounded-xl text-slate-300 space-y-1.5 leading-relaxed text-[11px]">
+                <div className="font-bold text-sky-300 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5" />
+                  <span>متطلبات Google Cloud Console لربط الحساب:</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-slate-300">
+                  <li>أنشئ مشروعاً في Google Cloud وفعل <strong>Google Drive API</strong>.</li>
+                  <li>أنشئ <strong>OAuth Client ID</strong> من نوع <strong>Web application</strong>.</li>
+                  <li>أضف الرابط التالي في خانة <strong>Authorized redirect URIs</strong>:</li>
+                </ol>
+                <div className="flex items-center justify-between gap-2 p-1.5 bg-slate-950 rounded-lg border border-sky-900/50 font-mono text-[10px] text-sky-200">
+                  <span className="truncate select-all">http://localhost:3000/api/v1/backups/drive/callback</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('http://localhost:3000/api/v1/backups/drive/callback');
+                      alert('تم نسخ رابط إعادة التوجيه إلى الحافظة.');
+                    }}
+                    className="px-2 py-0.5 bg-sky-800/60 hover:bg-sky-700 text-sky-100 rounded text-[10px] font-sans shrink-0 cursor-pointer"
+                  >
+                    نسخ الرابط
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              {/* Step 1: Credentials Form */}
+              <div className="space-y-3 p-4 bg-slate-950/60 rounded-xl border border-slate-800">
+                <div className="font-bold text-slate-200 flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span>الخطوة 1: إدخال بيانات الاعتماد (OAuth 2.0 Credentials)</span>
+                  {driveConfigured && (
+                    <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                      ✓ بيانات الاعتماد محفوظة
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-medium mb-1">
+                    Google Client ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={driveClientId}
+                    onChange={(e) => setDriveClientId(e.target.value)}
+                    placeholder="xxxxxxxxxxxx.apps.googleusercontent.com"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-sky-500 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-medium mb-1">
+                    Google Client Secret *
+                  </label>
+                  <input
+                    type="password"
+                    value={driveClientSecret}
+                    onChange={(e) => setDriveClientSecret(e.target.value)}
+                    placeholder="GOCSPX-xxxxxxxxxxxxxxxxxxxx"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-sky-500 text-xs"
+                  />
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSaveDriveCredentials}
+                    disabled={savingDriveConfig || !driveClientId.trim() || !driveClientSecret.trim()}
+                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-sky-300 border border-slate-700 rounded-xl font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {savingDriveConfig && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                    <span>حفظ بيانات الاعتماد وتوليد رابط تسجيل الدخول</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 2: Sign-in & Authentication */}
+              <div className="space-y-3 p-4 bg-slate-950/60 rounded-xl border border-slate-800">
+                <div className="font-bold text-slate-200 border-b border-slate-800 pb-2">
+                  الخطوة 2: تسجيل الدخول وتفويض الحساب
+                </div>
+
+                {driveAuthUrl ? (
+                  <div className="space-y-2.5">
+                    <button
+                      type="button"
+                      onClick={() => window.open(driveAuthUrl, '_blank')}
+                      className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-sky-600/20 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <Cloud className="w-4 h-4" />
+                      <span>فتح نافذة تسجيل الدخول بحساب Google</span>
+                    </button>
+                    <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+                      💡 <strong>الربط التلقائي:</strong> بمجرد إكمال تسجيل الدخول والموافقة في نافذة Google، سيتم ربط الحساب وتأكيد مجلد <code>MISHKAT Backups</code> تلقائياً وتغلق النافذة دون الحاجة لنسخ أي شيء.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500">
+                    يرجى إدخال بيانات الاعتماد في الخطوة 1 والضغط على "حفظ" لتوليد رابط تسجيل الدخول.
+                  </p>
+                )}
+
+                {/* Optional manual code fallback */}
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="text-slate-400 text-[11px]">
+                    إذا تعذر الربط التلقائي، الصق رمز التفويض (Authorization Code) يدوياً:
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={authCodeInput}
+                      onChange={(e) => setAuthCodeInput(e.target.value)}
+                      placeholder="4/0AWtgk..."
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-sky-500 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleConfirmDriveCode}
+                      disabled={connectingDrive || !authCodeInput.trim()}
+                      className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all cursor-pointer shrink-0"
+                    >
+                      {connectingDrive ? 'جاري التحقق...' : 'تأكيد الرمز'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
                 <button
                   type="button"
                   onClick={() => setShowDriveConnectModal(false)}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all cursor-pointer"
                 >
-                  إلغاء
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmDriveCode}
-                  disabled={connectingDrive || !authCodeInput.trim()}
-                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  {connectingDrive && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{connectingDrive ? 'جاري التحقق والربط...' : 'تأكيد الربط الآن'}</span>
+                  إغلاق النافذة
                 </button>
               </div>
             </div>

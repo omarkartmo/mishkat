@@ -134,6 +134,98 @@ backupRouter.get('/drive/auth-url', authenticateToken, requireRole('admin'), asy
   }
 });
 
+// GET /api/v1/backups/drive/callback
+// Handles OAuth2 browser redirect from Google
+backupRouter.get('/drive/callback', async (req: Request, res: Response) => {
+  const code = (req.query.code as string) || '';
+  const error = (req.query.error as string) || '';
+
+  if (error || !code) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head><meta charset="utf-8"><title>فشل ربط Google Drive</title></head>
+      <body style="font-family:sans-serif;background:#0f172a;color:#f87171;padding:40px;text-align:center;">
+        <h2>تعذر إتمام ربط Google Drive</h2>
+        <p>${error || 'لم يتم العثور على رمز التفويض.'}</p>
+        <button onclick="window.close()" style="margin-top:20px;padding:10px 20px;background:#334155;color:#fff;border:none;border-radius:8px;cursor:pointer;">إغلاق هذه النافذة</button>
+      </body>
+      </html>
+    `);
+  }
+
+  try {
+    await googleDriveService.exchangeCodeForTokens(code);
+    await googleDriveService.ensureBackupsFolder();
+
+    res.send(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="utf-8">
+        <title>تم ربط Google Drive بنجاح</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1329; color: #e2e8f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+          .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px; max-width: 480px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+          .icon { font-size: 48px; margin-bottom: 16px; }
+          h2 { color: #38bdf8; margin: 0 0 12px 0; }
+          p { color: #94a3b8; font-size: 14px; line-height: 1.6; }
+          .code-box { background: #0f172a; padding: 12px; border-radius: 8px; font-family: monospace; color: #a5f3fc; font-size: 12px; word-break: break-all; margin: 16px 0; border: 1px solid #334155; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="icon">✨</div>
+          <h2>تم ربط Google Drive بنجاح!</h2>
+          <p>تم حفظ رموز التفويض والتحقق من مجلد <strong>MISHKAT Backups</strong>. يتم الآن إغلاق هذه النافذة والعودة إلى لوحة إدارة مشكاة تلقائياً...</p>
+          <div class="code-box">${code}</div>
+        </div>
+        <script>
+          try {
+            if (window.opener) {
+              window.opener.postMessage({ type: 'MISHKAT_DRIVE_CONNECTED', code: '${code}' }, '*');
+              setTimeout(() => { window.close(); }, 1500);
+            }
+          } catch(e) {}
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (err: any) {
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head><meta charset="utf-8"><title>خطأ في استبدال الرمز</title></head>
+      <body style="font-family:sans-serif;background:#0f172a;color:#f87171;padding:40px;text-align:center;">
+        <h2>حدث خطأ أثناء الاتصال بـ Google</h2>
+        <p>${err.message}</p>
+        <p style="color:#94a3b8;font-size:12px;">يمكنك نسخ رمز التفويض أدناه ولصقه يدوياً في مشكاة:</p>
+        <div style="background:#1e293b;padding:12px;border-radius:8px;font-family:monospace;color:#a5f3fc;max-width:500px;margin:16px auto;word-break:break-all;">${code}</div>
+        <button onclick="window.close()" style="padding:10px 20px;background:#334155;color:#fff;border:none;border-radius:8px;cursor:pointer;">إغلاق</button>
+      </body>
+      </html>
+    `);
+  }
+});
+
+// GET /api/v1/backups/drive/config
+backupRouter.get('/drive/config', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const isConfigured = googleDriveService.isConfigured();
+    const config = isConfigured ? googleDriveService.getConfig() : null;
+    res.json({
+      success: true,
+      data: {
+        configured: isConfigured,
+        clientId: config?.clientId || '',
+        hasSecret: Boolean(config?.clientSecret),
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'GET_CONFIG_FAILED', message: err.message } });
+  }
+});
+
 // POST /api/v1/backups/drive/config
 backupRouter.post('/drive/config', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
