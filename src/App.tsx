@@ -33,6 +33,9 @@ import { StudentManagerView } from './components/students/StudentManagerView';
 import { CategoryManagerView } from './components/admin/CategoryManagerView';
 import { StudentPortalView } from './components/student/StudentPortalView';
 import { SystemSettingsView } from './components/admin/SystemSettingsView';
+import { SystemSupportDashboard } from './components/admin/SystemSupportDashboard';
+import { StudentKioskHeader } from './components/student/StudentKioskHeader';
+import { telemetryService } from './services/telemetry/telemetryService';
 import { FavoritesView } from './components/favorites/FavoritesView';
 import { ReadingWorkspaceView } from './components/reading/ReadingWorkspaceView';
 import { PhysicalBookmarkModal } from './components/reading/PhysicalBookmarkModal';
@@ -140,6 +143,10 @@ export default function App() {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    telemetryService.init({ appVersion: '1.0.0' });
+  }, []);
 
   // Load server-authoritative categories
   const loadCategories = async () => {
@@ -1352,6 +1359,15 @@ export default function App() {
 
       {/* Main Workspace Frame */}
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-950 transition-all duration-300 min-w-0">
+        {/* Student Controlled Browser / Kiosk Header */}
+        {currentUser.role === 'student' && (
+          <StudentKioskHeader
+            currentScreenName={activeTab === 'student_portal' ? 'فضاء الطالب والأبحاث' : activeTab}
+            onNavigateHome={() => setActiveTab('student_portal')}
+            onRefresh={() => window.location.reload()}
+          />
+        )}
+
         {/* Desktop Header Bar with Role Switcher, Notification Dropdown & Theme Toggle */}
         <HeaderBar
           currentUser={currentUser}
@@ -1672,6 +1688,10 @@ export default function App() {
               onCreateBackup={handleCreateBackup}
               onExportInstitutionalData={handleExportInstitutionalData}
             />
+          )}
+
+          {activeTab === 'support' && currentUser.role === 'admin' && (
+            <SystemSupportDashboard />
           )}
         </main>
       </div>

@@ -588,3 +588,27 @@ export async function restoreDatabaseFromBackup(
 
   return { restoredCounts };
 }
+
+/**
+ * Returns a sorted list of local backup files with timestamps
+ */
+export function listLocalBackups(): Array<{ fileName: string; filePath: string; createdAt: string }> {
+  try {
+    const dir = serverConfig.dirs.backups;
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((fileName) => {
+        const filePath = path.join(dir, fileName);
+        const stats = fs.statSync(filePath);
+        return {
+          fileName,
+          filePath,
+          createdAt: stats.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch {
+    return [];
+  }
+}

@@ -13,7 +13,8 @@ export type NavigationTab =
   | 'categories'
   | 'student_portal'
   | 'search_results'
-  | 'settings';
+  | 'settings'
+  | 'support';
 
 export interface User {
   id: string;

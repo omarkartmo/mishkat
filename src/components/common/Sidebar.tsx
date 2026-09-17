@@ -18,6 +18,7 @@ import {
   Star,
   Bookmark,
   Search,
+  Activity,
   X as CloseIcon,
 } from 'lucide-react';
 import { NavigationTab, UserRole } from '../../types/library';
@@ -300,6 +301,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   label="إعدادات النظام والنسخ"
                   active={activeTab === 'settings'}
                   onClick={() => onSelectTab('settings')}
+                  isCollapsed={isCollapsed}
+                />
+                <NavItem
+                  icon={<Activity className="w-4 h-4 text-emerald-500" />}
+                  label="صحة النظام والدعم الفني"
+                  active={activeTab === 'support'}
+                  onClick={() => onSelectTab('support')}
                   isCollapsed={isCollapsed}
                 />
               </div>

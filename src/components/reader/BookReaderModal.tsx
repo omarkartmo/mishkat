@@ -27,6 +27,7 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import ePub, { Book, Rendition } from 'epubjs';
 import { DigitalBook, StudentNote } from '../../types/library';
 import { bookRepository } from '../../services/bookRepository';
+import { telemetryService } from '../../services/telemetry/telemetryService';
 
 // Configure PDF.js worker
 if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
@@ -279,8 +280,9 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       setError(err?.message || 'تعذر تحميل الكتاب من الخادم المركزي.');
       setErrorCode('DOCUMENT_LOAD_FAILED');
       setIsLoading(false);
+      telemetryService.reportReaderError(isEpub ? 'epub' : 'pdf', book.title, err);
     }
-  }, [book.id, isEpub]);
+  }, [book.id, book.title, isEpub]);
 
   useEffect(() => {
     loadBook();

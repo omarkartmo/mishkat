@@ -404,16 +404,18 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                     <span>فتح الموقع (وضع التصفح بملء الشاشة)</span>
                   </button>
 
-                  <a
-                    href={portal.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-sky-500 text-slate-400 hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
-                    title="فتح الموقع في علامة تبويب مستقلة للمتصفح (لتفادي قيود الحماية التي تمنع التضمين)"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+                  {currentUser?.role === 'admin' && (
+                    <a
+                      href={portal.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-sky-500 text-slate-400 hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                      title="فتح الموقع في علامة تبويب مستقلة للمتصفح (لتفادي قيود الحماية التي تمنع التضمين)"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
@@ -480,17 +482,19 @@ export const WhitelistedPortalsView: React.FC<WhitelistedPortalsViewProps> = ({
                 <span className="sm:hidden">اقتراح</span>
               </button>
 
-              {/* Open in external tab for sites that block iframes (X-Frame-Options) */}
-              <a
-                href={selectedPortal.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                title="فتح الموقع في علامة تبويب جديدة مستقلة لتجاوز حظر التضمين الأمني"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">فتح في تبويب خارجي</span>
-              </a>
+              {/* Open in external tab for sites that block iframes (Admin Only) */}
+              {currentUser?.role === 'admin' && (
+                <a
+                  href={selectedPortal.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  title="فتح الموقع في علامة تبويب جديدة مستقلة لتجاوز حظر التضمين الأمني"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">فتح في تبويب خارجي</span>
+                </a>
+              )}
 
               {/* Explicit Exit Control with ESC Badge (Section 3) */}
               <button

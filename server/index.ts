@@ -27,6 +27,7 @@ import notificationsRoutes from './routes/notifications.routes';
 import submissionsRoutes from './routes/submissions.routes';
 import settingsRoutes from './routes/settings.routes';
 import { auditRouter, backupRouter, healthRouter, systemRouter, incomingRouter } from './routes/system.routes';
+import { supportRouter, clientEventsRouter } from './routes/support.routes';
 import { startIncomingWatcher, stopIncomingWatcher } from './services/incomingWatcher';
 import { backupScheduler } from './services/backupScheduler';
 import { errorHandler } from './middleware/errorHandler';
@@ -141,6 +142,8 @@ export async function createExpressApp() {
   app.use('/api/v1/backups', backupRouter);
   app.use('/api/v1/system', systemRouter);
   app.use('/api/v1/system', incomingRouter);
+  app.use('/api/v1/client-events', clientEventsRouter);
+  app.use('/api/v1/support', supportRouter);
 
   // Global Error Handler
   app.use(errorHandler);

@@ -21,3 +21,8 @@ test-results/
 # Temporary scratch and investigation scripts
 scratch/
 .vercel
+
+# Staged binaries & installer outputs
+bin/
+*.exe
+src-tauri/target/
