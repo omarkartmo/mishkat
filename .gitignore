@@ -26,3 +26,6 @@ scratch/
 bin/
 *.exe
 src-tauri/target/
+
+# Developer Support Hub local persistence
+tools/developer-support-hub/support_hub_data.json

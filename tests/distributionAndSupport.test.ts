@@ -279,6 +279,47 @@ describe('MISHKAT Commercial Distribution & Support Architecture Suite', () => {
       expect(row.diagnostic_context.secret).toBe('[REDACTED]');
       expect(row.diagnostic_context.safeKey).toBe('normalValue');
     });
+
+    it('generates a robust detached updater runner script for Windows Service', () => {
+      const scriptPath = updaterService.generateDetachedUpdateScript({
+        stagingDir: path.join(serverConfig.dirs.temp, 'mock_staged'),
+        rollbackSnapshotDir: path.join(serverConfig.dirs.temp, 'mock_rollback'),
+        preUpdateBackupPath: path.join(serverConfig.dirs.temp, 'mock_backup.json'),
+      });
+
+      expect(fs.existsSync(scriptPath)).toBe(true);
+      const content = fs.readFileSync(scriptPath, 'utf8');
+      expect(content).toContain('MishkatLibraryService');
+      expect(content).toContain('net stop MishkatLibraryService');
+      expect(content).toContain('net start MishkatLibraryService');
+      expect(content).toContain('http://localhost:3000/api/v1/health');
+      expect(content).toContain(':ROLLBACK');
+      expect(content).toContain(':VERIFIED');
+
+      // Cleanup
+      fs.unlinkSync(scriptPath);
+    });
+
+    it('rejects update with mismatched SHA-256 checksum and executes 3-layer rollback', async () => {
+      // Create a temporary mock zip package
+      const tempZip = path.join(serverConfig.dirs.temp, `test_pkg_${Date.now()}.zip`);
+      fs.writeFileSync(tempZip, 'fake zip content for integrity test');
+
+      const result = await updaterService.applyCertifiedUpdate(
+        tempZip,
+        '0000000000000000000000000000000000000000000000000000000000000000'
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('فشل التحقق من سلامة الحزمة');
+      const status = updaterService.getStatus();
+      expect(status.state).toBe('rolled_back');
+      expect(status.lastBackupPath).toBeDefined();
+
+      // Cleanup
+      if (fs.existsSync(tempZip)) fs.unlinkSync(tempZip);
+    });
   });
 });
+
 

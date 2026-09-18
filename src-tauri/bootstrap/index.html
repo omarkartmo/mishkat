@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MISHKAT Student — الاتصال بالخادم المركزي</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #111726;
+      --border: #1e293b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+      text-align: center;
+    }
+    .logo {
+      font-size: 40px;
+      margin-bottom: 12px;
+      display: inline-block;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #ffffff;
+    }
+    p.subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 24px;
+      background: #1e1b4b;
+      color: #a5b4fc;
+      border: 1px solid #312e81;
+    }
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #a5b4fc;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .form-group {
+      text-align: right;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      direction: ltr;
+      text-align: left;
+      font-family: monospace;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus {
+      border-color: var(--primary);
+    }
+    .btn {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .btn:hover {
+      background: var(--primary-hover);
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .msg-box {
+      margin-top: 16px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+      text-align: right;
+      line-height: 1.4;
+    }
+    .msg-error {
+      display: block;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+    .msg-success {
+      display: block;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+    }
+    .footer-note {
+      margin-top: 24px;
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">📖</div>
+    <h1>نظام المشكاة — تطبيق الطالب</h1>
+    <p class="subtitle">بيئة المطالعة والبحث الآمنة المتصلة بخادم المكتبة المدرسية</p>
+
+    <div id="statusBadge" class="status-badge">
+      <span class="spinner"></span>
+      <span id="statusText">جاري فحص الاتصال بالخادم...</span>
+    </div>
+
+    <div id="configForm" style="display: none;">
+      <div class="form-group">
+        <label for="serverInput">عنوان خادم المكتبة المركزي (Server URL):</label>
+        <input type="text" id="serverInput" placeholder="http://192.168.1.100:3000" spellcheck="false" autocomplete="off" />
+      </div>
+
+      <button id="connectBtn" class="btn" onclick="testAndConnect()">
+        <span>فحص الاتصال والربط</span>
+      </button>
+
+      <div id="msgBox" class="msg-box"></div>
+    </div>
+
+    <div class="footer-note">
+      يتم تشغيل واجهة النظام وقواعد البيانات مباشرة من الخادم المركزي داخل الشبكة المحلية (LAN).
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_SERVER_URL = 'http://localhost:3000';
+    const STORAGE_KEY = 'mishkat_institution_server_url';
+
+    function getNormalizedUrl(input) {
+      let url = (input || '').trim();
+      if (!url) return DEFAULT_SERVER_URL;
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'http://' + url;
+      }
+      return url.replace(/\/+$/, '');
+    }
+
+    async function probeServer(url) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3500);
+      try {
+        const res = await fetch(url + '/api/v1/health', {
+          signal: controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          const data = await res.json();
+          return data && data.success === true;
+        }
+        return false;
+      } catch (e) {
+        clearTimeout(timer);
+        return false;
+      }
+    }
+
+    async function tryAutoConnect() {
+      const savedUrl = localStorage.getItem(STORAGE_KEY) || DEFAULT_SERVER_URL;
+      const normalized = getNormalizedUrl(savedUrl);
+
+      const isHealthy = await probeServer(normalized);
+      if (isHealthy) {
+        document.getElementById('statusText').innerText = 'تم الاتصال بالخادم، جاري فتح النظام...';
+        setTimeout(() => {
+          window.location.replace(normalized);
+        }, 300);
+        return;
+      }
+
+      // If default localhost fails and there is no saved URL or saved URL failed, show manual config
+      document.getElementById('statusBadge').style.display = 'none';
+      document.getElementById('configForm').style.display = 'block';
+      document.getElementById('serverInput').value = savedUrl;
+      showMsg('تعذر الاتصال التلقائي بالخادم. يرجى التأكد من تشغيل خادم المشكاة على جهاز السيرفر وإدخال عنوانه المحلي.', 'error');
+    }
+
+    async function testAndConnect() {
+      const inputVal = document.getElementById('serverInput').value;
+      const targetUrl = getNormalizedUrl(inputVal);
+      const btn = document.getElementById('connectBtn');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span><span>جاري التحقق من الخادم...</span>';
+      showMsg('جاري التحقق من عنوان الخادم وصحة الخدمة...', 'success');
+
+      const ok = await probeServer(targetUrl);
+      if (ok) {
+        localStorage.setItem(STORAGE_KEY, targetUrl);
+        showMsg('تم الاتصال بالخادم بنجاح! جاري تحويلك إلى واجهة المطالعة...', 'success');
+        setTimeout(() => {
+          window.location.replace(targetUrl);
+        }, 500);
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = '<span>فحص الاتصال والربط</span>';
+        showMsg('فشل الاتصال بالخادم (' + targetUrl + '). تأكد من تشغيل MISHKAT Server ومن سماح جدار الحماية (Firewall) بالمنفذ 3000.', 'error');
+      }
+    }
+
+    function showMsg(text, type) {
+      const box = document.getElementById('msgBox');
+      box.innerText = text;
+      box.className = 'msg-box ' + (type === 'error' ? 'msg-error' : 'msg-success');
+    }
+
+    // Auto-probe on startup
+    window.addEventListener('DOMContentLoaded', tryAutoConnect);
+  </script>
+</body>
+</html>

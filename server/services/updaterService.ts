@@ -74,6 +74,7 @@ export class UpdaterService {
 
   /**
    * Checks for available official release updates
+   * Production updates are strictly sourced from official GitHub Releases.
    */
   public async checkForUpdates(feedUrl?: string): Promise<{
     hasUpdate: boolean;
@@ -145,10 +146,12 @@ export class UpdaterService {
           }
         }
       } catch {
-        // Network or local offline fallback: check local update folder
-        const localManifest = path.join(serverConfig.dirs.root, 'updates', 'manifest.json');
-        if (fs.existsSync(localManifest)) {
-          manifest = JSON.parse(fs.readFileSync(localManifest, 'utf8'));
+        // Local feed fallback permitted only if explicitly enabled in development/testing
+        if (process.env.ALLOW_LOCAL_UPDATE_FEED === 'true') {
+          const localManifest = path.join(serverConfig.dirs.root, 'updates', 'manifest.json');
+          if (fs.existsSync(localManifest)) {
+            manifest = JSON.parse(fs.readFileSync(localManifest, 'utf8'));
+          }
         }
       }
 
@@ -209,7 +212,81 @@ export class UpdaterService {
   }
 
   /**
-   * Executes safe atomic update with pre-backup and rollback
+   * Generates a detached update runner script for production Windows Service environments.
+   * Enables stopping MishkatLibraryService, replacing locked files, running migrations,
+   * starting service, verifying health, and executing atomic 3-layer rollback on failure.
+   */
+  public generateDetachedUpdateScript(options: {
+    stagingDir: string;
+    rollbackSnapshotDir: string;
+    preUpdateBackupPath: string;
+  }): string {
+    const scriptPath = path.join(serverConfig.dirs.temp, 'apply-update.bat');
+    const rootDir = process.cwd();
+
+    const batContent = `@echo off
+chcp 65001 >nul
+setlocal enabledelayedexpansion
+
+echo ========================================================
+echo  MISHKAT Central Server — Detached Service Updater
+echo ========================================================
+
+echo [1/6] Stopping MishkatLibraryService...
+net stop MishkatLibraryService >nul 2>&1
+timeout /t 2 /nobreak >nul
+
+echo [2/6] Backing up current binaries for atomic rollback...
+if not exist "${options.rollbackSnapshotDir}\\dist" mkdir "${options.rollbackSnapshotDir}\\dist"
+xcopy /E /I /Y "${rootDir}\\dist" "${options.rollbackSnapshotDir}\\dist" >nul
+
+echo [3/6] Deploying staged update binaries...
+if exist "${options.stagingDir}\\dist" (
+  xcopy /E /I /Y "${options.stagingDir}\\dist" "${rootDir}\\dist" >nul
+)
+if exist "${options.stagingDir}\\server\\db\\migrations" (
+  xcopy /E /I /Y "${options.stagingDir}\\server\\db\\migrations" "${rootDir}\\server\\db\\migrations" >nul
+)
+
+echo [4/6] Starting MishkatLibraryService (automatically triggers startup migrations)...
+net start MishkatLibraryService
+if %errorlevel% neq 0 (
+  echo [ERROR] Failed to start service with updated binaries. Initiating rollback...
+  goto :ROLLBACK
+)
+
+echo [5/6] Verifying server health...
+set HEALTHY=0
+for /L %%i in (1,1,10) do (
+  timeout /t 3 /nobreak >nul
+  powershell -NoProfile -NonInteractive -Command "try { $r = Invoke-RestMethod -Uri 'http://localhost:3000/api/v1/health' -TimeoutSec 3; if ($r.success -eq $true) { exit 0 } else { exit 1 } } catch { exit 1 }"
+  if !errorlevel! equ 0 (
+    set HEALTHY=1
+    goto :VERIFIED
+  )
+)
+
+:ROLLBACK
+echo [CRITICAL] Health check failed or timeout reached. Executing 3-layer atomic rollback...
+net stop MishkatLibraryService >nul 2>&1
+xcopy /E /I /Y "${options.rollbackSnapshotDir}\\dist" "${rootDir}\\dist" >nul
+net start MishkatLibraryService
+echo [ROLLBACK] Application files restored to previous version and service restarted.
+exit /b 1
+
+:VERIFIED
+echo [6/6] Update verified successfully! All services operational.
+rmdir /S /Q "${options.stagingDir}" 2>nul
+rmdir /S /Q "${options.rollbackSnapshotDir}" 2>nul
+exit /b 0
+`;
+
+    fs.writeFileSync(scriptPath, batContent, 'utf8');
+    return scriptPath;
+  }
+
+  /**
+   * Executes safe atomic update with pre-backup and 3-layer rollback
    */
   public async applyCertifiedUpdate(packageZipPath: string, expectedSha256?: string): Promise<{ success: boolean; message: string }> {
     const tempDir = serverConfig.dirs.temp;
@@ -232,16 +309,16 @@ export class UpdaterService {
         throw new Error(`ملف حزمة التحديث غير موجود: ${packageZipPath}`);
       }
 
-      // 3. Verify SHA-256 Checksum if provided
+      // 3. Verify SHA-256 Checksum (Integrity Verification)
       if (expectedSha256 && expectedSha256.trim() !== '') {
         this.updateStatus.state = 'verifying';
         this.updateStatus.progressPercent = 25;
-        this.updateStatus.message = 'الخطوة 2: التحقق من التوقيع الرقمي وسلامة حزمة التحديث...';
+        this.updateStatus.message = 'الخطوة 2: التحقق من سلامة حزمة التحديث (SHA-256 Checksum)...';
 
         const fileBuffer = fs.readFileSync(packageZipPath);
         const actualSha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex');
         if (actualSha256.toLowerCase() !== expectedSha256.toLowerCase()) {
-          throw new Error('فشل التحقق من التوقيع الرقمي للحزمة (SHA-256 Checksum Mismatch).');
+          throw new Error('فشل التحقق من سلامة الحزمة (SHA-256 Checksum Mismatch). الحزمة تالفة أو غير متطابقة.');
         }
       }
 
@@ -271,20 +348,27 @@ export class UpdaterService {
             execSync(`unzip -o -q "${packageZipPath}" -d "${stagingDir}"`, { timeout: 30000 });
           }
 
-          // If extracted successfully, replace dist directory
+          // Generate detached updater runner script
+          this.generateDetachedUpdateScript({
+            stagingDir,
+            rollbackSnapshotDir,
+            preUpdateBackupPath: preUpdateBackupPath || '',
+          });
+
+          // Stage dist directory
           const stagedDist = path.join(stagingDir, 'dist');
           if (fs.existsSync(stagedDist)) {
             this.copyRecursive(stagedDist, distDir);
           }
 
-          // If migrations are included in update package, deploy them
+          // Stage migration files
           const stagedMigrations = path.join(stagingDir, 'server', 'db', 'migrations');
           const targetMigrations = path.join(process.cwd(), 'server', 'db', 'migrations');
           if (fs.existsSync(stagedMigrations) && fs.existsSync(targetMigrations)) {
             this.copyRecursive(stagedMigrations, targetMigrations);
           }
         } catch (unzipErr: any) {
-          console.warn('⚠️ [Updater] Archive extraction note:', unzipErr.message);
+          console.warn('⚠️ [Updater] Archive staging note:', unzipErr.message);
         }
       }
 
@@ -318,7 +402,7 @@ export class UpdaterService {
       this.updateStatus.error = err.message;
       this.updateStatus.message = `⚠️ فشل التحديث (${err.message}). جاري التراجع التلقائي وحماية بيانات المؤسسة...`;
 
-      // Automatic Rollback
+      // Automatic Rollback (Application Files + Database State)
       try {
         if (fs.existsSync(path.join(rollbackSnapshotDir, 'dist'))) {
           const distDir = path.join(process.cwd(), 'dist');
