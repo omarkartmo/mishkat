@@ -12,5 +12,5 @@ echo       MISHKAT Developer Support Hub & Dashboard
 echo ========================================================
 echo.
 
-node index.js
+node index.cjs
 pause
