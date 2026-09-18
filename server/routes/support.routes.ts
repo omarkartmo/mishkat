@@ -1,6 +1,8 @@
+import path from 'path';
 import { Router, Request, Response } from 'express';
 import { supportAgentService } from '../services/supportAgentService';
 import { updaterService } from '../services/updaterService';
+import { serverConfig } from '../config';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 
@@ -180,14 +182,20 @@ supportRouter.post('/updater/check', authenticateToken, requireRole('admin'), as
 supportRouter.post('/updater/apply', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const { packageZipPath, expectedSha256 } = req.body;
-    if (!packageZipPath) {
+    if (!packageZipPath || typeof packageZipPath !== 'string') {
       return res.status(400).json({
         success: false,
         error: { message: 'packageZipPath is required to apply update' },
       });
     }
 
-    const result = await updaterService.applyCertifiedUpdate(packageZipPath, expectedSha256);
+    // Resolve relative filenames securely into controlled temporary update directory
+    let targetZipPath = packageZipPath.trim();
+    if (!path.isAbsolute(targetZipPath)) {
+      targetZipPath = path.join(serverConfig.dirs.temp, path.basename(targetZipPath));
+    }
+
+    const result = await updaterService.applyCertifiedUpdate(targetZipPath, expectedSha256);
 
     return res.status(result.success ? 200 : 500).json({
       success: result.success,

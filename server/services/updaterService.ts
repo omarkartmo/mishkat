@@ -299,12 +299,28 @@ exit /b 0
       this.updateStatus.progressPercent = 10;
       this.updateStatus.message = 'الخطوة 1: إنشاء نسخة احتياطية فورية قبل تطبيق التحديث...';
 
-      // 1. Mandatory Safety Pre-Update Backup
+      // 1. Enforce controlled staging directory containment (Prevent path traversal and arbitrary file attacks)
+      const allowedBaseDirs = [
+        path.resolve(serverConfig.dirs.temp),
+        path.resolve(serverConfig.dirs.root, 'updates'),
+      ];
+      const resolvedPackagePath = path.resolve(packageZipPath);
+      const isInsideAllowed = allowedBaseDirs.some(
+        (dir) => resolvedPackagePath.startsWith(dir + path.sep) || resolvedPackagePath === dir
+      );
+      if (!isInsideAllowed) {
+        throw new Error('مسار حزمة التحديث غير مصرح به. يجب أن تكون الحزمة داخل مجلد التحديثات المخصص.');
+      }
+      if (!packageZipPath.toLowerCase().endsWith('.zip')) {
+        throw new Error('نوع ملف التحديث غير صالح. الحزم المعتمدة يجب أن تكون بصيغة .zip فقط.');
+      }
+
+      // 2. Mandatory Safety Pre-Update Backup
       const backupResult = await createDatabaseBackup('SYSTEM_UPDATER', 'pre_restore');
       preUpdateBackupPath = backupResult.filePath;
       this.updateStatus.lastBackupPath = preUpdateBackupPath;
 
-      // 2. Verify package file exists
+      // 3. Verify package file exists
       if (!fs.existsSync(packageZipPath)) {
         throw new Error(`ملف حزمة التحديث غير موجود: ${packageZipPath}`);
       }

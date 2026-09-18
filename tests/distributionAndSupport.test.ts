@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+import { execSync } from 'child_process';
 import { ClientEventSanitizer } from '../src/services/telemetry/clientEventSanitizer';
 import { ClientEventQueue } from '../src/services/telemetry/clientEventQueue';
 import { supportAgentService } from '../server/services/supportAgentService';
@@ -301,7 +303,7 @@ describe('MISHKAT Commercial Distribution & Support Architecture Suite', () => {
     });
 
     it('rejects update with mismatched SHA-256 checksum and executes 3-layer rollback', async () => {
-      // Create a temporary mock zip package
+      // Create a temporary mock zip package in controlled temp directory
       const tempZip = path.join(serverConfig.dirs.temp, `test_pkg_${Date.now()}.zip`);
       fs.writeFileSync(tempZip, 'fake zip content for integrity test');
 
@@ -318,6 +320,57 @@ describe('MISHKAT Commercial Distribution & Support Architecture Suite', () => {
 
       // Cleanup
       if (fs.existsSync(tempZip)) fs.unlinkSync(tempZip);
+    });
+
+    it('rejects update package paths outside controlled staging directory (Path Traversal Defense)', async () => {
+      const evilPath = path.join(process.cwd(), '..', 'evil_update.zip');
+      const result = await updaterService.applyCertifiedUpdate(evilPath);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('مسار حزمة التحديث غير مصرح به');
+    });
+
+    it('rejects non-zip files as update packages', async () => {
+      const exePath = path.join(serverConfig.dirs.temp, 'malicious.exe');
+      fs.writeFileSync(exePath, 'not a zip');
+
+      const result = await updaterService.applyCertifiedUpdate(exePath);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('نوع ملف التحديث غير صالح');
+
+      if (fs.existsSync(exePath)) fs.unlinkSync(exePath);
+    });
+
+    it('successfully processes a valid update archive with integrity verification', async () => {
+      const stagingSourceDir = path.join(serverConfig.dirs.temp, `test_src_${Date.now()}`);
+      const stagingDist = path.join(stagingSourceDir, 'dist');
+      fs.mkdirSync(stagingDist, { recursive: true });
+      fs.writeFileSync(path.join(stagingDist, 'test_update_marker.txt'), 'v1.0.1-verified');
+
+      const validZip = path.join(serverConfig.dirs.temp, `valid_update_${Date.now()}.zip`);
+      
+      // Create valid zip archive using PowerShell
+      execSync(`powershell.exe -NoProfile -NonInteractive -Command "Compress-Archive -Path '${stagingSourceDir}\\*' -DestinationPath '${validZip}' -Force"`);
+
+      const fileBuffer = fs.readFileSync(validZip);
+      const validSha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+      const result = await updaterService.applyCertifiedUpdate(validZip, validSha256);
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('تم تطبيق التحديث بنجاح');
+      const status = updaterService.getStatus();
+      expect(status.state).toBe('completed');
+      expect(status.progressPercent).toBe(100);
+
+      // Verify marker was deployed
+      const deployedMarker = path.join(process.cwd(), 'dist', 'test_update_marker.txt');
+      expect(fs.existsSync(deployedMarker)).toBe(true);
+
+      // Cleanup
+      if (fs.existsSync(deployedMarker)) fs.unlinkSync(deployedMarker);
+      if (fs.existsSync(validZip)) fs.unlinkSync(validZip);
+      if (fs.existsSync(stagingSourceDir)) fs.rmSync(stagingSourceDir, { recursive: true, force: true });
     });
   });
 });
