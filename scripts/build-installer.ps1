@@ -43,6 +43,27 @@ if ($NodeExe -and (Test-Path $NodeExe)) {
     Write-Host "  ✓ Portable Node.js runtime staged: bin/node.exe" -ForegroundColor Green
 }
 
+# 3.1 Stage Portable NSSM in bin/
+$NssmExe = Join-Path $BinDir "nssm.exe"
+if (-not (Test-Path $NssmExe)) {
+    Write-Host "  -> Staging portable NSSM service manager..." -ForegroundColor DarkCyan
+    $NssmZip = Join-Path $BinDir "nssm.zip"
+    $NssmTempDir = Join-Path $BinDir "nssm_temp"
+    curl.exe -s -L -o $NssmZip "https://nssm.cc/release/nssm-2.24.zip"
+    if (Test-Path $NssmZip) {
+        Expand-Archive -Path $NssmZip -DestinationPath $NssmTempDir -Force
+        $ExtractedNssm = Join-Path $NssmTempDir "nssm-2.24\win64\nssm.exe"
+        if (Test-Path $ExtractedNssm) {
+            Copy-Item $ExtractedNssm $NssmExe -Force
+            Write-Host "  ✓ Portable NSSM ready: bin/nssm.exe" -ForegroundColor Green
+        }
+        Remove-Item $NssmZip -Force -ErrorAction SilentlyContinue
+        Remove-Item $NssmTempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+} else {
+    Write-Host "  ✓ Portable NSSM ready: bin/nssm.exe" -ForegroundColor Green
+}
+
 # 4. Check for NSIS Compiler (makensis)
 Write-Host "[4/5] Checking for NSIS Compiler..." -ForegroundColor Yellow
 $MakeNsisPaths = @(

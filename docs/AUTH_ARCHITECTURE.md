@@ -6,7 +6,7 @@
 In accordance with the Mishkat centralized client-server model:
 
 1. **Server Authoritative**: The Central Mishkat Server is the sole entity authorized to verify credentials, hash passwords, manage account locks, and issue authentication tokens.
-2. **Zero Client-Side Databases for Auth**: The client application (React SPA / Electron renderer) does not maintain local password hashes, local user tables, or local mock credentials.
+2. **Zero Client-Side Databases for Auth**: The client application (React SPA / Tauri 2 Client) does not maintain local password hashes, local user tables, or local mock credentials.
 3. **No Silent Local Fallback**: If the Central Server is unreachable, authentication strictly fails with a clear network message (`تعذر الاتصال بالخادم المركزي`). The client never authenticates offline against stale memory or local databases.
 4. **Stateless JWT Session Verification**: Client authentication state is governed by a digitally signed JWT token issued by the Central Server and verified on every server request.
 

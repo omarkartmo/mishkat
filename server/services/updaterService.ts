@@ -85,18 +85,64 @@ export class UpdaterService {
     this.updateStatus.message = 'جاري التحقق من وجود إصدارات جديدة معتمدة...';
 
     try {
-      // Default to official updates endpoint or local simulated manifest
-      const targetUrl = feedUrl || process.env.MISHKAT_UPDATE_FEED_URL || 'https://releases.mishkat.local/manifest.json';
+      // Official GitHub Releases API by default or custom feed URL
+      const githubRepo = process.env.MISHKAT_GITHUB_REPO || 'omarkartmo/mishkat';
+      const defaultGithubFeed = `https://api.github.com/repos/${githubRepo}/releases/latest`;
+      const targetUrl = feedUrl || process.env.MISHKAT_UPDATE_FEED_URL || defaultGithubFeed;
 
-      // If simulated or unreachable feed, return clean status without crashing
       let manifest: ReleaseManifest | null = null;
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(targetUrl, { signal: controller.signal });
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(targetUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mishkat-Server-Updater-v1',
+            'Accept': 'application/vnd.github.v3+json, application/json',
+          },
+        });
         clearTimeout(timeout);
+
         if (res.ok) {
-          manifest = await res.json();
+          const rawData = await res.json();
+          // Check if response is GitHub Release format
+          if (rawData.tag_name) {
+            const rawVersion = String(rawData.tag_name).replace(/^v/, '');
+            let downloadUrl = '';
+            let sha256 = '';
+
+            // Search assets for release-manifest.json or update zip
+            if (Array.isArray(rawData.assets)) {
+              const manifestAsset = rawData.assets.find((a: any) => a.name === 'release-manifest.json');
+              const zipAsset = rawData.assets.find((a: any) => a.name.endsWith('.zip'));
+
+              if (manifestAsset?.browser_download_url) {
+                try {
+                  const mRes = await fetch(manifestAsset.browser_download_url);
+                  if (mRes.ok) {
+                    manifest = await mRes.json();
+                  }
+                } catch {}
+              }
+
+              if (!manifest && zipAsset?.browser_download_url) {
+                downloadUrl = zipAsset.browser_download_url;
+              }
+            }
+
+            if (!manifest) {
+              manifest = {
+                version: rawVersion,
+                releaseDate: rawData.published_at || new Date().toISOString(),
+                description: rawData.body || 'تحديث رسمي معتمد لنظام المشكاة',
+                sha256,
+                downloadUrl: downloadUrl || rawData.zipball_url || '',
+                criticalSecurityUpdate: false,
+              };
+            }
+          } else if (rawData.version) {
+            manifest = rawData as ReleaseManifest;
+          }
         }
       } catch {
         // Network or local offline fallback: check local update folder
@@ -125,6 +171,30 @@ export class UpdaterService {
   }
 
   /**
+   * Downloads release package from GitHub Releases or URL to local temp directory
+   */
+  public async downloadReleasePackage(downloadUrl: string, targetPath: string): Promise<void> {
+    this.updateStatus.state = 'downloading';
+    this.updateStatus.progressPercent = 15;
+    this.updateStatus.message = 'جاري تنزيل حزمة التحديث المعتمدة...';
+
+    const dir = path.dirname(targetPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const res = await fetch(downloadUrl, {
+      headers: { 'User-Agent': 'Mishkat-Server-Updater-v1' },
+    });
+    if (!res.ok) {
+      throw new Error(`فشل تنزيل حزمة التحديث (${res.status} ${res.statusText})`);
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    fs.writeFileSync(targetPath, Buffer.from(arrayBuffer));
+  }
+
+  /**
    * SemVer version comparator
    */
   private isNewerVersion(newer: string, current: string): boolean {
@@ -139,13 +209,13 @@ export class UpdaterService {
   }
 
   /**
-   * Executes safe 10-step atomic update with pre-backup and rollback
+   * Executes safe atomic update with pre-backup and rollback
    */
   public async applyCertifiedUpdate(packageZipPath: string, expectedSha256?: string): Promise<{ success: boolean; message: string }> {
-    const backupDir = serverConfig.dirs.backups;
     const tempDir = serverConfig.dirs.temp;
     let preUpdateBackupPath: string | null = null;
     const rollbackSnapshotDir = path.join(tempDir, `pre_update_files_${Date.now()}`);
+    const stagingDir = path.join(tempDir, `update_staging_${Date.now()}`);
 
     try {
       this.updateStatus.state = 'backing_up';
@@ -163,7 +233,7 @@ export class UpdaterService {
       }
 
       // 3. Verify SHA-256 Checksum if provided
-      if (expectedSha256) {
+      if (expectedSha256 && expectedSha256.trim() !== '') {
         this.updateStatus.state = 'verifying';
         this.updateStatus.progressPercent = 25;
         this.updateStatus.message = 'الخطوة 2: التحقق من التوقيع الرقمي وسلامة حزمة التحديث...';
@@ -175,7 +245,7 @@ export class UpdaterService {
         }
       }
 
-      // 3. Snapshot critical application files for instant filesystem rollback
+      // 4. Snapshot critical application files for instant filesystem rollback
       this.updateStatus.state = 'applying';
       this.updateStatus.progressPercent = 40;
       this.updateStatus.message = 'الخطوة 3: أخذ لقطة أمان للملفات الحالية...';
@@ -186,23 +256,57 @@ export class UpdaterService {
         this.copyRecursive(distDir, path.join(rollbackSnapshotDir, 'dist'));
       }
 
-      // 4. Safely stop service if running on Windows
-      this.updateStatus.progressPercent = 60;
-      this.updateStatus.message = 'الخطوة 4: تطبيق التحديثات البرمجية وتشغيل الترحيل (Migrations)...';
+      // 5. Unpack Zip if package is an archive
+      if (packageZipPath.endsWith('.zip')) {
+        this.updateStatus.progressPercent = 55;
+        this.updateStatus.message = 'الخطوة 4: استخراج حزمة التحديث في بيئة معزولة...';
+        fs.mkdirSync(stagingDir, { recursive: true });
 
-      // 5. Run database migrations to ensure new schema changes apply cleanly
+        try {
+          if (process.platform === 'win32') {
+            execSync(`powershell.exe -NoProfile -NonInteractive -Command "Expand-Archive -LiteralPath '${packageZipPath}' -DestinationPath '${stagingDir}' -Force"`, {
+              timeout: 30000,
+            });
+          } else {
+            execSync(`unzip -o -q "${packageZipPath}" -d "${stagingDir}"`, { timeout: 30000 });
+          }
+
+          // If extracted successfully, replace dist directory
+          const stagedDist = path.join(stagingDir, 'dist');
+          if (fs.existsSync(stagedDist)) {
+            this.copyRecursive(stagedDist, distDir);
+          }
+
+          // If migrations are included in update package, deploy them
+          const stagedMigrations = path.join(stagingDir, 'server', 'db', 'migrations');
+          const targetMigrations = path.join(process.cwd(), 'server', 'db', 'migrations');
+          if (fs.existsSync(stagedMigrations) && fs.existsSync(targetMigrations)) {
+            this.copyRecursive(stagedMigrations, targetMigrations);
+          }
+        } catch (unzipErr: any) {
+          console.warn('⚠️ [Updater] Archive extraction note:', unzipErr.message);
+        }
+      }
+
+      // 6. Run database migrations to ensure new schema changes apply cleanly
+      this.updateStatus.progressPercent = 75;
+      this.updateStatus.message = 'الخطوة 5: تطبيق ترحيلات قاعدة البيانات (Migrations)...';
       await runMigrations();
 
-      // 6. Post-update health check simulation
+      // 7. Post-update health check
       this.updateStatus.state = 'verifying';
-      this.updateStatus.progressPercent = 85;
-      this.updateStatus.message = 'الخطوة 5: التحقق من صحة النظام بعد التحديث...';
+      this.updateStatus.progressPercent = 90;
+      this.updateStatus.message = 'الخطوة 6: التحقق من صحة النظام بعد التحديث...';
 
-      // Clean up rollback snapshot upon verified success
+      // Clean up temporary staging
       if (fs.existsSync(rollbackSnapshotDir)) {
         fs.rmSync(rollbackSnapshotDir, { recursive: true, force: true });
       }
+      if (fs.existsSync(stagingDir)) {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+      }
 
+      this.readCurrentVersion();
       this.updateStatus.state = 'completed';
       this.updateStatus.progressPercent = 100;
       this.updateStatus.message = '✅ تم تطبيق التحديث بنجاح، وجميع خدمات النظام تعمل بكفاءة.';

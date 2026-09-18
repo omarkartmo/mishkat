@@ -3,7 +3,7 @@
 
 ## 1. Overview & Data Ownership
 
-In accordance with Phase 1.7.3-A, **Categories** are 100% server-authoritative. The client application (Electron student/admin workstation) owns no category database and performs no persistent local caching.
+In accordance with Phase 1.7.3-A, **Categories** are 100% server-authoritative. The client application (Tauri student workstation / browser admin) owns no category database and performs no persistent local caching.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐

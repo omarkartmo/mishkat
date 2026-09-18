@@ -180,13 +180,16 @@ Section "MISHKAT Core Installation" SecCore
     SetOutPath "$INSTDIR"
     File "..\package.json"
 
-    ; Ensure .env exists with strong random JWT_SECRET if new install
+    ; Ensure .env exists with unique cryptographically strong JWT_SECRET if new install
     ${Unless} ${FileExists} "$INSTDIR\.env"
-      FileOpen $0 "$INSTDIR\.env" w
-      FileWrite $0 "JWT_SECRET=0f8a713121c4b8f65443bc1d546e2777ece3be3c4163917f58d079a5a41ed569bd3834872203e8eaaccee6cdadd4637a$\r$\n"
-      FileWrite $0 "PORT=3000$\r$\n"
-      FileWrite $0 "NODE_ENV=production$\r$\n"
-      FileClose $0
+      nsExec::Exec '"$INSTDIR\bin\node.exe" -e "const fs=require(\"fs\"), crypto=require(\"crypto\"); fs.writeFileSync(\"$INSTDIR\\.env\", \"JWT_SECRET=\" + crypto.randomBytes(32).toString(\"hex\") + \"\r\nPORT=3000\r\nNODE_ENV=production\r\n\");"'
+      ; Fallback if node execution encountered error
+      ${Unless} ${FileExists} "$INSTDIR\.env"
+        FileOpen $0 "$INSTDIR\.env" w
+        FileWrite $0 "PORT=3000$\r$\n"
+        FileWrite $0 "NODE_ENV=production$\r$\n"
+        FileClose $0
+      ${EndUnless}
     ${EndUnless}
 
     ; Configure Windows Service via NSSM

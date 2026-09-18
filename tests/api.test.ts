@@ -1018,11 +1018,14 @@ describe('11. Backup, Restore & Disaster Recovery (Phase 15.3 & 15.3.1)', () => 
 
     // Explicit non-application / infrastructure / audit tables
     const infrastructureAndAuditTables = new Set([
-      'schema_migrations', // migration version control
-      'roles',             // static RBAC seed data
-      'permissions',       // static RBAC seed data
-      'role_permissions',  // static RBAC seed data
-      'audit_logs',        // append-only compliance audit trail (intentionally preserved across restore)
+      'schema_migrations',       // migration version control
+      'roles',                   // static RBAC seed data
+      'permissions',             // static RBAC seed data
+      'role_permissions',        // static RBAC seed data
+      'audit_logs',              // append-only compliance audit trail (intentionally preserved across restore)
+      'connected_clients',       // client station heartbeat registry
+      'client_telemetry_events', // diagnostic telemetry logs
+      'support_outbound_queue',  // outbound support dispatch queue
     ]);
 
     const persistentAppTables = allDbTables.filter((t: string) => !infrastructureAndAuditTables.has(t));

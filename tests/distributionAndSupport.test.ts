@@ -227,4 +227,58 @@ describe('MISHKAT Commercial Distribution & Support Architecture Suite', () => {
       }
     });
   });
+
+  // =========================================================================
+  // 7. Outbound Support Queue, Idempotency & Privacy Protection
+  // =========================================================================
+  describe('7. Outbound Support Queue & Reliable Reporting', () => {
+    it('provisions unique institution identity and cryptographic support keys', () => {
+      const identity = supportAgentService.getInstitutionIdentity();
+      expect(identity.institutionId).toBeDefined();
+      expect(identity.installationId).toBeDefined();
+      expect(identity.supportSecretKey).toBeDefined();
+      expect(identity.supportSecretKey.startsWith('msk_')).toBe(true);
+    });
+
+    it('enqueues diagnostic reports with deep PII sanitization and deduplication', async () => {
+      const sensitivePassword = 'superSecretPassword123';
+      const fakeJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.doNotLeakThisSignature1234567890';
+      
+      const reportId = await supportAgentService.enqueueOutboundReport({
+        sourceType: 'server',
+        component: 'database_layer',
+        errorType: 'connection_retry_timeout',
+        errorCode: 'DB_TIMEOUT',
+        severity: 'critical',
+        message: `Database connection failed with password=${sensitivePassword} and token=${fakeJwt}`,
+        stackTrace: `Error at pool.ts:45\nBearer ${fakeJwt}`,
+        diagnosticContext: {
+          secret: 'confidentialValue',
+          safeKey: 'normalValue',
+        },
+      });
+
+      expect(reportId).toBeDefined();
+
+      const summary = await supportAgentService.getOutboundQueueSummary();
+      expect(summary.totalCount).toBeGreaterThan(0);
+      expect(summary.pendingCount).toBeGreaterThan(0);
+
+      // Verify sanitized storage in database
+      const { rows } = await db.query(
+        'SELECT * FROM support_outbound_queue WHERE report_id = $1',
+        [reportId]
+      );
+
+      expect(rows.length).toBe(1);
+      const row = rows[0];
+      expect(row.sanitized_message).not.toContain(sensitivePassword);
+      expect(row.sanitized_message).toContain('[REDACTED_PASSWORD]');
+      expect(row.sanitized_message).not.toContain(fakeJwt);
+      expect(row.sanitized_message).toContain('[REDACTED_JWT]');
+      expect(row.diagnostic_context.secret).toBe('[REDACTED]');
+      expect(row.diagnostic_context.safeKey).toBe('normalValue');
+    });
+  });
 });
+

@@ -534,6 +534,235 @@ export class SupportAgentService {
       createdAt: r.created_at,
     }));
   }
+
+  /**
+   * Retrieves or provisions unique institution identity & cryptographic support credentials
+   */
+  public getInstitutionIdentity(): { institutionId: string; installationId: string; supportSecretKey: string } {
+    const secretsDir = path.join(serverConfig.dirs.root, 'secrets');
+    const identityFile = path.join(secretsDir, 'institution.json');
+
+    try {
+      if (fs.existsSync(identityFile)) {
+        return JSON.parse(fs.readFileSync(identityFile, 'utf8'));
+      }
+    } catch {}
+
+    // First-time provisioning
+    if (!fs.existsSync(secretsDir)) {
+      fs.mkdirSync(secretsDir, { recursive: true });
+    }
+
+    const newIdentity = {
+      institutionId: process.env.MISHKAT_INSTITUTION_ID || 'INST-' + crypto.randomBytes(4).toString('hex').toUpperCase(),
+      installationId: 'INS-' + crypto.randomBytes(8).toString('hex'),
+      supportSecretKey: 'msk_' + crypto.randomBytes(24).toString('hex'),
+    };
+
+    try {
+      fs.writeFileSync(identityFile, JSON.stringify(newIdentity, null, 2), 'utf8');
+    } catch (e: any) {
+      console.warn('⚠️ [SupportAgent] Could not write institution identity:', e.message);
+    }
+
+    return newIdentity;
+  }
+
+  /**
+   * Enqueues an error or diagnostic report into the persistent outbound queue
+   */
+  public async enqueueOutboundReport(report: {
+    reportId?: string;
+    sourceType?: 'client' | 'server';
+    clientDeviceId?: string;
+    userRole?: string;
+    component: string;
+    errorType: string;
+    errorCode: string;
+    severity?: 'critical' | 'warning' | 'info';
+    message: string;
+    stackTrace?: string;
+    diagnosticContext?: Record<string, any>;
+  }): Promise<string> {
+    const identity = this.getInstitutionIdentity();
+    const reportId = report.reportId || `rep_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const sourceType = report.sourceType || 'server';
+    const severity = report.severity || 'warning';
+    const sanitizedMsg = this.sanitizeText(report.message);
+    const sanitizedStack = report.stackTrace ? this.sanitizeText(report.stackTrace).slice(0, 4000) : null;
+    const sanitizedContext = JSON.stringify(this.sanitizeMetadata(report.diagnosticContext));
+
+    const appVersion = (process.env.npm_package_version || '1.0.0').slice(0, 50);
+
+    try {
+      await db.query(
+        `INSERT INTO support_outbound_queue (
+           report_id, institution_id, installation_id, app_version,
+           source_type, client_device_id, user_role, component,
+           error_type, error_code, severity, sanitized_message,
+           sanitized_stack_trace, diagnostic_context, status, next_retry_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, 'pending', CURRENT_TIMESTAMP)
+         ON CONFLICT (report_id) DO NOTHING`,
+        [
+          reportId,
+          identity.institutionId,
+          identity.installationId,
+          appVersion,
+          sourceType,
+          report.clientDeviceId || null,
+          report.userRole || 'system',
+          report.component,
+          report.errorType,
+          report.errorCode,
+          severity,
+          sanitizedMsg,
+          sanitizedStack,
+          sanitizedContext,
+        ]
+      );
+    } catch (err: any) {
+      console.warn('⚠️ [SupportAgent] Enqueue outbound report notice:', err.message);
+    }
+
+    return reportId;
+  }
+
+  /**
+   * Flushes pending reports from outbound queue to the Developer Support API
+   * Applies Exponential Backoff, Idempotent Delivery, and ACK verification.
+   */
+  public async flushOutboundQueue(apiEndpoint?: string): Promise<{ sent: number; failed: number }> {
+    const targetUrl = apiEndpoint || process.env.MISHKAT_SUPPORT_API_URL;
+    if (!targetUrl) {
+      // Offline / Developer endpoint not configured: reports remain safely queued on disk
+      return { sent: 0, failed: 0 };
+    }
+
+    const identity = this.getInstitutionIdentity();
+
+    // Fetch up to 20 pending or retryable reports
+    const { rows } = await db.query(`
+      SELECT * FROM support_outbound_queue
+      WHERE (status = 'pending' OR status = 'failed')
+        AND next_retry_at <= CURRENT_TIMESTAMP
+      ORDER BY created_at ASC
+      LIMIT 20
+    `);
+
+    if (rows.length === 0) {
+      return { sent: 0, failed: 0 };
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const row of rows) {
+      // Mark as sending
+      await db.query(
+        `UPDATE support_outbound_queue SET status = 'sending', last_attempt_at = CURRENT_TIMESTAMP, attempts_count = attempts_count + 1 WHERE report_id = $1`,
+        [row.report_id]
+      );
+
+      try {
+        const payload = {
+          reportId: row.report_id,
+          institutionId: row.institution_id,
+          installationId: row.installation_id,
+          appVersion: row.app_version,
+          sourceType: row.source_type,
+          clientDeviceId: row.client_device_id,
+          userRole: row.user_role,
+          component: row.component,
+          errorType: row.error_type,
+          errorCode: row.error_code,
+          severity: row.severity,
+          sanitizedMessage: row.sanitized_message,
+          sanitizedStackTrace: row.sanitized_stack_trace,
+          diagnosticContext: row.diagnostic_context,
+          timestamp: row.created_at,
+        };
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Institution-Id': identity.institutionId,
+            'X-Installation-Id': identity.installationId,
+            'X-Support-Key': identity.supportSecretKey,
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          await db.query(
+            `UPDATE support_outbound_queue SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE report_id = $1`,
+            [row.report_id]
+          );
+          sent++;
+        } else {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+      } catch (err: any) {
+        failed++;
+        // Calculate exponential backoff delay: 1m, 5m, 15m, 30m, 60m
+        const attempts = Number(row.attempts_count) + 1;
+        const delaysMinutes = [1, 5, 15, 30, 60];
+        const delay = delaysMinutes[Math.min(attempts - 1, delaysMinutes.length - 1)];
+
+        await db.query(
+          `UPDATE support_outbound_queue 
+           SET status = 'failed', 
+               next_retry_at = CURRENT_TIMESTAMP + INTERVAL '${delay} minutes' 
+           WHERE report_id = $1`,
+          [row.report_id]
+        );
+      }
+    }
+
+    // Opportunistically prune sent reports older than 14 days
+    await db.query(`
+      DELETE FROM support_outbound_queue 
+      WHERE status = 'sent' AND sent_at < NOW() - INTERVAL '14 days'
+    `).catch(() => {});
+
+    return { sent, failed };
+  }
+
+  /**
+   * Returns outbound support queue metrics
+   */
+  public async getOutboundQueueSummary(): Promise<{
+    pendingCount: number;
+    sentCount: number;
+    failedCount: number;
+    totalCount: number;
+  }> {
+    try {
+      const { rows } = await db.query(`
+        SELECT 
+          COUNT(*) FILTER (WHERE status = 'pending')::int as pending_count,
+          COUNT(*) FILTER (WHERE status = 'sent')::int as sent_count,
+          COUNT(*) FILTER (WHERE status = 'failed')::int as failed_count,
+          COUNT(*)::int as total_count
+        FROM support_outbound_queue
+      `);
+
+      return {
+        pendingCount: rows[0]?.pending_count || 0,
+        sentCount: rows[0]?.sent_count || 0,
+        failedCount: rows[0]?.failed_count || 0,
+        totalCount: rows[0]?.total_count || 0,
+      };
+    } catch {
+      return { pendingCount: 0, sentCount: 0, failedCount: 0, totalCount: 0 };
+    }
+  }
 }
 
 export const supportAgentService = SupportAgentService.getInstance();
+
