@@ -1,23 +1,11 @@
-use tauri::Manager;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .setup(|app| {
-            let window = app.get_webview_window("main").unwrap();
-
-            // Enforce educational controlled environment:
-            // Intercept new window requests, restrict DevTools in production
-            #[cfg(not(debug_assertions))]
-            {
-                // Disable right-click context menu in production
-                let _ = window.eval(
-                    "window.addEventListener('contextmenu', function(e) { e.preventDefault(); }, false);"
-                );
-            }
-
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running MISHKAT Student application");
+    let url = "http://localhost:3000";
+    
+    // Launch the default browser
+    if cfg!(target_os = "windows") {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", url])
+            .spawn();
+    }
 }
