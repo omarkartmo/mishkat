@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { google, drive_v3 } from 'googleapis';
+import type { drive_v3 } from 'googleapis';
 import { serverConfig } from '../config';
 import { logger } from '../utils/logger';
 
@@ -156,11 +156,27 @@ class GoogleDriveService {
   }
 
   /**
+   * Lazily loads the Google API module to avoid hard startup crashes
+   * when cloud backups are not configured or googleapis is omitted from runtime.
+   */
+  private getGoogle(): any {
+    try {
+      // Lazy load to prevent top-level require failures
+      const req = typeof __non_webpack_require__ !== 'undefined' ? __non_webpack_require__ : require;
+      const mod = req('googleapis');
+      return mod.google || mod.default?.google || mod;
+    } catch {
+      throw new Error('حزمة Google Drive API غير متوفرة في بيئة التشغيل هذه.');
+    }
+  }
+
+  /**
    * Creates an OAuth2 client instance.
    */
   public createOAuth2Client(redirectUriOverride?: string) {
     const config = this.getConfig();
     const redirectUri = redirectUriOverride || config.redirectUri;
+    const google = this.getGoogle();
     return new google.auth.OAuth2(config.clientId, config.clientSecret, redirectUri);
   }
 
@@ -210,6 +226,7 @@ class GoogleDriveService {
       logger.info('[GoogleDrive] Automatically refreshed and saved Google Drive tokens.');
     });
 
+    const google = this.getGoogle();
     return google.drive({ version: 'v3', auth: oauth2Client });
   }
 

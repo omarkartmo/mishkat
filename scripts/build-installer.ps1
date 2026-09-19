@@ -20,6 +20,13 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Production build failed!"
 }
 
+Write-Host "  -> Building Tauri Student App..." -ForegroundColor Yellow
+npx @tauri-apps/cli build
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Tauri Student build failed. Aborting installer build!"
+}
+Write-Host "  ✓ Tauri Student build complete." -ForegroundColor Green
+
 # 2. Verify Output Artifacts
 Write-Host "[2/5] Verifying Production Artifacts..." -ForegroundColor Yellow
 $ServerBundle = Join-Path $ProjectRoot "dist\server.cjs"
@@ -63,6 +70,30 @@ if (-not (Test-Path $NssmExe)) {
 } else {
     Write-Host "  ✓ Portable NSSM ready: bin/nssm.exe" -ForegroundColor Green
 }
+
+# 3.2 Stage Minimal Server Runtime Dependencies in bin/node_modules/
+Write-Host "  -> Staging production server runtime dependencies..." -ForegroundColor DarkCyan
+$BinModulesDir = Join-Path $BinDir "node_modules"
+if (-not (Test-Path $BinModulesDir)) {
+    New-Item -ItemType Directory -Path $BinModulesDir | Out-Null
+}
+
+$RequiredModules = @(
+    "dotenv", "express", "cors", "jsonwebtoken", "bcryptjs",
+    "pg", "@electric-sql", "multer"
+)
+
+foreach ($mod in $RequiredModules) {
+    $Src = Join-Path $ProjectRoot "node_modules\$mod"
+    $Dest = Join-Path $BinModulesDir $mod
+    if (Test-Path $Src) {
+        if (-not (Test-Path (Split-Path $Dest -Parent))) {
+            New-Item -ItemType Directory -Path (Split-Path $Dest -Parent) -Force | Out-Null
+        }
+        Copy-Item $Src $Dest -Recurse -Force
+    }
+}
+Write-Host "  ✓ Production runtime dependencies staged in bin/node_modules" -ForegroundColor Green
 
 # 4. Check for NSIS Compiler (makensis)
 Write-Host "[4/5] Checking for NSIS Compiler..." -ForegroundColor Yellow

@@ -4,16 +4,18 @@ import { fileURLToPath } from 'url';
 import { db } from './pool';
 
 function getMigrationsDir(): string {
-  try {
-    if (typeof __dirname !== 'undefined') {
-      return path.join(__dirname, 'migrations');
-    }
-    const filename = fileURLToPath(import.meta.url);
-    const dirname = path.dirname(filename);
-    return path.join(dirname, 'migrations');
-  } catch {
-    return path.join(process.cwd(), 'server', 'db', 'migrations');
+  const possiblePaths = [
+    path.join(process.cwd(), 'server', 'db', 'migrations'), // Dev
+    typeof __dirname !== 'undefined' ? path.join(__dirname, '..', 'server', 'db', 'migrations') : '', // Prod NSIS Installer
+    typeof __dirname !== 'undefined' ? path.join(__dirname, 'migrations') : '',
+    path.join(process.cwd(), 'dist', 'migrations')
+  ];
+
+  for (const p of possiblePaths) {
+    if (p && fs.existsSync(p)) return p;
   }
+  
+  return path.join(process.cwd(), 'server', 'db', 'migrations'); // fallback
 }
 
 export async function runMigrations(): Promise<void> {

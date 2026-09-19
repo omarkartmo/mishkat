@@ -118,6 +118,8 @@ FunctionEnd
 ; Initialization & Upgrade Detection
 ; ==============================================================================
 Function .onInit
+  StrCpy $SelectedRole "SERVER"
+  StrCpy $RemoteSupportEnabled "0"
   StrCpy $IsUpgrade "0"
   ClearErrors
   ReadRegStr $0 HKLM "Software\MISHKAT" "Install_Dir"
@@ -174,28 +176,70 @@ Section "MISHKAT Core Installation" SecCore
     SetOutPath "$INSTDIR\bin"
     File /nonfatal "..\bin\node.exe"
     File /nonfatal "..\bin\nssm.exe"
-    File /nonfatal "..\nssm.exe"
 
     ; Copy root package and configuration
     SetOutPath "$INSTDIR"
     File "..\package.json"
 
-    ; Ensure .env exists with unique cryptographically strong JWT_SECRET if new install
+    ; Copy required production server runtime dependencies
+    SetOutPath "$INSTDIR\node_modules"
+    File /r "..\bin\node_modules\*.*"
+
+    ; Ensure .env exists with unique cryptographically strong JWT_SECRET
     ${Unless} ${FileExists} "$INSTDIR\.env"
-      nsExec::Exec '"$INSTDIR\bin\node.exe" -e "const fs=require(\"fs\"), crypto=require(\"crypto\"); fs.writeFileSync(\"$INSTDIR\\.env\", \"JWT_SECRET=\" + crypto.randomBytes(32).toString(\"hex\") + \"\r\nPORT=3000\r\nNODE_ENV=production\r\n\");"'
-      ; Fallback if node execution encountered error
-      ${Unless} ${FileExists} "$INSTDIR\.env"
-        FileOpen $0 "$INSTDIR\.env" w
-        FileWrite $0 "PORT=3000$\r$\n"
-        FileWrite $0 "NODE_ENV=production$\r$\n"
+      StrCpy $1 ""
+      StrCpy $2 0
+      ${DoWhile} $2 < 8
+        System::Call 'advapi32::CryptGenRandom(i 0, i 4, *i .r3)'
+        IntFmt $4 "%08x" $3
+        StrCpy $1 "$1$4"
+        IntOp $2 $2 + 1
+      ${Loop}
+      FileOpen $0 "$INSTDIR\.env" w
+      FileWrite $0 "PORT=3000$\r$\n"
+      FileWrite $0 "NODE_ENV=production$\r$\n"
+      FileWrite $0 "JWT_SECRET=$1$\r$\n"
+      FileClose $0
+    ${Else}
+      ; If .env exists from a prior faulty install but lacks JWT_SECRET, append it
+      FileOpen $0 "$INSTDIR\.env" r
+      StrCpy $5 "0"
+      ${Do}
+        FileRead $0 $6
+        ${If} $6 == ""
+          ${ExitDo}
+        ${EndIf}
+        ${If} $6 != ""
+          ; Quick check if line starts with JWT_SECRET
+          StrCpy $7 $6 10
+          ${If} $7 == "JWT_SECRET"
+            StrCpy $5 "1"
+          ${EndIf}
+        ${EndIf}
+      ${Loop}
+      FileClose $0
+      ${If} $5 == "0"
+        StrCpy $1 ""
+        StrCpy $2 0
+        ${DoWhile} $2 < 8
+          System::Call 'advapi32::CryptGenRandom(i 0, i 4, *i .r3)'
+          IntFmt $4 "%08x" $3
+          StrCpy $1 "$1$4"
+          IntOp $2 $2 + 1
+        ${Loop}
+        FileOpen $0 "$INSTDIR\.env" a
+        FileSeek $0 0 END
+        FileWrite $0 "$\r$\nJWT_SECRET=$1$\r$\n"
         FileClose $0
-      ${EndUnless}
+      ${EndIf}
     ${EndUnless}
 
     ; Configure Windows Service via NSSM
     DetailPrint "تهيئة خدمة ويندوز الذاتية (MishkatLibraryService)..."
-    nsExec::Exec '"$INSTDIR\bin\nssm.exe" install MishkatLibraryService "$INSTDIR\bin\node.exe" "$INSTDIR\dist\server.cjs"'
+    nsExec::Exec '"$INSTDIR\bin\nssm.exe" install MishkatLibraryService "$INSTDIR\bin\node.exe" "\"$INSTDIR\dist\server.cjs\""'
+    nsExec::Exec '"$INSTDIR\bin\nssm.exe" set MishkatLibraryService Application "$INSTDIR\bin\node.exe"'
     nsExec::Exec '"$INSTDIR\bin\nssm.exe" set MishkatLibraryService AppDirectory "$INSTDIR"'
+    nsExec::Exec '"$INSTDIR\bin\nssm.exe" set MishkatLibraryService AppParameters "\"$INSTDIR\dist\server.cjs\""'
     nsExec::Exec '"$INSTDIR\bin\nssm.exe" set MishkatLibraryService DisplayName "Mishkat School Library Central Server"'
     nsExec::Exec '"$INSTDIR\bin\nssm.exe" set MishkatLibraryService Start SERVICE_AUTO_START'
     nsExec::Exec '"$INSTDIR\bin\nssm.exe" set MishkatLibraryService AppRestartDelay 5000'
@@ -268,6 +312,7 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\bin"
   RMDir /r "$INSTDIR\server"
   RMDir /r "$INSTDIR\public"
+  RMDir /r "$INSTDIR\node_modules"
   Delete "$INSTDIR\mishkat-student.exe"
   Delete "$INSTDIR\uninstall.exe"
   Delete "$INSTDIR\package.json"
