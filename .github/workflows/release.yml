@@ -38,6 +38,10 @@ jobs:
           }
           Write-Output "VERSION=$packageVersion" >> $env:GITHUB_ENV
 
+      - name: Install Dependencies
+        shell: pwsh
+        run: npm ci
+
       - name: Build and Package
         shell: pwsh
         run: .\scripts\build-update.ps1
