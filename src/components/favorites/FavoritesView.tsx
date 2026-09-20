@@ -110,7 +110,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               typeFilter === 'all'
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             الكل ({allFavorites.length})
@@ -120,7 +120,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               typeFilter === 'physical'
                 ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             ورقية ({favoritePhysical.length})
@@ -130,7 +130,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               typeFilter === 'digital'
                 ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             رقمية ({favoriteDigital.length})
@@ -140,7 +140,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
 
       {/* Search inside favorites */}
       <div className="relative">
-        <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+        <Search className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
         <input
           type="text"
           value={search}

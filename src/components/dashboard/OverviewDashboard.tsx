@@ -116,19 +116,19 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-7">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-slate-800 p-5 sm:p-7 md:p-8 shadow-xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-7 md:p-8 shadow-xl">
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
                 {currentUser.role === 'admin' ? 'لوحة تحكم المشرف المركزي' : 'بوابة الطالب والباحث'}
               </span>
-              <span className="text-xs text-slate-400 truncate max-w-[200px] sm:max-w-none">مرحباً بك، {currentUser.name}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[200px] sm:max-w-none">مرحباً بك، {currentUser.name}</span>
             </div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight leading-snug break-words">
               نظام إدارة ومطالعة المكتبة المركزية
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1.5 max-w-2xl leading-relaxed break-words">
+            <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 mt-1.5 max-w-2xl leading-relaxed break-words">
               تصفح فهارس الكتب الورقية، تابع تقدم قراءتك في قاعة المطالعة، واقرأ في المستودع الرقمي أو استورد مراجع من المكتبات العالمية المعتمدة.
             </p>
           </div>
@@ -204,8 +204,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       {/* =================================================================== */}
       {/* DIRECT IN-DASHBOARD READING PROGRESS & PHYSICAL BOOKMARKS HUB       */}
       {/* =================================================================== */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
               <span className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -213,7 +213,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               </span>
               <span>محطة متابعة القراءة والمطالعة الحالية</span>
             </h3>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               متابعة فورية لأين وصلت في قراءة الكتب الورقية بقاعة المكتبة والمستودع الرقمي
             </p>
           </div>
@@ -236,7 +236,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             </button>
             <button
               onClick={() => onNavigate('reading_workspace')}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <span>فتح المفكرة الكاملة</span>
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -252,17 +252,17 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 <BookOpen className="w-4 h-4 text-amber-400" />
                 <span>فواصل مطالعة الكتب الورقية بقاعة المكتبة ({activePhysicalBookmarks.length})</span>
               </h4>
-              <span className="text-[11px] text-slate-400 font-mono">مطالعة داخلية</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">مطالعة داخلية</span>
             </div>
 
             {activePhysicalBookmarks.length === 0 ? (
-              <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-6 text-center space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 text-center space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-400 mx-auto flex items-center justify-center">
                   <Bookmark className="w-6 h-6" />
                 </div>
                 <div className="space-y-1">
-                  <h5 className="font-bold text-slate-200 text-sm">لم تسجل فواصل مطالعة للكتب الورقية بعد</h5>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  <h5 className="font-bold text-slate-800 dark:text-slate-200 text-sm">لم تسجل فواصل مطالعة للكتب الورقية بعد</h5>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                     عندما تطالع كتاباً في قاعة المكتبة، ثبّت رقم الصفحة والباب لتعود إليه في أي وقت دون أن تنسى موضعك.
                   </p>
                 </div>
@@ -284,12 +284,12 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   return (
                     <div
                       key={bm.id}
-                      className="p-4 bg-slate-950/70 border border-amber-500/20 rounded-2xl hover:border-amber-500/40 transition-all space-y-3"
+                      className="p-4 bg-slate-50 dark:bg-slate-950/70 border border-amber-500/20 rounded-2xl hover:border-amber-500/40 transition-all space-y-3"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1 min-w-0">
                           <h5 className="font-bold text-slate-100 text-sm truncate">{bm.bookTitle}</h5>
-                          <div className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+                          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
                             {bm.bookAuthor && <span>المؤلف: {bm.bookAuthor}</span>}
                             {bm.location && (
                               <>
@@ -321,9 +321,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                           <span className="text-amber-400 font-bold">
                             وصلت لصفحة {bm.currentPage} من {bm.totalPages}
                           </span>
-                          <span className="text-slate-400">{percent}%</span>
+                          <span className="text-slate-500 dark:text-slate-400">{percent}%</span>
                         </div>
-                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-500"
                             style={{ width: `${percent}%` }}
@@ -333,14 +333,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
                       {/* Topic or Quick Note */}
                       {(bm.chapterOrTopic || bm.quickNote) && (
-                        <div className="p-2 bg-slate-900/80 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-1">
+                        <div className="p-2 bg-white dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-1">
                           {bm.chapterOrTopic && (
                             <div className="font-semibold text-amber-300/90 truncate">
                               📌 {bm.chapterOrTopic}
                             </div>
                           )}
                           {bm.quickNote && (
-                            <p className="text-slate-400 text-[11px] line-clamp-1 italic">
+                            <p className="text-slate-500 dark:text-slate-400 text-[11px] line-clamp-1 italic">
                               "{bm.quickNote}"
                             </p>
                           )}
@@ -369,13 +369,13 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             </div>
 
             {inProgressDigitalBooks.length === 0 ? (
-              <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-6 text-center space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 text-center space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 mx-auto flex items-center justify-center">
                   <Library className="w-6 h-6" />
                 </div>
                 <div className="space-y-1">
-                  <h5 className="font-bold text-slate-200 text-sm">لا توجد كتب رقمية قيد القراءة حالياً</h5>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  <h5 className="font-bold text-slate-800 dark:text-slate-200 text-sm">لا توجد كتب رقمية قيد القراءة حالياً</h5>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                     تصفح المستودع الرقمي وافتح أي كتاب بصيغة PDF أو ePub في القارئ المدمج لحفظ تقدمك تلقائياً.
                   </p>
                 </div>
@@ -393,7 +393,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   return (
                     <div
                       key={book.id}
-                      className="p-4 bg-slate-950/70 border border-emerald-500/20 rounded-2xl hover:border-emerald-500/40 transition-all space-y-3"
+                      className="p-4 bg-slate-50 dark:bg-slate-950/70 border border-emerald-500/20 rounded-2xl hover:border-emerald-500/40 transition-all space-y-3"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1 min-w-0">
@@ -403,7 +403,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                             </span>
                             <h5 className="font-bold text-slate-100 text-sm truncate">{book.title}</h5>
                           </div>
-                          <p className="text-xs text-slate-400 truncate">{book.author}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{book.author}</p>
                         </div>
 
                         <button
@@ -424,9 +424,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                           <span className="text-emerald-400 font-bold">
                             صفحة {prog.currentPage} من {prog.totalPages}
                           </span>
-                          <span className="text-slate-400">{percent}%</span>
+                          <span className="text-slate-500 dark:text-slate-400">{percent}%</span>
                         </div>
-                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
                             style={{ width: `${percent}%` }}
@@ -464,14 +464,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               {overdueLoans.slice(0, 3).map((loan) => (
                 <div
                   key={loan.id}
-                  className="flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-rose-900/40"
+                  className="flex items-center justify-between bg-white dark:bg-slate-900/80 p-3 rounded-xl border border-rose-900/40"
                 >
                   <div>
                     <div className="font-semibold text-slate-100 text-sm">{loan.bookTitle}</div>
-                    <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
                       <span className="text-rose-400 font-medium">الطالب: {loan.studentName}</span>
                       <span>•</span>
-                      <span className="font-mono text-slate-400">{loan.studentRegNumber}</span>
+                      <span className="font-mono text-slate-500 dark:text-slate-400">{loan.studentRegNumber}</span>
                       <span>•</span>
                       <span className="text-rose-400/80">استحقاق: {loan.dueDate}</span>
                     </div>
@@ -490,14 +490,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         )}
 
         {/* Active Loans Table Snapshot */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
                 <ArrowLeftRight className="w-4 h-4 text-sky-400" />
                 أحدث عمليات الإعارة الورقية الجارية
               </h3>
-              <p className="text-xs text-slate-400">متابعة الكتب المستعارة وفترات الاستحقاق والتمديد</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">متابعة الكتب المستعارة وفترات الاستحقاق والتمديد</p>
             </div>
             <button
               onClick={() => onNavigate('loans')}
@@ -517,7 +517,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               {activeLoans.slice(0, 4).map((loan) => (
                 <div
                   key={loan.id}
-                  className="flex items-center justify-between p-3 bg-slate-950/60 hover:bg-slate-950 border border-slate-800/80 rounded-xl transition-colors"
+                  className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/60 hover:bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-xl transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div
@@ -531,11 +531,11 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                       {loan.purpose === 'academic_research' ? 'بحث' : 'مطالعة'}
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-200 text-sm">{loan.bookTitle}</div>
-                      <div className="text-xs text-slate-400 flex items-center gap-2">
-                        <span className="text-slate-300">{loan.studentName}</span>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{loan.bookTitle}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <span className="text-slate-700 dark:text-slate-300">{loan.studentName}</span>
                         <span>•</span>
-                        <span>تاريخ الإرجاع: <strong className="text-slate-200">{loan.dueDate}</strong></span>
+                        <span>تاريخ الإرجاع: <strong className="text-slate-800 dark:text-slate-200">{loan.dueDate}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -626,17 +626,17 @@ const MetricCard: React.FC<MetricCardProps> = ({
           ? 'bg-rose-950/30 border-rose-800/60 hover:border-rose-600'
           : isWarning
           ? 'bg-amber-950/30 border-amber-800/60 hover:border-amber-600'
-          : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+          : 'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:border-slate-700 hover:bg-white dark:bg-slate-900'
       }`}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-slate-400">{title}</span>
-        <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800 group-hover:scale-110 transition-transform">
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{title}</span>
+        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 group-hover:scale-110 transition-transform">
           {icon}
         </div>
       </div>
       <div className="text-2xl font-bold text-slate-100 tracking-tight">{value}</div>
-      <div className="text-[11px] text-slate-400 mt-1 font-medium">{subtext}</div>
+      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">{subtext}</div>
     </div>
   );
 };

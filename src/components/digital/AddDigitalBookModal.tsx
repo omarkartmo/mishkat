@@ -173,29 +173,29 @@ export const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[150] animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
+      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-800">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
               <Upload className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-bold text-slate-100 text-base">إضافة كتاب رقمي فردي</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {step === 'upload' ? 'الخطوة ١: رفع الملف إلى الخادم المركزي' :
                  step === 'metadata' ? 'الخطوة ٢: بيانات الكتاب وتصنيفه' : 'تم الاستيراد بنجاح'}
               </p>
             </div>
           </div>
           <button onClick={onClose} disabled={isUploading || isSaving}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 cursor-pointer">
+            className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Step bar */}
-        <div className="flex items-center gap-2 px-5 py-3 bg-slate-950/50 border-b border-slate-800/60 text-xs">
+        <div className="flex items-center gap-2 px-5 py-3 bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800/60 text-xs">
           {[
             { key: 'upload', icon: <Upload className="w-3.5 h-3.5" />, label: 'رفع الملف' },
             { key: 'metadata', icon: <BookOpen className="w-3.5 h-3.5" />, label: 'البيانات' },
@@ -221,13 +221,13 @@ export const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
                 </div>
               )}
 
-              <div className="border-2 border-dashed border-slate-700 hover:border-emerald-500/60 rounded-2xl p-8 text-center space-y-3 cursor-pointer transition-colors"
+              <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500/60 rounded-2xl p-8 text-center space-y-3 cursor-pointer transition-colors"
                 onClick={() => fileInputRef.current?.click()}>
                 <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto text-emerald-400">
                   <FileText className="w-7 h-7" />
                 </div>
                 <div>
-                  <p className="text-slate-200 font-semibold text-sm">
+                  <p className="text-slate-800 dark:text-slate-200 font-semibold text-sm">
                     {selectedFile ? selectedFile.name : 'اضغط لاختيار ملف PDF أو ePub'}
                   </p>
                   {selectedFile
@@ -239,13 +239,13 @@ export const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
                   onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
               </div>
 
-              <div className="border border-slate-800 hover:border-slate-600 rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-colors"
+              <div className="border border-slate-200 dark:border-slate-800 hover:border-slate-600 rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-colors"
                 onClick={() => coverInputRef.current?.click()}>
-                <div className="w-8 h-8 bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center text-slate-400">
+                <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400">
                   <Image className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-slate-300 text-xs font-medium">{selectedCover ? selectedCover.name : 'إضافة صورة غلاف (اختياري)'}</p>
+                  <p className="text-slate-700 dark:text-slate-300 text-xs font-medium">{selectedCover ? selectedCover.name : 'إضافة صورة غلاف (اختياري)'}</p>
                   {selectedCover && <p className="text-slate-500 text-[11px]">{(selectedCover.size / 1024).toFixed(0)} KB</p>}
                 </div>
                 <span className="text-[10px] text-slate-500 shrink-0 font-mono">JPG / PNG / WebP</span>
@@ -278,10 +278,10 @@ export const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
                   <HardDrive className="w-3.5 h-3.5" />
                   <span>تأكيد استلام الخادم المركزي للملف</span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-slate-400 font-mono">
-                  <span>الحجم:</span><span className="text-slate-200">{uploadedFile.fileSize}</span>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-slate-500 dark:text-slate-400 font-mono">
+                  <span>الحجم:</span><span className="text-slate-800 dark:text-slate-200">{uploadedFile.fileSize}</span>
                   <span>SHA-256:</span><span className="text-emerald-400 truncate" title={uploadedFile.fileHash}>{uploadedFile.fileHash.substring(0, 24)}…</span>
-                  <span>المسار:</span><span className="text-slate-300 truncate" title={uploadedFile.filePath}>{uploadedFile.filePath.split(/[/\\]/).slice(-2).join('/')}</span>
+                  <span>المسار:</span><span className="text-slate-700 dark:text-slate-300 truncate" title={uploadedFile.filePath}>{uploadedFile.filePath.split(/[/\\]/).slice(-2).join('/')}</span>
                 </div>
               </div>
 
@@ -295,62 +295,62 @@ export const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
               <form onSubmit={handleSave} className="space-y-3 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">عنوان الكتاب *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">عنوان الكتاب *</label>
                     <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">المؤلف أو المحقق</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">المؤلف أو المحقق</label>
                     <input type="text" value={author} onChange={(e) => setAuthor(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">التصنيف</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">التصنيف</label>
                     <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500">
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500">
                       {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">الصيغة</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">الصيغة</label>
                     <select value={format} onChange={(e) => setFormat(e.target.value as 'pdf' | 'epub')}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500">
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500">
                       <option value="pdf">PDF</option>
                       <option value="epub">ePub</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">اللغة</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اللغة</label>
                     <input type="text" value={language} onChange={(e) => setLanguage(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">عدد الصفحات (تقريبي)</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">عدد الصفحات (تقريبي)</label>
                     <input type="number" min="1" value={pages} onChange={(e) => setPages(Number(e.target.value))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-emerald-500" />
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-emerald-500" />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">رقم ISBN (اختياري)</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">رقم ISBN (اختياري)</label>
                     <input type="text" value={isbn} onChange={(e) => setIsbn(e.target.value)} placeholder="978-..."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-emerald-500" />
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-emerald-500" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">نبذة عن الكتاب</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">نبذة عن الكتاب</label>
                   <textarea rows={3} value={summary} onChange={(e) => setSummary(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500 resize-none" />
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500 resize-none" />
                 </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800 gap-3">
+                <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 gap-3">
                   <button type="button" onClick={() => { setStep('upload'); setUploadedFile(null); }}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium text-xs cursor-pointer transition-colors">
+                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium text-xs cursor-pointer transition-colors">
                     رجوع لرفع ملف آخر
                   </button>
                   <button type="submit" disabled={isSaving}
@@ -371,7 +371,7 @@ export const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
                 <CheckCircle2 className="w-9 h-9" />
               </div>
               <h4 className="font-bold text-slate-100 text-lg">تم إضافة الكتاب بنجاح!</h4>
-              <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed">
+              <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm mx-auto leading-relaxed">
                 تم رفع الملف وتسجيل بيانات الكتاب في المستودع الرقمي المركزي. سيظهر في الفهرس الرقمي فوراً.
               </p>
             </div>

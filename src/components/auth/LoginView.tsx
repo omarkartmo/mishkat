@@ -93,7 +93,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col justify-between relative overflow-hidden font-sans selection:bg-indigo-500 selection:text-white" dir="rtl">
+    <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-100 flex flex-col justify-between relative overflow-hidden font-sans selection:bg-indigo-500 selection:text-white" dir="rtl">
       {/* Background Decorative Gradients & Grid */}
       <div className="absolute inset-0 bg-[radial-gradient(#1e1b4b_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
       <div className="absolute -top-40 -right-40 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
@@ -101,14 +101,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
 
       {/* Top Header Bar */}
       <header className="relative z-10 w-full mx-auto px-6 py-8 flex flex-col items-center justify-center text-center space-y-4">
-        <div className="w-20 h-20 rounded-3xl overflow-hidden bg-slate-900/70 backdrop-blur-md shadow-xl shadow-black/50 border border-slate-800/80 flex items-center justify-center p-2">
+        <div className="w-20 h-20 rounded-3xl overflow-hidden bg-white dark:bg-slate-900/70 backdrop-blur-md shadow-xl shadow-black/50 border border-slate-200 dark:border-slate-800/80 flex items-center justify-center p-2">
           <img src="/mishkat-logo.png" alt="المشكاة" className="w-full h-full object-contain filter drop-shadow-[0_4px_12px_rgba(212,175,55,0.3)]" />
         </div>
         <div>
           <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400 tracking-wide">
             نظام المشكاة
           </h1>
-          <p className="text-sm text-slate-400 mt-2">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
             {config.libraryName || 'المكتبة المركزية'} • {config.schoolName || 'معهد المنهاج للتربية والتعليم'}
           </p>
         </div>
@@ -116,14 +116,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
 
       {/* Main Login Card Centered Container */}
       <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6">
-        <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/60 space-y-6">
+        <div className="w-full max-w-md bg-white dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/60 space-y-6">
           {/* Card Title */}
           <div className="text-right space-y-1">
             <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
               <LogIn className="w-5 h-5 text-indigo-400" />
               <span>تسجيل الدخول</span>
             </h2>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               أدخل رقم القيد أو رمز المستخدم وكلمة المرور للدخول إلى النظام مباشرة
             </p>
           </div>
@@ -153,7 +153,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Identifier Field */}
             <div className="space-y-1.5 text-right">
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                 <span>رقم القيد / رمز المستخدم</span>
                 <span className="text-[10px] text-slate-500 font-mono">
                   مثال: STU-2026-101 أو ADM-001
@@ -166,7 +166,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="STU-2026-101 أو ADM-001"
                   disabled={lockoutSeconds > 0}
-                  className="w-full pl-4 pr-10 py-3 bg-slate-950/80 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-sm font-mono text-white placeholder-slate-600 transition-colors disabled:opacity-50"
+                  className="w-full pl-4 pr-10 py-3 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-sm font-mono text-white placeholder-slate-600 transition-colors disabled:opacity-50"
                   required
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
@@ -177,7 +177,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
 
             {/* Password Field */}
             <div className="space-y-1.5 text-right">
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                 <span>كلمة المرور</span>
                 <span className="text-[10px] text-slate-500">حساس لحالة الأحرف</span>
               </label>
@@ -188,7 +188,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
                   disabled={lockoutSeconds > 0}
-                  className="w-full pl-10 pr-10 py-3 bg-slate-950/80 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-sm font-mono text-white placeholder-slate-600 transition-colors disabled:opacity-50"
+                  className="w-full pl-10 pr-10 py-3 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-sm font-mono text-white placeholder-slate-600 transition-colors disabled:opacity-50"
                   required
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
@@ -197,7 +197,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer p-1"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:text-slate-300 cursor-pointer p-1"
                   title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

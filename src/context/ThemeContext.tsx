@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'dark';
+type Theme = 'light' | 'dark';
 
 interface ThemeContextType {
   theme: Theme;
@@ -14,22 +14,35 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setThemeState] = useState<Theme>('dark');
 
   useEffect(() => {
-    localStorage.setItem('almanara_theme', 'dark');
+    const savedTheme = localStorage.getItem('almanara_theme') as Theme | null;
+    const initialTheme = savedTheme === 'light' ? 'light' : 'dark';
+    
+    setThemeState(initialTheme);
     const root = document.documentElement;
-    root.classList.add('dark');
-    root.classList.remove('light');
+    if (initialTheme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
   }, []);
 
   const toggleTheme = () => {
-    // No-op, we only support dark mode now
+    setTheme((prevTheme) => (prevTheme === 'dark' ? 'light' : 'dark'));
   };
 
   const setTheme = (t: Theme) => {
-    // No-op
+    setThemeState(t);
+    localStorage.setItem('almanara_theme', t);
+    const root = document.documentElement;
+    if (t === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
   };
 
   return (
-    <ThemeContext.Provider value={{ theme: 'dark', toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

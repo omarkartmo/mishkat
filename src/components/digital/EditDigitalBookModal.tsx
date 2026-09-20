@@ -97,7 +97,7 @@ export const EditDigitalBookModal: React.FC<EditDigitalBookModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer btn-press"
+            className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer btn-press"
           >
             <X className="w-5 h-5" />
           </button>
@@ -154,7 +154,7 @@ export const EditDigitalBookModal: React.FC<EditDigitalBookModalProps> = ({
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">مطابق لملف الـ PDF</span>
               </label>
               <div className="relative">
-                <FileText className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                <FileText className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="number"
                   min={1}
@@ -172,7 +172,7 @@ export const EditDigitalBookModal: React.FC<EditDigitalBookModalProps> = ({
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1.5">المصدر / جهة الإصدار</label>
               <div className="relative">
-                <Globe2 className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                <Globe2 className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={sourceOrigin}
@@ -186,7 +186,7 @@ export const EditDigitalBookModal: React.FC<EditDigitalBookModalProps> = ({
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1.5">الكلمات الدلالية والوسوم</label>
               <div className="relative">
-                <Tag className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                <Tag className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={tags}
@@ -202,7 +202,7 @@ export const EditDigitalBookModal: React.FC<EditDigitalBookModalProps> = ({
           <div>
             <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1.5 flex items-center justify-between">
               <span>نبذة وموضوع الكتاب ومحتواه العلمي</span>
-              <span className="text-[10px] text-slate-400 font-normal">صياغة واضحة ورصينة لموضوع الكتاب</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">صياغة واضحة ورصينة لموضوع الكتاب</span>
             </label>
             <textarea
               rows={4}

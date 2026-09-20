@@ -83,7 +83,7 @@ const ImportItemModal: React.FC<ImportItemModalProps> = ({ item, categories, onC
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full shadow-2xl p-5 space-y-4 text-xs">
+      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl max-w-lg w-full shadow-2xl p-5 space-y-4 text-xs">
         <h3 className="font-bold text-slate-100 text-sm flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           تأكيد استيراد: {item.originalFilename}
@@ -91,41 +91,41 @@ const ImportItemModal: React.FC<ImportItemModalProps> = ({ item, categories, onC
 
         <div className="space-y-3">
           <div>
-            <label className="block text-slate-300 font-medium mb-1">عنوان الكتاب *</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">عنوان الكتاب *</label>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">المؤلف</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">المؤلف</label>
               <input type="text" value={author} onChange={(e) => setAuthor(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
             </div>
             <div>
-              <label className="block text-slate-300 font-medium mb-1">التصنيف</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">التصنيف</label>
               <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500">
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500">
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">اللغة</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اللغة</label>
               <input type="text" value={language} onChange={(e) => setLanguage(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500" />
             </div>
           </div>
           <div>
-            <label className="block text-slate-300 font-medium mb-1">نبذة</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">نبذة</label>
             <textarea rows={2} value={summary} onChange={(e) => setSummary(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500 resize-none" />
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500 resize-none" />
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
           <button type="button" onClick={onCancel} disabled={isSubmitting}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium cursor-pointer">
+            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium cursor-pointer">
             إلغاء
           </button>
           <button
@@ -263,7 +263,7 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
             <Activity className="w-4 h-4 text-emerald-400" />
             مراقبة خط استيراد الكتب الرقمية (Ingestion Pipeline)
           </h3>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
             مراقبة حالة الواردة، طابور المراجعة، وإجراء الاستيراد أو الرفض على مستوى كل ملف
           </p>
         </div>
@@ -271,7 +271,7 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
           <button
             onClick={loadStatus}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-xs font-medium cursor-pointer transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-medium cursor-pointer transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             تحديث
@@ -301,7 +301,7 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
 
       {/* Watcher Status Card */}
       {data && (
-        <div className={`p-4 rounded-2xl border text-xs space-y-2 ${data.watcher.isActive ? 'bg-emerald-950/30 border-emerald-800/50' : 'bg-slate-900/80 border-slate-800'}`}>
+        <div className={`p-4 rounded-2xl border text-xs space-y-2 ${data.watcher.isActive ? 'bg-emerald-950/30 border-emerald-800/50' : 'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 font-bold text-slate-100 text-sm">
               <div className={`w-2 h-2 rounded-full ${data.watcher.isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
@@ -313,9 +313,9 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
               </span>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-slate-400 font-mono text-[11px]">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
             <span>مجلد الواردة:</span>
-            <span className="text-slate-200 truncate flex items-center gap-1" title={data.watcher.incomingDir}>
+            <span className="text-slate-800 dark:text-slate-200 truncate flex items-center gap-1" title={data.watcher.incomingDir}>
               <FolderOpen className="w-3 h-3 text-amber-400 shrink-0" />
               {data.watcher.incomingDir.split(/[/\\]/).slice(-3).join('/')}
             </span>
@@ -323,14 +323,14 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
             {data.watcher.startedAt && (
               <>
                 <span>بدأ في:</span>
-                <span className="text-slate-300">{new Date(data.watcher.startedAt).toLocaleString('ar-SA')}</span>
+                <span className="text-slate-700 dark:text-slate-300">{new Date(data.watcher.startedAt).toLocaleString('ar-SA')}</span>
               </>
             )}
 
             {data.watcher.lastScanAt && (
               <>
                 <span>آخر فحص:</span>
-                <span className="text-slate-300">{new Date(data.watcher.lastScanAt).toLocaleString('ar-SA')}</span>
+                <span className="text-slate-700 dark:text-slate-300">{new Date(data.watcher.lastScanAt).toLocaleString('ar-SA')}</span>
               </>
             )}
 
@@ -342,7 +342,7 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
             )}
 
             <span>ملفات قيد المعالجة:</span>
-            <span className={data.watcher.pendingFiles > 0 ? 'text-amber-300' : 'text-slate-300'}>
+            <span className={data.watcher.pendingFiles > 0 ? 'text-amber-300' : 'text-slate-700 dark:text-slate-300'}>
               {data.watcher.pendingFiles}
             </span>
           </div>
@@ -352,14 +352,14 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
       {/* Staging Queue */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h4 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+          <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
             <Inbox className="w-3.5 h-3.5 text-sky-400" />
             طابور المراجعة ({data?.queue.length ?? 0} عنصر)
           </h4>
         </div>
 
         {!data || data.queue.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/60 border border-slate-800 rounded-2xl">
+          <div className="p-8 text-center text-slate-500 text-xs bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl">
             {isLoading ? 'جاري تحميل طابور المراجعة...' : 'لا توجد ملفات في طابور المراجعة حالياً.'}
           </div>
         ) : (
@@ -371,10 +371,10 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
 
               return (
                 <div key={item.id}
-                  className={`bg-slate-900 border rounded-xl overflow-hidden transition-all ${isPending ? 'border-amber-800/40' : 'border-slate-800/70'}`}>
+                  className={`bg-white dark:bg-slate-900 border rounded-xl overflow-hidden transition-all ${isPending ? 'border-amber-800/40' : 'border-slate-200 dark:border-slate-800/70'}`}>
                   {/* Row header */}
                   <div className="flex items-center gap-2 p-3 text-xs">
-                    <div className="w-6 h-6 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 shrink-0">
+                    <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0">
                       <FileText className="w-3.5 h-3.5" />
                     </div>
 
@@ -427,7 +427,7 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
 
                     <button
                       onClick={() => toggleExpand(item.id)}
-                      className="p-1 text-slate-500 hover:text-slate-300 cursor-pointer shrink-0"
+                      className="p-1 text-slate-500 hover:text-slate-700 dark:text-slate-300 cursor-pointer shrink-0"
                     >
                       {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </button>
@@ -435,23 +435,23 @@ export const IngestionObservabilityPanel: React.FC<Props> = ({ categories }) => 
 
                   {/* Expanded details */}
                   {isExpanded && (
-                    <div className="border-t border-slate-800/60 p-3 bg-slate-950/50 text-[11px] font-mono space-y-1 text-slate-400">
-                      <div className="flex gap-2"><span className="text-slate-500 w-24 shrink-0">الاسم الأصلي:</span><span className="text-slate-300 break-all">{item.originalFilename}</span></div>
-                      {item.author && <div className="flex gap-2"><span className="text-slate-500 w-24 shrink-0">المؤلف:</span><span className="text-slate-300">{item.author}</span></div>}
+                    <div className="border-t border-slate-200 dark:border-slate-800/60 p-3 bg-slate-50 dark:bg-slate-950/50 text-[11px] font-mono space-y-1 text-slate-500 dark:text-slate-400">
+                      <div className="flex gap-2"><span className="text-slate-500 w-24 shrink-0">الاسم الأصلي:</span><span className="text-slate-700 dark:text-slate-300 break-all">{item.originalFilename}</span></div>
+                      {item.author && <div className="flex gap-2"><span className="text-slate-500 w-24 shrink-0">المؤلف:</span><span className="text-slate-700 dark:text-slate-300">{item.author}</span></div>}
                       {item.fileHash && (
                         <div className="flex items-center gap-2">
                           <span className="text-slate-500 w-24 shrink-0">SHA-256:</span>
                           <span className="text-emerald-400 truncate flex-1" title={item.fileHash}>{item.fileHash.substring(0, 32)}…</span>
                           <button
                             onClick={() => navigator.clipboard.writeText(item.fileHash)}
-                            className="text-slate-500 hover:text-slate-300 cursor-pointer"
+                            className="text-slate-500 hover:text-slate-700 dark:text-slate-300 cursor-pointer"
                           >
                             <Copy className="w-3 h-3" />
                           </button>
                         </div>
                       )}
                       {item.duplicateReason && <div className="flex gap-2"><span className="text-slate-500 w-24 shrink-0">سبب التكرار:</span><span className="text-purple-300">{item.duplicateReason}</span></div>}
-                      {item.adminNotes && <div className="flex gap-2"><span className="text-slate-500 w-24 shrink-0">ملاحظات:</span><span className="text-slate-300">{item.adminNotes}</span></div>}
+                      {item.adminNotes && <div className="flex gap-2"><span className="text-slate-500 w-24 shrink-0">ملاحظات:</span><span className="text-slate-700 dark:text-slate-300">{item.adminNotes}</span></div>}
                     </div>
                   )}
                 </div>

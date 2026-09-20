@@ -165,6 +165,7 @@ export const SystemSupportDashboard: React.FC = () => {
         setUpdateStatus((prev: any) => ({
           ...prev,
           availableVersion: res.data.latestRelease?.version || null,
+          latestRelease: res.data.latestRelease || null,
           message: res.data.hasUpdate
             ? `يتوفر تحديث معتمد: ${res.data.latestRelease.version}`
             : 'النظام محدث إلى أحدث إصدار.',
@@ -172,6 +173,26 @@ export const SystemSupportDashboard: React.FC = () => {
       }
     } catch {
       // Handled cleanly
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleApplyUpdate = async () => {
+    if (!updateStatus.latestRelease) return;
+    setIsCheckingUpdate(true);
+    try {
+      const res = await apiClient.post<any>('/support/updater/apply', {
+        downloadUrl: updateStatus.latestRelease.downloadUrl,
+        expectedSha256: updateStatus.latestRelease.sha256
+      });
+      if (res.success) {
+        alert('تم تحميل حزمة التحديث بنجاح، جاري إعادة التشغيل لتطبيق التحديث...');
+      } else {
+        alert(res.error?.message || 'فشل التحديث');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء التحديث');
     } finally {
       setIsCheckingUpdate(false);
     }
@@ -211,7 +232,7 @@ export const SystemSupportDashboard: React.FC = () => {
   return (
     <div className="p-8 max-w-[1600px] mx-auto space-y-6 animate-fade-in text-slate-100 pb-10">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-800">
         <div>
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
@@ -219,7 +240,7 @@ export const SystemSupportDashboard: React.FC = () => {
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-100">صحة النظام والدعم الفني (System Health & Support)</h1>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 مراقبة مركزية لحالة خادم MISHKAT، وقاعدة البيانات، والنسخ الاحتياطية، وأجهزة الطلاب المتصلة
               </p>
             </div>
@@ -227,13 +248,13 @@ export const SystemSupportDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">
             <span
               className={`w-2.5 h-2.5 rounded-full ${
                 h?.status === 'healthy' ? 'bg-emerald-400' : h?.status === 'degraded' ? 'bg-amber-400' : 'bg-rose-500'
               }`}
             />
-            <span className="font-semibold text-slate-200">
+            <span className="font-semibold text-slate-800 dark:text-slate-200">
               {h?.status === 'healthy' ? 'الخادم في حالة ممتازة' : h?.status === 'degraded' ? 'تنبيه: أداء منخفض' : 'حالة حرجة'}
             </span>
           </div>
@@ -241,7 +262,7 @@ export const SystemSupportDashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsReportModalOpen(true)}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-colors"
+            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-rose-400 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-300 dark:border-slate-700 transition-colors"
           >
             <HelpCircle className="w-3.5 h-3.5" />
             <span>إبلاغ عن مشكلة</span>
@@ -251,7 +272,7 @@ export const SystemSupportDashboard: React.FC = () => {
             type="button"
             onClick={handleManualRefresh}
             disabled={isRefreshing}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-colors"
+            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-300 dark:border-slate-700 transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>تحديث الآن</span>
@@ -260,14 +281,14 @@ export const SystemSupportDashboard: React.FC = () => {
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
         <button
           type="button"
           onClick={() => setActiveSubTab('overview')}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
             activeSubTab === 'overview'
               ? 'bg-indigo-600 text-white'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/60'
           }`}
         >
           نظرة عامة على الخادم
@@ -278,7 +299,7 @@ export const SystemSupportDashboard: React.FC = () => {
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
             activeSubTab === 'errors'
               ? 'bg-indigo-600 text-white'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/60'
           }`}
         >
           <span>الأخطاء المجمعة (Aggregated Errors)</span>
@@ -294,7 +315,7 @@ export const SystemSupportDashboard: React.FC = () => {
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
             activeSubTab === 'clients'
               ? 'bg-indigo-600 text-white'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/60'
           }`}
         >
           <span>أجهزة الطلاب المتصلة</span>
@@ -308,7 +329,7 @@ export const SystemSupportDashboard: React.FC = () => {
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
             activeSubTab === 'updater'
               ? 'bg-indigo-600 text-white'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/60'
           }`}
         >
           المحدث التلقائي (Updater)
@@ -321,59 +342,59 @@ export const SystemSupportDashboard: React.FC = () => {
           {/* Key Metrics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Server Service Card */}
-            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="p-4 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>خدمة ويندوز المركزية</span>
                 <Server className="w-4 h-4 text-indigo-400" />
               </div>
               <div className="text-lg font-bold text-slate-100">{h?.service.name}</div>
-              <div className="text-xs text-slate-400 space-y-0.5">
-                <div>مدة التشغيل: <span className="text-slate-200">{formatUptime(h?.service.uptimeSeconds || 0)}</span></div>
-                <div>الذاكرة: <span className="text-slate-200">{h?.service.memoryUsageMb} MB</span></div>
-                <div>المنصة: <span className="text-slate-300 font-mono text-[11px]">{h?.service.platform}</span></div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+                <div>مدة التشغيل: <span className="text-slate-800 dark:text-slate-200">{formatUptime(h?.service.uptimeSeconds || 0)}</span></div>
+                <div>الذاكرة: <span className="text-slate-800 dark:text-slate-200">{h?.service.memoryUsageMb} MB</span></div>
+                <div>المنصة: <span className="text-slate-700 dark:text-slate-300 font-mono text-[11px]">{h?.service.platform}</span></div>
               </div>
             </div>
 
             {/* Database Card */}
-            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="p-4 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>قاعدة البيانات المركزية</span>
                 <Database className="w-4 h-4 text-emerald-400" />
               </div>
               <div className="text-lg font-bold text-slate-100">{h?.database.engine}</div>
-              <div className="text-xs text-slate-400 space-y-0.5">
-                <div>زمن الاستجابة: <span className="text-slate-200 font-mono">{h?.database.latencyMs}ms</span></div>
-                <div>إجمالي الكتب: <span className="text-slate-200 font-bold">{h?.database.tableCounts.books}</span></div>
-                <div>المستخدمون: <span className="text-slate-200">{h?.database.tableCounts.users}</span> | إعارات نشطة: <span className="text-slate-200">{h?.database.tableCounts.activeLoans}</span></div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+                <div>زمن الاستجابة: <span className="text-slate-800 dark:text-slate-200 font-mono">{h?.database.latencyMs}ms</span></div>
+                <div>إجمالي الكتب: <span className="text-slate-800 dark:text-slate-200 font-bold">{h?.database.tableCounts.books}</span></div>
+                <div>المستخدمون: <span className="text-slate-800 dark:text-slate-200">{h?.database.tableCounts.users}</span> | إعارات نشطة: <span className="text-slate-800 dark:text-slate-200">{h?.database.tableCounts.activeLoans}</span></div>
               </div>
             </div>
 
             {/* Storage Card */}
-            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="p-4 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>وحدة التخزين والمساحة</span>
                 <HardDrive className="w-4 h-4 text-amber-400" />
               </div>
               <div className="text-lg font-bold text-slate-100">{h?.storage.libraryDataSizeMb} MB</div>
-              <div className="text-xs text-slate-400 space-y-0.5">
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
                 <div>المساحة المتاحة على القرص: <span className="text-emerald-400 font-bold">{h?.storage.diskFreeSpaceMb} MB</span></div>
                 <div>حالة الكتابة: <span className="text-emerald-400">{h?.storage.isWritable ? 'جاهزة وقابلة للكتابة' : 'خطأ'}</span></div>
-                <div>المسار: <span className="font-mono text-[10px] text-slate-400 truncate block">{h?.storage.libraryDataPath}</span></div>
+                <div>المسار: <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate block">{h?.storage.libraryDataPath}</span></div>
               </div>
             </div>
 
             {/* Backups Card */}
-            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="p-4 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>منظومة النسخ الاحتياطي</span>
                 <Cloud className="w-4 h-4 text-sky-400" />
               </div>
               <div className="text-lg font-bold text-slate-100">
                 {h?.backups.googleDriveConnected ? '✓ متصل بـ Drive' : 'نسخ محلي فقط'}
               </div>
-              <div className="text-xs text-slate-400 space-y-0.5">
-                <div>النسخ المحلية: <span className="text-slate-200 font-bold">{h?.backups.localBackupsCount} / 7</span></div>
-                <div>سياسة الاستبقاء: <span className="text-slate-300 text-[11px]">{h?.backups.retentionPolicy}</span></div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+                <div>النسخ المحلية: <span className="text-slate-800 dark:text-slate-200 font-bold">{h?.backups.localBackupsCount} / 7</span></div>
+                <div>سياسة الاستبقاء: <span className="text-slate-700 dark:text-slate-300 text-[11px]">{h?.backups.retentionPolicy}</span></div>
                 {h?.backups.googleDriveAccount && (
                   <div className="truncate font-mono text-[10px] text-sky-300">{h.backups.googleDriveAccount}</div>
                 )}
@@ -382,29 +403,29 @@ export const SystemSupportDashboard: React.FC = () => {
           </div>
 
           {/* Student Activity Summary */}
-          <div className="p-5 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-3">
+          <div className="p-5 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-200">
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-200">
                 <Users className="w-4 h-4 text-purple-400" />
                 <span>نشاط أجهزة الطلاب المتصلة (Connected Student Stations)</span>
               </div>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 {s?.connectedNowCount} متصل الآن من إجمالي {s?.totalRegisteredCount} جهاز مسجل
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
                 <div className="text-xl font-bold text-emerald-400">{s?.connectedNowCount}</div>
-                <div className="text-xs text-slate-400">متصل بالشبكة الآن</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">متصل بالشبكة الآن</div>
               </div>
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
                 <div className="text-xl font-bold text-indigo-400">{s?.seenTodayCount}</div>
-                <div className="text-xs text-slate-400">نشط خلال اليوم</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">نشط خلال اليوم</div>
               </div>
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                <div className="text-xl font-bold text-slate-200">{s?.totalRegisteredCount}</div>
-                <div className="text-xs text-slate-400">إجمالي الأجهزة المعتمدة</div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div className="text-xl font-bold text-slate-800 dark:text-slate-200">{s?.totalRegisteredCount}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">إجمالي الأجهزة المعتمدة</div>
               </div>
             </div>
           </div>
@@ -414,7 +435,7 @@ export const SystemSupportDashboard: React.FC = () => {
       {/* Sub-Tab 2: Aggregated Errors */}
       {activeSubTab === 'errors' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>
               يتم تجميع الأخطاء المتطابقة تلقائياً من جميع أجهزة الطلاب لمنع التكرار وتسهيل المعالجة.
             </span>
@@ -422,9 +443,9 @@ export const SystemSupportDashboard: React.FC = () => {
           </div>
 
           {aggregatedErrors.length === 0 ? (
-            <div className="p-8 text-center bg-slate-900/30 border border-slate-800 rounded-2xl text-slate-400">
+            <div className="p-8 text-center bg-white dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-500 dark:text-slate-400">
               <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
-              <div className="font-bold text-slate-200">لا توجد أخطاء مسجلة اليوم</div>
+              <div className="font-bold text-slate-800 dark:text-slate-200">لا توجد أخطاء مسجلة اليوم</div>
               <div className="text-xs text-slate-500">جميع أجهزة الطلاب والخدمات تعمل بدون مشاكل أو أعطال معلقة.</div>
             </div>
           ) : (
@@ -434,7 +455,7 @@ export const SystemSupportDashboard: React.FC = () => {
                 return (
                   <div
                     key={err.signature}
-                    className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl space-y-3 transition-all hover:border-slate-700"
+                    className="p-4 bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3 transition-all hover:border-slate-300 dark:border-slate-700"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
@@ -460,7 +481,7 @@ export const SystemSupportDashboard: React.FC = () => {
                               {err.severity}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-300 line-clamp-2">{err.sampleMessage}</p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">{err.sampleMessage}</p>
                         </div>
                       </div>
 
@@ -468,12 +489,12 @@ export const SystemSupportDashboard: React.FC = () => {
                       <div className="flex items-center gap-3 shrink-0 text-left">
                         <div className="text-right">
                           <div className="text-sm font-bold text-indigo-400">{err.occurrenceCount} تكرار</div>
-                          <div className="text-[11px] text-slate-400">على {err.affectedClientsCount} جهاز طالب</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">على {err.affectedClientsCount} جهاز طالب</div>
                         </div>
                         <button
                           type="button"
                           onClick={() => setExpandedSignature(isExpanded ? null : err.signature)}
-                          className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                          className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer"
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
@@ -481,20 +502,20 @@ export const SystemSupportDashboard: React.FC = () => {
                     </div>
 
                     {/* Metadata summary bar */}
-                    <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-2 border-t border-slate-800/80">
-                      <div>أول رصد: <span className="text-slate-300">{new Date(err.firstSeenAt).toLocaleTimeString()}</span></div>
-                      <div>آخر رصد: <span className="text-slate-300">{new Date(err.lastSeenAt).toLocaleTimeString()}</span></div>
-                      <div>إصدار التطبيق: <span className="font-mono text-slate-300">{err.affectedAppVersions.join(', ')}</span></div>
-                      {err.recentRoute && <div>المسار: <span className="font-mono text-slate-300">{err.recentRoute}</span></div>}
+                    <div className="flex items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                      <div>أول رصد: <span className="text-slate-700 dark:text-slate-300">{new Date(err.firstSeenAt).toLocaleTimeString()}</span></div>
+                      <div>آخر رصد: <span className="text-slate-700 dark:text-slate-300">{new Date(err.lastSeenAt).toLocaleTimeString()}</span></div>
+                      <div>إصدار التطبيق: <span className="font-mono text-slate-700 dark:text-slate-300">{err.affectedAppVersions.join(', ')}</span></div>
+                      {err.recentRoute && <div>المسار: <span className="font-mono text-slate-700 dark:text-slate-300">{err.recentRoute}</span></div>}
                     </div>
 
                     {/* Expandable details */}
                     {isExpanded && (
-                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2 animate-fade-in">
-                        <div className="font-semibold text-slate-300">معرفات الأجهزة المتأثرة (Client IDs):</div>
+                      <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-2 animate-fade-in">
+                        <div className="font-semibold text-slate-700 dark:text-slate-300">معرفات الأجهزة المتأثرة (Client IDs):</div>
                         <div className="flex flex-wrap gap-1.5 font-mono text-[10px]">
                           {err.affectedClientIds.map((cid) => (
-                            <span key={cid} className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                            <span key={cid} className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
                               {cid}
                             </span>
                           ))}
@@ -502,8 +523,8 @@ export const SystemSupportDashboard: React.FC = () => {
 
                         {err.sampleStackTrace && (
                           <div className="pt-2">
-                            <div className="font-semibold text-slate-300 mb-1">أثر الشيفرة بعد التنقية (Sanitized Stack Trace):</div>
-                            <pre className="p-2.5 bg-slate-900 rounded-lg text-[10px] text-slate-300 font-mono overflow-x-auto max-h-40">
+                            <div className="font-semibold text-slate-700 dark:text-slate-300 mb-1">أثر الشيفرة بعد التنقية (Sanitized Stack Trace):</div>
+                            <pre className="p-2.5 bg-white dark:bg-slate-900 rounded-lg text-[10px] text-slate-700 dark:text-slate-300 font-mono overflow-x-auto max-h-40">
                               {err.sampleStackTrace}
                             </pre>
                           </div>
@@ -521,14 +542,14 @@ export const SystemSupportDashboard: React.FC = () => {
       {/* Sub-Tab 3: Connected Student Stations */}
       {activeSubTab === 'clients' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>سجل أجهزة الطلاب المسجلة في شبكة المؤسسة:</span>
             <span>إجمالي الأجهزة: {clientStations.length}</span>
           </div>
 
-          <div className="overflow-x-auto bg-slate-900/60 border border-slate-800 rounded-2xl">
+          <div className="overflow-x-auto bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl">
             <table className="w-full text-xs text-right">
-              <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                 <tr>
                   <th className="p-3">حالة الجهاز</th>
                   <th className="p-3">اسم الحاسوب</th>
@@ -541,7 +562,7 @@ export const SystemSupportDashboard: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {clientStations.map((station) => (
-                  <tr key={station.clientId} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={station.clientId} className="hover:bg-slate-100 dark:bg-slate-800/30 transition-colors">
                     <td className="p-3">
                       <div className="flex items-center gap-1.5">
                         <span className={`w-2 h-2 rounded-full ${station.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
@@ -550,14 +571,14 @@ export const SystemSupportDashboard: React.FC = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="p-3 font-semibold text-slate-200 flex items-center gap-1.5">
+                    <td className="p-3 font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                       <Laptop className="w-3.5 h-3.5 text-purple-400" />
                       <span>{station.machineName}</span>
                     </td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">{station.clientId}</td>
-                    <td className="p-3 font-mono text-slate-300">{station.ipAddress}</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-500 dark:text-slate-400">{station.clientId}</td>
+                    <td className="p-3 font-mono text-slate-700 dark:text-slate-300">{station.ipAddress}</td>
                     <td className="p-3 font-mono text-indigo-300">{station.appVersion}</td>
-                    <td className="p-3 text-slate-400">{new Date(station.lastSeenAt).toLocaleString()}</td>
+                    <td className="p-3 text-slate-500 dark:text-slate-400">{new Date(station.lastSeenAt).toLocaleString()}</td>
                     <td className="p-3 text-center">
                       {station.todayErrorsCount > 0 ? (
                         <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold font-mono">
@@ -577,30 +598,30 @@ export const SystemSupportDashboard: React.FC = () => {
 
       {/* Sub-Tab 4: Updater */}
       {activeSubTab === 'updater' && (
-        <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-6 max-w-2xl mx-auto">
-          <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+        <div className="p-6 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-6 max-w-2xl mx-auto">
+          <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
             <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
               <ArrowUpCircle className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-100">نظام التحديث البرمجي الآمن (MISHKAT Updater)</h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 تحديث ملفات البرنامج فقط مع الحفاظ التام على بيانات المؤسسة والكتب وقاعدة البيانات
               </p>
             </div>
           </div>
 
           <div className="space-y-4 text-xs">
-            <div className="flex items-center justify-between p-3.5 bg-slate-950 rounded-xl border border-slate-800">
-              <span className="text-slate-400">الإصدار المثبت حالياً:</span>
-              <span className="font-bold text-slate-200 font-mono text-sm">
+            <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+              <span className="text-slate-500 dark:text-slate-400">الإصدار المثبت حالياً:</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200 font-mono text-sm">
                 v{updateStatus?.currentVersion || '1.0.0'}
               </span>
             </div>
 
-            <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
-              <div className="font-semibold text-slate-200">حالة التحديث:</div>
-              <p className="text-slate-400">
+            <div className="p-4 bg-slate-50 dark:bg-slate-950/80 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="font-semibold text-slate-800 dark:text-slate-200">حالة التحديث:</div>
+              <p className="text-slate-500 dark:text-slate-400">
                 {updateStatus?.message || 'أنت تستخدم أحدث إصدار معتمد من نظام المشكاة.'}
               </p>
               {updateStatus?.lastBackupPath && (
@@ -610,9 +631,9 @@ export const SystemSupportDashboard: React.FC = () => {
               )}
             </div>
 
-            <div className="p-4 bg-indigo-950/20 border border-indigo-500/20 rounded-xl text-slate-300 space-y-1.5">
+            <div className="p-4 bg-indigo-950/20 border border-indigo-500/20 rounded-xl text-slate-700 dark:text-slate-300 space-y-1.5">
               <div className="font-bold text-indigo-300">ضمانات الأمان أثناء التحديث:</div>
-              <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-400">
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
                 <li>إنشاء نسخة احتياطية فورية وتلقائية لقاعدة البيانات قبل أي تعديل.</li>
                 <li>حماية مجلد البيانات <code>LibraryData</code> وملف الإعدادات من أي حذف أو تعديل.</li>
                 <li>تطبيق ترحيل الجداول الجديدة (Database Migrations) آلياً.</li>
@@ -620,20 +641,32 @@ export const SystemSupportDashboard: React.FC = () => {
               </ul>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex gap-2">
               <button
                 type="button"
                 onClick={handleCheckUpdate}
                 disabled={isCheckingUpdate}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold cursor-pointer transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
+                className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-200 rounded-xl font-bold cursor-pointer transition-all flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-700"
               >
                 {isCheckingUpdate ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
                   <RefreshCw className="w-4 h-4" />
                 )}
-                <span>{isCheckingUpdate ? 'جاري الفحص...' : 'فحص وجود تحديثات جديدة معتمدة'}</span>
+                <span>{isCheckingUpdate ? 'جاري الفحص...' : 'فحص تحديثات'}</span>
               </button>
+
+              {updateStatus?.availableVersion && (
+                <button
+                  type="button"
+                  onClick={handleApplyUpdate}
+                  disabled={isCheckingUpdate}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold cursor-pointer transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                  <span>تحديث النظام الآن</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -641,9 +674,9 @@ export const SystemSupportDashboard: React.FC = () => {
 
       {/* Report Problem Modal */}
       {isReportModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2 text-slate-100 font-bold text-sm">
                 <HelpCircle className="w-4 h-4 text-purple-400" />
                 <span>الإبلاغ عن مشكلة تقنية</span>
@@ -651,7 +684,7 @@ export const SystemSupportDashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsReportModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -661,18 +694,18 @@ export const SystemSupportDashboard: React.FC = () => {
               <div className="py-6 text-center space-y-2">
                 <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
                 <h4 className="text-sm font-bold text-slate-100">تم إرسال التقرير بنجاح</h4>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   شكراً لك. تم إرسال المعلومات التشخيصية بنجاح ليتم مراجعتها.
                 </p>
               </div>
             ) : (
               <form onSubmit={handleReportSubmit} className="space-y-3">
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
                   سيتم إرسال وصف المشكلة ومعلومات الشاشة الحالية فقط دون أي بيانات خاصة.
                 </div>
 
                 <div>
-                  <label className="block text-xs text-slate-300 font-medium mb-1">
+                  <label className="block text-xs text-slate-700 dark:text-slate-300 font-medium mb-1">
                     ما المشكلة التي واجهتك؟ *
                   </label>
                   <textarea
@@ -681,7 +714,7 @@ export const SystemSupportDashboard: React.FC = () => {
                     value={problemDescription}
                     onChange={(e) => setProblemDescription(e.target.value)}
                     placeholder="مثال: تعذر تحميل الصفحة رقم 5 في الكتاب أو بطء في عرض الفهرس..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
                   />
                 </div>
 
@@ -689,7 +722,7 @@ export const SystemSupportDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsReportModalOpen(false)}
-                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 cursor-pointer"
+                    className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer"
                   >
                     إلغاء
                   </button>

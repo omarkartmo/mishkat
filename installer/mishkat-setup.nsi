@@ -23,6 +23,8 @@ BrandingText "MISHKAT Commercial Distribution v1.0.0"
 
 ; --- Interface Settings ---
 !define MUI_ABORTWARNING
+!define MUI_ICON "..\src-tauri\icons\icon.ico"
+!define MUI_UNICON "..\src-tauri\icons\icon.ico"
 
 ; --- Variables ---
 Var Dialog
@@ -163,6 +165,9 @@ Section "MISHKAT Core Installation" SecCore
     nsExec::Exec 'net stop MishkatLibraryService'
 
     ; Copy server production files
+    SetOutPath "$INSTDIR"
+    File /nonfatal "..\src-tauri\icons\icon.ico"
+
     SetOutPath "$INSTDIR\dist"
     File /r "..\dist\*.*"
 
@@ -256,8 +261,8 @@ Section "MISHKAT Core Installation" SecCore
 
     ; Server Shortcuts
     CreateDirectory "$SMPROGRAMS\MISHKAT"
-    CreateShortCut "$SMPROGRAMS\MISHKAT\إدارة نظام المشكاة المركزي.lnk" "http://localhost:3000"
-    CreateShortCut "$DESKTOP\MISHKAT Server Administration.lnk" "http://localhost:3000"
+    CreateShortCut "$SMPROGRAMS\MISHKAT\إدارة نظام المشكاة المركزي.lnk" "http://localhost:3000" "" "$INSTDIR\icon.ico" 0
+    CreateShortCut "$DESKTOP\MISHKAT Server Administration.lnk" "http://localhost:3000" "" "$INSTDIR\icon.ico" 0
   ${EndIf}
 
   ; 3. Install Student Components if Role is STUDENT or COMBINED
@@ -276,7 +281,7 @@ Section "MISHKAT Core Installation" SecCore
       CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe" "" "$INSTDIR\icon.ico" 0
     ${Else}
       ; Fallback shortcut to web kiosk if desktop binary built separately
-      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "http://localhost:3000"
+      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "http://localhost:3000" "" "$INSTDIR\icon.ico" 0
     ${EndIf}
   ${EndIf}
 

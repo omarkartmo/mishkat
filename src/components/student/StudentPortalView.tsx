@@ -92,14 +92,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 text-xs font-semibold whitespace-nowrap">
                 فضاء الطالب المخصص للأبحاث
               </span>
-              <span className="text-xs text-slate-300 font-mono truncate">
+              <span className="text-xs text-slate-700 dark:text-slate-300 font-mono truncate">
                 رقم القيد: {currentUser.registrationNumber}
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight leading-snug break-words">
               مرحباً بك، {currentUser.name}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-200 max-w-xl leading-relaxed break-words">
+            <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 max-w-xl leading-relaxed break-words">
               قسم: <strong className="text-indigo-200">{currentUser.grade || 'طالب باحث'}</strong> • مساحتك الأكاديمية لمتابعة الإعارات الورقية، مطالعة المستودع الرقمي، وتدوين الملاحظات.
             </p>
           </div>
@@ -171,7 +171,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </div>
 
             {physicalBookmarks.filter((b) => !b.isCompleted).length === 0 ? (
-              <div className="text-center py-10 text-slate-400 dark:text-slate-500 text-xs space-y-2">
+              <div className="text-center py-10 text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs space-y-2">
                 <p>لا توجد فواصل نشطة للكتب الورقية حالياً.</p>
                 <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
                   عند مطالعتك لأي كتاب في قاعة المكتبة، يمكنك تثبيت رقم الصفحة والخزانة لتتذكر موضعك في زيارتك القادمة.
@@ -299,7 +299,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </div>
 
             {inProgressBooks.length === 0 ? (
-              <div className="text-center py-10 text-slate-400 dark:text-slate-500 text-xs space-y-2">
+              <div className="text-center py-10 text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs space-y-2">
                 <p>لم تبدأ قراءة أي كتاب إلكتروني بعد.</p>
                 <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
                   افتح المستودع الرقمي لبدء القراءة في كتب التراث والمراجع وتدوين الملاحظات.
@@ -428,7 +428,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
 
         {myActiveLoans.length === 0 ? (
-          <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-xs">
+          <div className="text-center py-8 text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs">
             ليس لديك أي كتب ورقية مستعارة حالياً. يمكنك تصفح المكتبة الورقية واختيار كتاب للاستعارة لدى أمين المكتبة.
           </div>
         ) : (
@@ -501,7 +501,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         )}
                       </div>
                     ) : (
-                      <div className="text-[11px] text-slate-400 italic">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 italic">
                         لم تثبت فاصل قراءة لهذا الكتاب بعد.
                       </div>
                     )}
@@ -547,7 +547,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
 
         {mySubmissions.length === 0 ? (
-          <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-xs">
+          <div className="text-center py-8 text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs">
             لم تقم بإرسال أي ترشيحات لكتب بعد. يمكنك استخدام "بوابة المكتبات المعتمدة" للبحث عن مراجع علمية ومخطوطات وترشيحها لأمين المكتبة.
           </div>
         ) : (
@@ -610,14 +610,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 <BookOpen className="w-5 h-5 text-sky-500" />
                 سجل إعاراتي الورقية الكامل ({myLoans.length} عمليات)
               </h3>
-              <button onClick={() => setShowAllLoansModal(false)} className="text-slate-400 hover:text-slate-200">
+              <button onClick={() => setShowAllLoansModal(false)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 p-1">
               {myLoans.length === 0 ? (
-                <div className="text-center py-12 text-slate-400 text-xs">
+                <div className="text-center py-12 text-slate-500 dark:text-slate-400 text-xs">
                   لا توجد أي إعارات مسجلة باسمك حتى الآن.
                 </div>
               ) : (

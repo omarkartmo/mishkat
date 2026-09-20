@@ -141,7 +141,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             <ArrowLeftRight className="w-5 h-5 text-sky-400 shrink-0" />
             <span className="break-words">نظام تسيير الإعارات وتتبع الاستحقاق</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1 leading-relaxed break-words">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed break-words">
             تسجيل الإعارات الورقية، تخصيص فترات المطالعة والبحوث، وإدارة التمديد والمنع التلقائي للمتأخرين
           </p>
         </div>
@@ -158,13 +158,13 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
       </div>
 
       {/* Main Tab Switcher */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl">
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
         <button
           onClick={() => setActiveTab('requests')}
           className={`flex items-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'requests'
               ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/60'
           }`}
         >
           <Inbox className="w-4 h-4 shrink-0" />
@@ -186,7 +186,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'loans'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/60'
           }`}
         >
           <ArrowLeftRight className="w-4 h-4" />
@@ -203,14 +203,14 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
       {activeTab === 'requests' && (
         <div className="space-y-4">
           {/* Requests Status Filter */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
             <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto text-xs">
               <button
                 onClick={() => setRequestsFilter('all')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
                   requestsFilter === 'all'
                     ? 'bg-slate-100 text-slate-900 font-bold'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                 }`}
               >
                 الكل ({loanRequests.length})
@@ -220,7 +220,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                 className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
                   requestsFilter === 'pending'
                     ? 'bg-amber-600 text-white font-bold'
-                    : 'bg-slate-950 text-amber-400 hover:bg-amber-950/30'
+                    : 'bg-slate-50 dark:bg-slate-950 text-amber-400 hover:bg-amber-950/30'
                 }`}
               >
                 <span>طلبات قيد المراجعة</span>
@@ -231,7 +231,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                 className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
                   requestsFilter === 'approved'
                     ? 'bg-emerald-600 text-white font-bold'
-                    : 'bg-slate-950 text-emerald-400 hover:bg-emerald-950/30'
+                    : 'bg-slate-50 dark:bg-slate-950 text-emerald-400 hover:bg-emerald-950/30'
                 }`}
               >
                 <span>مقبولة (بانتظار تسليم النسخة)</span>
@@ -242,7 +242,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                 className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
                   requestsFilter === 'handed_over'
                     ? 'bg-indigo-600 text-white font-bold'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                 }`}
               >
                 تم التسليم وخروج الكتاب
@@ -250,22 +250,22 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             </div>
 
             <div className="relative w-full sm:w-64">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="بحث في الطلبات..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-9 pl-3 py-1.5 text-xs text-slate-200 outline-none focus:border-sky-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pr-9 pl-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
               />
             </div>
           </div>
 
           {/* Requests List */}
           {filteredRequests.length === 0 ? (
-            <div className="text-center py-16 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-2">
+            <div className="text-center py-16 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
               <Inbox className="w-12 h-12 text-slate-600 mx-auto" />
-              <h3 className="text-base font-bold text-slate-300">لا توجد طلبات إعارة مطابقة</h3>
+              <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">لا توجد طلبات إعارة مطابقة</h3>
               <p className="text-xs text-slate-500">
                 عندما يقدم الطلبة طلبات استعارة لكتب ورقية، ستظهر هنا للمراجعة والموافقة
               </p>
@@ -278,7 +278,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                 return (
                   <div
                     key={req.id}
-                    className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 space-y-4 shadow-md transition-all"
+                    className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:border-slate-700 rounded-2xl p-5 space-y-4 shadow-md transition-all"
                   >
                     {/* Header */}
                     <div className="flex items-start justify-between gap-3">
@@ -306,12 +306,12 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                         </div>
 
                         <h3 className="font-bold text-slate-100 text-sm mt-2">{req.bookTitle}</h3>
-                        <p className="text-xs text-slate-400">المؤلف: {req.bookAuthor}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">المؤلف: {req.bookAuthor}</p>
                       </div>
 
                       {book && (
                         <div className="text-left shrink-0">
-                          <span className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 font-mono border border-slate-700">
+                          <span className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono border border-slate-300 dark:border-slate-700">
                             متوفر: {book.availableCopies} / {book.totalCopies}
                           </span>
                         </div>
@@ -320,8 +320,8 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
 
                     {/* Shelf Location Box */}
                     {book && (
-                      <div className="p-2.5 bg-slate-950/80 border border-slate-800/80 rounded-xl text-xs flex items-center justify-between text-slate-300">
-                        <span className="flex items-center gap-1 text-slate-400">
+                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 rounded-xl text-xs flex items-center justify-between text-slate-700 dark:text-slate-300">
+                        <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
                           <MapPin className="w-3.5 h-3.5 text-sky-400" />
                           الموقع على الرف:
                         </span>
@@ -332,23 +332,23 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                     )}
 
                     {/* Student details & Purpose */}
-                    <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-2 text-xs">
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800/80 space-y-2 text-xs">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           <User className="w-3.5 h-3.5 text-indigo-400" />
-                          <span className="font-bold text-slate-200">{req.studentName}</span>
-                          <span className="text-slate-400">({req.studentGrade || 'طالب'})</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{req.studentName}</span>
+                          <span className="text-slate-500 dark:text-slate-400">({req.studentGrade || 'طالب'})</span>
                         </div>
                         <span className="font-mono text-[11px] text-slate-500">{req.studentRegNumber}</span>
                       </div>
 
-                      <div className="pt-1.5 border-t border-slate-800 flex items-start gap-1.5">
+                      <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex items-start gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-slate-400">سبب الإعارة: </span>
-                          <strong className="text-slate-200">{req.purpose}</strong>
+                          <span className="text-slate-500 dark:text-slate-400">سبب الإعارة: </span>
+                          <strong className="text-slate-800 dark:text-slate-200">{req.purpose}</strong>
                           {req.customReason && (
-                            <p className="text-slate-300 mt-1 italic bg-slate-900/90 p-2 rounded-lg border border-slate-800/80">
+                            <p className="text-slate-700 dark:text-slate-300 mt-1 italic bg-white dark:bg-slate-900/90 p-2 rounded-lg border border-slate-200 dark:border-slate-800/80">
                               "{req.customReason}"
                             </p>
                           )}
@@ -381,7 +381,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                     </div>
 
                     {/* Actions based on status */}
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-end gap-2">
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-end gap-2">
                       {req.status === 'pending' && (
                         <>
                           <button
@@ -477,16 +477,16 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
       )}
 
       {/* Search & Tabs */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="البحث باسم الطالب، رقم التسجيل، أو عنوان الكتاب..."
-              className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl pr-10 pl-4 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-xl pr-10 pl-4 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-500 outline-none"
             />
           </div>
 
@@ -494,7 +494,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             <select
               value={purposeFilter}
               onChange={(e) => setPurposeFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 outline-none focus:border-indigo-500"
+              className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500"
             >
               <option value="all">كل أغراض الإعارة</option>
               <option value="general_reading">مطالعة عامة ({config.generalReadingDurationDays} أيام)</option>
@@ -510,7 +510,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
               statusFilter === 'all'
                 ? 'bg-slate-100 text-slate-900 font-bold'
-                : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             جميع السجلات ({loans.length})
@@ -520,7 +520,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
               statusFilter === 'active'
                 ? 'bg-sky-600 text-white font-bold'
-                : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             <span>النشطة</span>
@@ -531,7 +531,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
               statusFilter === 'overdue'
                 ? 'bg-rose-600 text-white font-bold'
-                : 'bg-slate-950 text-rose-400 hover:bg-rose-950/30'
+                : 'bg-slate-50 dark:bg-slate-950 text-rose-400 hover:bg-rose-950/30'
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -543,7 +543,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
               statusFilter === 'extended'
                 ? 'bg-amber-600 text-white font-bold'
-                : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             <span>الممددة</span>
@@ -554,7 +554,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
               statusFilter === 'returned'
                 ? 'bg-emerald-600 text-white font-bold'
-                : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             <span>المسترجعة</span>
@@ -565,16 +565,16 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
 
       {/* Loans Table / Cards */}
       {filteredLoans.length === 0 ? (
-        <div className="text-center py-16 bg-slate-900/40 border border-slate-800 rounded-2xl">
+        <div className="text-center py-16 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <ArrowLeftRight className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-300">لا توجد سجلات إعارة مطابقة</h3>
+          <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">لا توجد سجلات إعارة مطابقة</h3>
           <p className="text-xs text-slate-500 mt-1">تأكد من شروط البحث أو الفلاتر المحددة</p>
         </div>
       ) : (
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-semibold">
+              <thead className="bg-slate-50 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-semibold">
                 <tr>
                   <th className="py-3.5 px-4">الكتاب الورقي المستعار</th>
                   <th className="py-3.5 px-4">الطالب المستعير</th>
@@ -585,7 +585,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                   <th className="py-3.5 px-4 text-center">الإجراءات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-200">
+              <tbody className="divide-y divide-slate-800/60 text-slate-800 dark:text-slate-200">
                 {filteredLoans.map((loan) => {
                   const isOverdue = loan.status === 'overdue';
                   const isReturned = loan.status === 'returned';
@@ -593,7 +593,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                   return (
                     <tr
                       key={loan.id}
-                      className={`hover:bg-slate-800/40 transition-colors ${
+                      className={`hover:bg-slate-100 dark:bg-slate-800/40 transition-colors ${
                         isOverdue ? 'bg-rose-950/20' : ''
                       }`}
                     >
@@ -601,14 +601,14 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-100">{loan.bookTitle}</div>
                         {loan.notes && (
-                          <div className="text-[11px] text-slate-400 truncate max-w-xs">{loan.notes}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-xs">{loan.notes}</div>
                         )}
                       </td>
 
                       {/* Student Info */}
                       <td className="py-3.5 px-4">
-                        <div className="font-medium text-slate-200">{loan.studentName}</div>
-                        <div className="text-[11px] font-mono text-slate-400">{loan.studentRegNumber}</div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200">{loan.studentName}</div>
+                        <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">{loan.studentRegNumber}</div>
                         {loan.isOverrideExemption && (
                           <span className="text-[10px] text-amber-400 block" title={loan.overrideReason}>
                             ★ استثناء إداري مبرر
@@ -630,11 +630,11 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                       </td>
 
                       {/* Issue Date */}
-                      <td className="py-3.5 px-4 font-mono text-slate-300">{loan.issueDate}</td>
+                      <td className="py-3.5 px-4 font-mono text-slate-700 dark:text-slate-300">{loan.issueDate}</td>
 
                       {/* Due Date */}
                       <td className="py-3.5 px-4 font-mono">
-                        <span className={isOverdue ? 'text-rose-400 font-bold' : 'text-slate-200'}>
+                        <span className={isOverdue ? 'text-rose-400 font-bold' : 'text-slate-800 dark:text-slate-200'}>
                           {loan.dueDate}
                         </span>
                         {isReturned && loan.returnDate && (
@@ -681,7 +681,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                               disabled={loan.extensionCount >= loan.maxExtensionsAllowed}
                               className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors ${
                                 loan.extensionCount >= loan.maxExtensionsAllowed
-                                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
                                   : 'bg-amber-600/30 hover:bg-amber-600 text-amber-200 cursor-pointer'
                               }`}
                               title={
@@ -737,18 +737,18 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
       {/* Extend Loan Modal */}
       {extendingLoan && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
                 <RotateCcw className="w-4 h-4 text-amber-400" />
                 تمديد فترة إعارة الكتاب
               </h3>
-              <button onClick={() => setExtendingLoan(null)} className="text-slate-400 hover:text-slate-200">
+              <button onClick={() => setExtendingLoan(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="text-xs space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <div className="text-xs space-y-2 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
               <div>
                 الكتاب: <strong className="text-slate-100">{extendingLoan.bookTitle}</strong>
               </div>
@@ -768,7 +768,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             </div>
 
             <div className="space-y-3 text-xs">
-              <label className="block text-slate-300 font-medium">عدد الأيام الإضافية للتمديد:</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium">عدد الأيام الإضافية للتمديد:</label>
               <div className="grid grid-cols-3 gap-2">
                 {[7, 10, 14].map((days) => (
                   <button
@@ -778,7 +778,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                       onExtendLoan(extendingLoan.id, days, 'طلب تمديد بحثي من الطالب');
                       setExtendingLoan(null);
                     }}
-                    className="py-2 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-200 rounded-xl font-semibold transition-colors"
+                    className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-800 dark:text-slate-200 rounded-xl font-semibold transition-colors"
                   >
                     +{days} أيام
                   </button>
@@ -786,10 +786,10 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
               <button
                 onClick={() => setExtendingLoan(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs"
               >
                 إلغاء
               </button>
@@ -801,27 +801,27 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
       {/* Return Loan Confirmation Modal */}
       {returningLoan && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                 تأكيد إرجاع الكتاب واستعادة النسخة
               </h3>
-              <button onClick={() => setReturningLoan(null)} className="text-slate-400 hover:text-slate-200">
+              <button onClick={() => setReturningLoan(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
               سيتم تسجيل إرجاع كتاب <strong className="text-white">"{returningLoan.bookTitle}"</strong> من الطالب{' '}
               <strong className="text-white">{returningLoan.studentName}</strong>، وإعادة إضافة النسخة إلى رصيد النسخ
               المتوفرة على الرف فوراً.
             </p>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 onClick={() => setReturningLoan(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-medium"
               >
                 إلغاء
               </button>
@@ -842,23 +842,23 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
       {/* Approve Request Modal */}
       {approvingRequest && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
                 <Check className="w-5 h-5 text-sky-400" />
                 الموافقة على طلب الإعارة وتحديد المدة
               </h3>
-              <button onClick={() => setApprovingRequest(null)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+              <button onClick={() => setApprovingRequest(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs text-slate-300">
+            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 text-xs text-slate-700 dark:text-slate-300">
               <div>الكتاب: <strong className="text-slate-100">{approvingRequest.bookTitle}</strong></div>
               <div>المستعير: <strong className="text-slate-100">{approvingRequest.studentName}</strong></div>
               <div>سبب الاستعارة: <strong className="text-sky-300">{approvingRequest.purpose}</strong></div>
               {approvingRequest.customReason && (
-                <div className="text-slate-400 italic bg-slate-900 p-2 rounded border border-slate-800">
+                <div className="text-slate-500 dark:text-slate-400 italic bg-white dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-800">
                   "{approvingRequest.customReason}"
                 </div>
               )}
@@ -871,7 +871,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             </div>
 
             <div className="space-y-2 text-xs">
-              <label className="block text-slate-200 font-bold">
+              <label className="block text-slate-800 dark:text-slate-200 font-bold">
                 حدد عدد أيام الإعارة المعتمدة رسمياً بقرار أمين المكتبة:
               </label>
               <div className="grid grid-cols-4 gap-2">
@@ -883,7 +883,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                     className={`py-2 rounded-xl font-bold transition-colors cursor-pointer ${
                       approvalDuration === days
                         ? 'bg-sky-600 text-white'
-                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-700'
                     }`}
                   >
                     {days} أيام
@@ -892,23 +892,23 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
               </div>
 
               <div className="pt-2">
-                <label className="block text-slate-400 text-[11px] mb-1">أو أدخل عدداً مخصصاً للأيام:</label>
+                <label className="block text-slate-500 dark:text-slate-400 text-[11px] mb-1">أو أدخل عدداً مخصصاً للأيام:</label>
                 <input
                   type="number"
                   min="1"
                   max="60"
                   value={approvalDuration}
                   onChange={(e) => setApprovalDuration(parseInt(e.target.value) || 1)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setApprovingRequest(null)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
               >
                 إلغاء
               </button>
@@ -932,19 +932,19 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
       {/* Reject Request Modal */}
       {rejectingRequest && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
                 <Ban className="w-5 h-5 text-rose-400" />
                 رفض طلب استعارة الكتاب
               </h3>
-              <button onClick={() => setRejectingRequest(null)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+              <button onClick={() => setRejectingRequest(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              <p className="text-slate-300">
+              <p className="text-slate-700 dark:text-slate-300">
                 أدخل سبب الرفض ليتم توضيحه للطالب <strong className="text-slate-100">{rejectingRequest.studentName}</strong> في الإشعار:
               </p>
               <textarea
@@ -952,15 +952,15 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="مثال: الكتاب محجوز لأغراض الجرد أو يوجد لديك كتاب متأخر..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 outline-none focus:border-rose-500 resize-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-slate-800 dark:text-slate-200 outline-none focus:border-rose-500 resize-none"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setRejectingRequest(null)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
               >
                 إلغاء
               </button>
@@ -1059,13 +1059,13 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
           <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
             <ArrowLeftRight className="w-5 h-5 text-indigo-400" />
             تسجيل عملية إعارة جديدة
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1073,11 +1073,11 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           {/* Step 1: Select Student */}
           <div className="space-y-1">
-            <label className="block text-slate-300 font-medium">الطالب المستعير *</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium">الطالب المستعير *</label>
             <select
               value={selectedStudentId}
               onChange={(e) => setSelectedStudentId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-indigo-500 font-medium"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-indigo-500 font-medium"
             >
               {students.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -1097,7 +1097,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
 
               {/* Admin Override Checkbox */}
               <div className="pt-2 border-t border-rose-900/60 space-y-2">
-                <label className="flex items-center gap-2 text-slate-200 cursor-pointer">
+                <label className="flex items-center gap-2 text-slate-800 dark:text-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isOverride}
@@ -1116,7 +1116,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
                     value={overrideReason}
                     onChange={(e) => setOverrideReason(e.target.value)}
                     placeholder="بيان سبب الاستثناء (مثال: لديه عذر مقبول لتأخير الكتاب السابق وتم الاتفاق على إرجاعه غداً)..."
-                    className="w-full bg-slate-900 border border-amber-800/60 rounded-lg px-3 py-1.5 text-slate-100"
+                    className="w-full bg-white dark:bg-slate-900 border border-amber-800/60 rounded-lg px-3 py-1.5 text-slate-100"
                   />
                 )}
               </div>
@@ -1130,11 +1130,11 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
 
           {/* Step 2: Select Book */}
           <div className="space-y-1">
-            <label className="block text-slate-300 font-medium">الكتاب الورقي المطلوب *</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium">الكتاب الورقي المطلوب *</label>
             <select
               value={selectedBookId}
               onChange={(e) => setSelectedBookId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-indigo-500"
             >
               {books.map((b) => (
                 <option key={b.id} value={b.id} disabled={b.availableCopies <= 0}>
@@ -1146,7 +1146,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
 
           {/* Book Location Summary */}
           {selectedBook && (
-            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 flex items-center justify-between text-[11px]">
+            <div className="p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-300 flex items-center justify-between text-[11px]">
               <span>موقع الكتاب على الرف: <strong className="text-indigo-300">{selectedBook.location.cabinet} - {selectedBook.location.shelf}</strong></span>
               <span className={selectedBook.availableCopies > 0 ? 'text-emerald-400' : 'text-rose-400'}>
                 النسخ المتوفرة: {selectedBook.availableCopies}
@@ -1157,7 +1157,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
           {/* Step 3: Loan Purpose & Duration */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">غرض الإعارة *</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">غرض الإعارة *</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -1165,7 +1165,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
                   className={`py-2 rounded-xl text-xs font-semibold transition-all ${
                     purpose === 'general_reading'
                       ? 'bg-sky-600 text-white'
-                      : 'bg-slate-950 text-slate-400 border border-slate-800'
+                      : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
                   }`}
                 >
                   مطالعة عامة ({config.generalReadingDurationDays} أيام)
@@ -1176,7 +1176,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
                   className={`py-2 rounded-xl text-xs font-semibold transition-all ${
                     purpose === 'academic_research'
                       ? 'bg-purple-600 text-white'
-                      : 'bg-slate-950 text-slate-400 border border-slate-800'
+                      : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
                   }`}
                 >
                   بحث أكاديمي ({config.academicResearchDurationDays} يوماً)
@@ -1185,36 +1185,36 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">مدة الإعارة بالأيام</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">مدة الإعارة بالأيام</label>
               <input
                 type="number"
                 min="1"
                 max="60"
                 value={customDays}
                 onChange={(e) => setCustomDays(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100"
               />
             </div>
           </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-slate-300 font-medium mb-1">ملاحظات الإعارة (اختياري)</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">ملاحظات الإعارة (اختياري)</label>
             <input
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="مثال: استعارة لمشروع مادة التاريخ..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100"
             />
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium"
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium"
             >
               إلغاء
             </button>
@@ -1223,7 +1223,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({
               disabled={!eligibility.canBorrow && !isOverride}
               className={`px-5 py-2 rounded-xl font-semibold shadow-lg transition-all ${
                 !eligibility.canBorrow && !isOverride
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
                   : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 cursor-pointer'
               }`}
             >

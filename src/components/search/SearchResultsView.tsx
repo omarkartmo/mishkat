@@ -320,7 +320,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
 
           {/* Search Input Bar */}
           <div className="relative pt-2">
-            <Search className="w-5 h-5 text-slate-400 absolute right-4 top-1/2 translate-y-[-20%] pointer-events-none" />
+            <Search className="w-5 h-5 text-slate-500 dark:text-slate-400 absolute right-4 top-1/2 translate-y-[-20%] pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
@@ -455,7 +455,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
 
           {/* Sort Dropdown */}
           <div className="flex items-center gap-1.5 text-xs">
-            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
@@ -475,7 +475,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
               className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                 viewLayout === 'detailed'
                   ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                  : 'text-slate-400 hover:text-slate-600'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-600'
               }`}
               title="عرض تفصيلي أفقي"
             >
@@ -486,7 +486,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
               className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                 viewLayout === 'grid'
                   ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                  : 'text-slate-400 hover:text-slate-600'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-600'
               }`}
               title="عرض شبكي (بطاقات)"
             >
@@ -524,7 +524,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
       {/* Results Rendering */}
       {totalResultsCount === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-4 shadow-sm">
-          <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+          <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center mx-auto">
             <BookOpen className="w-8 h-8" />
           </div>
           <div className="space-y-1 max-w-md mx-auto">
@@ -628,7 +628,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                           <span>عدد الصفحات: <strong className="font-mono text-slate-700 dark:text-slate-300">{pBook.pages} ص</strong></span>
                         )}
                         {pBook.isbn && (
-                          <span className="font-mono text-[11px] text-slate-400">ISBN: {pBook.isbn}</span>
+                          <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">ISBN: {pBook.isbn}</span>
                         )}
                       </div>
                     </div>
@@ -641,7 +641,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                         className={`p-2.5 rounded-xl border transition-all cursor-pointer self-start ${
                           isFav
                             ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-                            : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-amber-500 border-slate-200 dark:border-slate-700'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-amber-500 border-slate-200 dark:border-slate-700'
                         }`}
                         title={isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
                       >
@@ -664,7 +664,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                   {/* Tags / Keywords */}
                   {pBook.tags && pBook.tags.length > 0 && (
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
                         <Tag className="w-3 h-3" />
                         الوسوم والتصنيفات:
                       </span>
@@ -746,7 +746,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                           className={`px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all cursor-pointer ${
                             isAvailable
                               ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                              : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                              : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed'
                           }`}
                         >
                           <BookOpen className="w-3.5 h-3.5" />
@@ -835,7 +835,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                         className={`p-2.5 rounded-xl border transition-all cursor-pointer self-start ${
                           isFav
                             ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-                            : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-amber-500 border-slate-200 dark:border-slate-700'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-amber-500 border-slate-200 dark:border-slate-700'
                         }`}
                         title={isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
                       >
@@ -858,7 +858,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                   {/* Tags / Keywords */}
                   {dBook.tags && dBook.tags.length > 0 && (
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
                         <Tag className="w-3 h-3" />
                         الوسوم والتصنيفات:
                       </span>
@@ -960,7 +960,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                         <button
                           onClick={() => onToggleFavorite(pBook.id)}
                           className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                            isFav ? 'text-amber-500 bg-amber-400/10' : 'text-slate-400 hover:text-amber-500'
+                            isFav ? 'text-amber-500 bg-amber-400/10' : 'text-slate-500 dark:text-slate-400 hover:text-amber-500'
                           }`}
                         >
                           <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400' : ''}`} />
@@ -1010,7 +1010,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => handleOpenDeleteModal(pBook)}
-                        className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                         title="حذف الكتاب أو استبعاد نسخ مفقودة"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1046,7 +1046,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                         className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                           isAvailable
                             ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                            : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                            : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed'
                         }`}
                       >
                         <span>طلب إعارة</span>
@@ -1078,7 +1078,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                         <button
                           onClick={() => onToggleFavorite(dBook.id)}
                           className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                            isFav ? 'text-amber-500 bg-amber-400/10' : 'text-slate-400 hover:text-amber-500'
+                            isFav ? 'text-amber-500 bg-amber-400/10' : 'text-slate-500 dark:text-slate-400 hover:text-amber-500'
                           }`}
                         >
                           <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400' : ''}`} />
@@ -1228,7 +1228,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     className={`p-3 rounded-2xl border text-right transition-all cursor-pointer space-y-1 ${
                       deleteMode === 'copies'
                         ? 'bg-amber-500/15 border-amber-500/50 text-amber-800 dark:text-amber-300 shadow-sm'
-                        : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                        : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800/60'
                     }`}
                   >
                     <div className="flex items-center gap-2 font-bold text-xs">
@@ -1246,7 +1246,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                     className={`p-3 rounded-2xl border text-right transition-all cursor-pointer space-y-1 ${
                       deleteMode === 'entire'
                         ? 'bg-rose-500/15 border-rose-500/50 text-rose-800 dark:text-rose-300 shadow-sm'
-                        : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                        : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800/60'
                     }`}
                   >
                     <div className="flex items-center gap-2 font-bold text-xs">
@@ -1283,7 +1283,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                             type="button"
                             onClick={() => setCopiesToRemove(Math.max(1, copiesToRemove - 1))}
                             disabled={copiesToRemove <= 1}
-                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-30 cursor-pointer"
+                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-30 cursor-pointer"
                           >
                             <MinusCircle className="w-4 h-4" />
                           </button>
@@ -1294,7 +1294,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                             type="button"
                             onClick={() => setCopiesToRemove(Math.min(physicalBookToDelete.availableCopies, copiesToRemove + 1))}
                             disabled={copiesToRemove >= physicalBookToDelete.availableCopies}
-                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-30 cursor-pointer"
+                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-30 cursor-pointer"
                           >
                             <PlusCircle className="w-4 h-4" />
                           </button>
@@ -1408,7 +1408,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                       }
                     }
                   }}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-200 dark:disabled:bg-slate-100 dark:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   {isDeletingPhysical ? (
                     <span>جارٍ الاستبعاد...</span>
@@ -1434,7 +1434,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
                       }
                     }
                   }}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-200 dark:disabled:bg-slate-100 dark:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   {isDeletingPhysical ? (
                     <span>جارٍ الحذف...</span>
@@ -1511,7 +1511,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
               <button
                 onClick={() => !isDeletingDigital && setDigitalBookToDelete(null)}
                 disabled={isDeletingDigital}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer disabled:opacity-50"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-800 dark:text-slate-200 cursor-pointer disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>

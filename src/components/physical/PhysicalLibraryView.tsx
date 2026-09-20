@@ -130,7 +130,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
             <BookOpen className="w-5 h-5 text-indigo-400 shrink-0" />
             <span className="break-words">فهرس المكتبة الورقية والجرد المكاني</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1 leading-relaxed break-words">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed break-words">
             إدارة الكتب الورقية، مواقع الرفوف والخزائن، وتتبع النسخ المتوفرة للإعارة
           </p>
         </div>
@@ -149,21 +149,21 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-4">
+      <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-4">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="البحث بالعنوان، المؤلف، رقم الـ ISBN، أو رقم الخزانة والرف..."
-              className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl pr-10 pl-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 outline-none transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-xl pr-10 pl-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-500 outline-none transition-all"
             />
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -174,7 +174,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
             <select
               value={availabilityFilter}
               onChange={(e) => setAvailabilityFilter(e.target.value as any)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-300 outline-none focus:border-indigo-500"
+              className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500"
             >
               <option value="all">كل حالات التوفر</option>
               <option value="available">النسخ المتوفرة فقط</option>
@@ -190,7 +190,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-all shrink-0 ${
               selectedCategory === 'all'
                 ? 'bg-indigo-600 text-white'
-                : 'bg-slate-950 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800'
             }`}
           >
             جميع الأقسام ({books.length})
@@ -205,7 +205,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all shrink-0 flex items-center gap-1.5 ${
                   isSelected
                     ? 'bg-slate-100 text-slate-900 font-bold'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800'
                 }`}
               >
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
@@ -219,9 +219,9 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
 
       {/* Book Grid */}
       {filteredBooks.length === 0 ? (
-        <div className="text-center py-16 bg-slate-900/40 border border-slate-800/60 rounded-2xl space-y-3">
+        <div className="text-center py-16 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/60 rounded-2xl space-y-3">
           <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-1" />
-          <h3 className="text-base font-bold text-slate-300">لا توجد كتب مطابقة لخيارات البحث</h3>
+          <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">لا توجد كتب مطابقة لخيارات البحث</h3>
           <p className="text-xs text-slate-500">جرب تغيير كلمات البحث أو اختيار قسم آخر</p>
           {userRole === 'admin' && (
             <button
@@ -242,7 +242,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
             return (
               <div
                 key={book.id}
-                className="bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between transition-all group shadow-sm hover:shadow-md"
+                className="bg-white dark:bg-slate-900/80 hover:bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between transition-all group shadow-sm hover:shadow-md"
               >
                 <div className="space-y-3">
                   {/* Category & Status Bar */}
@@ -271,7 +271,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                           className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
                             favoriteBookIds.includes(book.id)
                               ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-sm'
-                              : 'bg-slate-800/80 text-slate-400 hover:text-amber-400 hover:bg-slate-800 border-slate-700/60'
+                              : 'bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700/60'
                           }`}
                           title={favoriteBookIds.includes(book.id) ? 'إزالة من المفضلة' : 'إضافة للكتب المفضلة'}
                         >
@@ -304,18 +304,18 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                     <h3 className="font-bold text-slate-100 text-base leading-snug group-hover:text-indigo-300 transition-colors">
                       {book.title}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1 font-medium">{book.author}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">{book.author}</p>
                   </div>
 
                   {/* Summary */}
-                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                     {book.summary}
                   </p>
 
                   {/* Shelf Location Box (Critical Feature) */}
-                  <div className="p-2.5 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1 text-xs">
-                    <div className="flex items-center justify-between text-slate-300">
-                      <span className="flex items-center gap-1 text-slate-400 font-medium">
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-xl space-y-1 text-xs">
+                    <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                      <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 font-medium">
                         <MapPin className="w-3.5 h-3.5 text-indigo-400" />
                         الموقع على الرف:
                       </span>
@@ -324,7 +324,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                       </span>
                     </div>
                     {book.location.section && (
-                      <div className="text-[11px] text-slate-400 pr-4 truncate">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 pr-4 truncate">
                         {book.location.section}
                       </div>
                     )}
@@ -332,11 +332,11 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                 </div>
 
                 {/* Card Actions Footer */}
-                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       onClick={() => setShelfCardBook(book)}
-                      className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs transition-colors"
+                      className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-white rounded-lg text-xs transition-colors"
                       title="عرض بطاقة الرف والباركود"
                     >
                       <Barcode className="w-4 h-4" />
@@ -345,7 +345,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                       <>
                         <button
                           onClick={() => setEditingBook(book)}
-                          className="px-2.5 py-1.5 bg-slate-800 hover:bg-indigo-950/60 text-slate-300 hover:text-indigo-300 border border-slate-700/70 hover:border-indigo-500/50 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                          className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-950/60 text-slate-700 dark:text-slate-300 hover:text-indigo-300 border border-slate-300 dark:border-slate-700/70 hover:border-indigo-500/50 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                           title="تعديل بيانات الكتاب الورقي"
                         >
                           <Edit2 className="w-3.5 h-3.5 text-indigo-400" />
@@ -355,7 +355,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleOpenDeleteModal(book)}
-                            className="p-2 bg-slate-800 hover:bg-rose-900/50 text-slate-300 hover:text-rose-400 rounded-lg text-xs transition-colors cursor-pointer"
+                            className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-rose-900/50 text-slate-700 dark:text-slate-300 hover:text-rose-400 rounded-lg text-xs transition-colors cursor-pointer"
                             title="حذف الكتاب أو استبعاد نسخ مفقودة"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -378,7 +378,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                       className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
                         isAvailable
                           ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 cursor-pointer'
-                          : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
                       }`}
                     >
                       <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -450,13 +450,13 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
       {/* Shelf Location & Barcode Card Modal */}
       {shelfCardBook && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
                 <Barcode className="w-5 h-5 text-indigo-400" />
                 بطاقة الجرد والرف المكتبي
               </h3>
-              <button onClick={() => setShelfCardBook(null)} className="text-slate-400 hover:text-slate-200">
+              <button onClick={() => setShelfCardBook(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -487,7 +487,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
 
               {/* Simulated Barcode */}
               <div className="pt-2 text-center">
-                <div className="h-12 bg-slate-900 w-full flex items-center justify-around px-2 rounded">
+                <div className="h-12 bg-white dark:bg-slate-900 w-full flex items-center justify-around px-2 rounded">
                   {Array.from({ length: 32 }).map((_, i) => (
                     <div
                       key={i}
@@ -534,7 +534,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
       {/* Delete Book & Copies Management Modal */}
       {bookToDelete && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-right" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-right" dir="rtl">
             {/* Modal Header */}
             <div className="flex items-center gap-3 text-rose-400">
               <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
@@ -542,26 +542,26 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
               </div>
               <div>
                 <h3 className="font-bold text-slate-100 text-base">إدارة الحذف واستبعاد النسخ</h3>
-                <p className="text-xs text-slate-400">حذف الكتاب بالكامل أو استبعاد نسخ مفقودة لتطابق جرد الرف</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">حذف الكتاب بالكامل أو استبعاد نسخ مفقودة لتطابق جرد الرف</p>
               </div>
             </div>
 
             {/* Book Info Summary */}
-            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 space-y-2 text-xs">
+            <div className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">عنوان الكتاب:</span>
-                <span className="font-bold text-slate-200">{bookToDelete.title}</span>
+                <span className="text-slate-500 dark:text-slate-400">عنوان الكتاب:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{bookToDelete.title}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">المؤلف:</span>
-                <span className="text-slate-300">{bookToDelete.author}</span>
+                <span className="text-slate-500 dark:text-slate-400">المؤلف:</span>
+                <span className="text-slate-700 dark:text-slate-300">{bookToDelete.author}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">الموقع على الرف:</span>
+                <span className="text-slate-500 dark:text-slate-400">الموقع على الرف:</span>
                 <span className="font-mono text-indigo-400">{bookToDelete.location.cabinet} • {bookToDelete.location.shelf}</span>
               </div>
-              <div className="flex items-center justify-between pt-1 border-t border-slate-800/60">
-                <span className="text-slate-400">حالة الجرد الحالي:</span>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-800/60">
+                <span className="text-slate-500 dark:text-slate-400">حالة الجرد الحالي:</span>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 font-mono font-bold">
                     {bookToDelete.totalCopies} نسخة إجمالية
@@ -581,7 +581,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
             {/* If book has multiple copies, show selection between Copies Reduction vs Full Deletion */}
             {bookToDelete.totalCopies > 1 && (
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-300">اختر نوع العملية المطلوبة:</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">اختر نوع العملية المطلوبة:</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -589,7 +589,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                     className={`p-3 rounded-2xl border text-right transition-all cursor-pointer space-y-1 ${
                       deleteMode === 'copies'
                         ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-sm'
-                        : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                        : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/60 hover:text-slate-800 dark:text-slate-200'
                     }`}
                   >
                     <div className="flex items-center gap-2 font-bold text-xs">
@@ -607,7 +607,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                     className={`p-3 rounded-2xl border text-right transition-all cursor-pointer space-y-1 ${
                       deleteMode === 'entire'
                         ? 'bg-rose-500/15 border-rose-500/50 text-rose-300 shadow-sm'
-                        : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                        : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/60 hover:text-slate-800 dark:text-slate-200'
                     }`}
                   >
                     <div className="flex items-center gap-2 font-bold text-xs">
@@ -624,7 +624,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
 
             {/* Mode A: Reduce Specific Copies */}
             {deleteMode === 'copies' && (
-              <div className="space-y-4 bg-slate-950/50 border border-slate-800/80 rounded-2xl p-4">
+              <div className="space-y-4 bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4">
                 {bookToDelete.availableCopies === 0 ? (
                   <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-xs text-amber-300 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -635,16 +635,16 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                 ) : (
                   <>
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                         عدد النسخ المراد استبعادها من الفهرس:
                       </label>
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-1">
+                        <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 rounded-xl p-1">
                           <button
                             type="button"
                             onClick={() => setCopiesToRemove(Math.max(1, copiesToRemove - 1))}
                             disabled={copiesToRemove <= 1}
-                            className="p-1.5 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg disabled:opacity-30 cursor-pointer"
+                            className="p-1.5 hover:bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-white rounded-lg disabled:opacity-30 cursor-pointer"
                           >
                             <MinusCircle className="w-4 h-4" />
                           </button>
@@ -655,25 +655,25 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                             type="button"
                             onClick={() => setCopiesToRemove(Math.min(bookToDelete.availableCopies, copiesToRemove + 1))}
                             disabled={copiesToRemove >= bookToDelete.availableCopies}
-                            className="p-1.5 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg disabled:opacity-30 cursor-pointer"
+                            className="p-1.5 hover:bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-white rounded-lg disabled:opacity-30 cursor-pointer"
                           >
                             <PlusCircle className="w-4 h-4" />
                           </button>
                         </div>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
                           (الحد الأقصى المتاح للاستبعاد: <strong className="text-emerald-400 font-mono">{bookToDelete.availableCopies}</strong> نسخة متوفرة)
                         </span>
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                         سبب الاستبعاد (لتوثيق الجرد):
                       </label>
                       <select
                         value={removalReason}
                         onChange={(e) => setRemovalReason(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
                       >
                         <option value="نسخة مفقودة / ضائعة (لم يتم العثور عليها)">نسخة مفقودة / ضائعة (لم يتم العثور عليها بالرف)</option>
                         <option value="نسخة تالفة / ممزقة (استبعاد من الجرد)">نسخة تالفة / ممزقة (استبعاد من الجرد)</option>
@@ -687,19 +687,19 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                           value={customRemovalReason}
                           onChange={(e) => setCustomRemovalReason(e.target.value)}
                           placeholder="اكتب سبب الاستبعاد باختصار..."
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500 mt-2"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 mt-2"
                         />
                       )}
                     </div>
 
-                    <div className="p-3 bg-slate-900/90 border border-slate-800/80 rounded-xl text-xs space-y-1">
-                      <div className="flex items-center justify-between text-slate-300">
+                    <div className="p-3 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 rounded-xl text-xs space-y-1">
+                      <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                         <span>النسخ الإجمالية بعد الاستبعاد:</span>
                         <strong className="text-amber-400 font-mono">
                           {Math.max(0, bookToDelete.totalCopies - copiesToRemove)} نسخة
                         </strong>
                       </div>
-                      <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                      <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">
                         <span>النسخ المتوفرة على الرف بعد التحديث:</span>
                         <span className="font-mono text-emerald-400 font-semibold">
                           {Math.max(0, bookToDelete.availableCopies - copiesToRemove)} نسخة
@@ -738,12 +738,12 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
             )}
 
             {/* Modal Actions Footer */}
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setBookToDelete(null)}
                 disabled={isDeleting}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
               >
                 إلغاء
               </button>
@@ -769,7 +769,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                       }
                     }
                   }}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-100 dark:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   {isDeleting ? (
                     <span>جارٍ الاستبعاد...</span>
@@ -795,7 +795,7 @@ export const PhysicalLibraryView: React.FC<PhysicalLibraryViewProps> = ({
                       }
                     }
                   }}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-100 dark:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   {isDeleting ? (
                     <span>جارٍ الحذف...</span>
@@ -878,13 +878,13 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-200">
       <div
-        className={`relative bg-slate-900 border border-slate-800 rounded-3xl w-full ${
+        className={`relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full ${
           importMode === 'bulk_csv' && !initialBook
             ? 'max-w-4xl max-h-[92vh] flex flex-col'
             : 'max-w-2xl max-h-[90vh] overflow-y-auto'
         } p-5 sm:p-6 space-y-5 shadow-2xl transition-all`}
       >
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
               {importMode === 'bulk_csv' && !initialBook ? (
@@ -898,7 +898,7 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
                 <span>{initialBook ? 'تعديل بيانات الكتاب الورقي' : 'إضافة الكتب الورقية'}</span>
               </h3>
               {!initialBook && (
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {importMode === 'single'
                     ? 'إضافة كتاب ورقي جديد بشكل فردي إلى الفهرس'
                     : 'استيراد مجموعة كتب دفعة واحدة عبر ملف CSV مع كامل التفاصيل'}
@@ -908,7 +908,7 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -916,14 +916,14 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
 
         {/* Choice selector: single book vs bulk CSV */}
         {!initialBook && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800 gap-1.5 shrink-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 p-1.5 bg-slate-50 dark:bg-slate-950/80 rounded-2xl border border-slate-200 dark:border-slate-800 gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setImportMode('single')}
               className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                 importMode === 'single'
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-white dark:bg-slate-900'
               }`}
             >
               <BookOpen className="w-4 h-4 shrink-0" />
@@ -935,7 +935,7 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
               className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                 importMode === 'bulk_csv'
                   ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-lg shadow-amber-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-white dark:bg-slate-900'
               }`}
             >
               <FileSpreadsheet className="w-4 h-4 shrink-0 text-amber-400" />
@@ -963,37 +963,37 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">عنوان الكتاب *</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">عنوان الكتاب *</label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="مثال: مقدمة ابن خلدون"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">المؤلف / المحقق *</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">المؤلف / المحقق *</label>
               <input
                 type="text"
                 required
                 value={author}
                 onChange={(e) => setAuthor(e.target.value)}
                 placeholder="مثال: عبد الرحمن بن خلدون"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">القسم / المادة *</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">القسم / المادة *</label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -1004,64 +1004,64 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">دار النشر</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">دار النشر</label>
               <input
                 type="text"
                 value={publisher}
                 onChange={(e) => setPublisher(e.target.value)}
                 placeholder="مثال: دار المعارف"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">عدد النسخ الإجمالي *</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">عدد النسخ الإجمالي *</label>
               <input
                 type="number"
                 min="1"
                 required
                 value={totalCopies}
                 onChange={(e) => setTotalCopies(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
           {/* Shelf Location fields */}
-          <div className="p-4 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-3">
-            <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+          <div className="p-4 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-xl space-y-3">
+            <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
               <MapPin className="w-4 h-4 text-indigo-400" />
               تحديد الموقع المادي (الخزانة والرف)
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-slate-400 text-[11px] mb-1">الخزانة</label>
+                <label className="block text-slate-500 dark:text-slate-400 text-[11px] mb-1">الخزانة</label>
                 <input
                   type="text"
                   value={cabinet}
                   onChange={(e) => setCabinet(e.target.value)}
                   placeholder="مثال: خزانة التاريخ (أ)"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 text-[11px] mb-1">الرف</label>
+                <label className="block text-slate-500 dark:text-slate-400 text-[11px] mb-1">الرف</label>
                 <input
                   type="text"
                   value={shelf}
                   onChange={(e) => setShelf(e.target.value)}
                   placeholder="مثال: الرف الثاني"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 text-[11px] mb-1">القسم الداخلي (اختياري)</label>
+                <label className="block text-slate-500 dark:text-slate-400 text-[11px] mb-1">القسم الداخلي (اختياري)</label>
                 <input
                   type="text"
                   value={section}
                   onChange={(e) => setSection(e.target.value)}
                   placeholder="مثال: قسم المراجع الكبرى"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100"
                 />
               </div>
             </div>
@@ -1069,39 +1069,39 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">الرقم المعياري الدولي (ISBN)</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">الرقم المعياري الدولي (ISBN)</label>
               <input
                 type="text"
                 value={isbn}
                 onChange={(e) => setIsbn(e.target.value)}
                 placeholder="978-..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono"
               />
             </div>
             <div>
-              <label className="block text-slate-300 font-medium mb-1">الكلمات الدلالية (مفصولة بفواصل)</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">الكلمات الدلالية (مفصولة بفواصل)</label>
               <input
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="تاريخ, فلسفة, مراجع"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">نبذة عن الكتاب</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">نبذة عن الكتاب</label>
             <textarea
               rows={3}
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
               placeholder="وصف مختصر لمحتوى الكتاب وأهميته المنهجية..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none"
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-800">
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
             {initialBook && onDelete ? (
               <button
                 type="button"
@@ -1120,7 +1120,7 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium cursor-pointer"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium cursor-pointer"
               >
                 إلغاء
               </button>

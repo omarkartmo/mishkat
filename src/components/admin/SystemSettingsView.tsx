@@ -385,7 +385,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             <Settings className="w-5 h-5 text-indigo-400" />
             إعدادات النظام وسياسات الإعارة المركزية
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             تخصيص فترات الاستعارة، مدد التمديد، قواعد الحظر التلقائي، وإدارة النسخ الاحتياطي
           </p>
         </div>
@@ -400,8 +400,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Circulation Policies Card */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-5">
-          <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-5">
+          <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
             <Clock className="w-4 h-4 text-sky-400" />
             سياسات ومدد إعارة الكتب الورقية
           </h3>
@@ -409,7 +409,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
             {/* General Reading */}
             <div>
-              <label className="block text-slate-300 font-medium mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">
                 المدة الافتراضية للمطالعة العامة (أيام) *
               </label>
               <input
@@ -421,7 +421,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 onChange={(e) =>
                   setForm({ ...form, generalReadingDurationDays: Number(e.target.value) })
                 }
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 font-mono"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 font-mono"
               />
               <span className="text-[11px] text-slate-500 mt-1 block">
                 تطبق تلقائياً عند اختيار غرض الإعارة "مطالعة عامة"
@@ -430,7 +430,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
             {/* Academic Research */}
             <div>
-              <label className="block text-slate-300 font-medium mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">
                 المدة الافتراضية للبحوث الأكاديمية (أيام) *
               </label>
               <input
@@ -442,7 +442,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 onChange={(e) =>
                   setForm({ ...form, academicResearchDurationDays: Number(e.target.value) })
                 }
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 font-mono"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 font-mono"
               />
               <span className="text-[11px] text-slate-500 mt-1 block">
                 تمنح مدة أطول للمشاريع البحثية المدرسية
@@ -451,7 +451,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
             {/* Max Extensions */}
             <div>
-              <label className="block text-slate-300 font-medium mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">
                 الحد الأقصى لمرات التمديد لكل إعارة *
               </label>
               <input
@@ -463,13 +463,13 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 onChange={(e) =>
                   setForm({ ...form, maxExtensionsAllowed: Number(e.target.value) })
                 }
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 font-mono"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 font-mono"
               />
             </div>
 
             {/* Extension Duration */}
             <div>
-              <label className="block text-slate-300 font-medium mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">
                 مدة التمديد لكل طلب (أيام) *
               </label>
               <input
@@ -481,13 +481,13 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 onChange={(e) =>
                   setForm({ ...form, extensionDurationDays: Number(e.target.value) })
                 }
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 font-mono"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 font-mono"
               />
             </div>
           </div>
 
           {/* Auto block checkbox */}
-          <div className="pt-3 border-t border-slate-800">
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
             <label className="flex items-start gap-3 cursor-pointer text-xs">
               <input
                 type="checkbox"
@@ -496,10 +496,10 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 className="w-4 h-4 rounded text-indigo-600 focus:ring-0 mt-0.5"
               />
               <div>
-                <span className="font-semibold text-slate-200">
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
                   تفعيل الحظر التلقائي للطلبة المتأخرين عن موعد الاستحقاق
                 </span>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                   يمنع الطالب تلقائياً من استعارة أي كتاب جديد حتى يتم تسجيل إرجاع الكتب السابقة، مع إمكانية تجاوزه بقرار استثنائي من أمين المكتبة.
                 </p>
               </div>
@@ -508,14 +508,14 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         </div>
 
         {/* Predefined Loan Reasons Management Card */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                 <ListPlus className="w-4 h-4 text-indigo-400" />
                 أسباب الاستعارة المسبقة في قائمة اختيار الطالب
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 قائمة الأسباب الجاهزة التي تظهر للطالب في القائمة المنسدلة عند طلب استعارة كتاب ورقي
               </p>
             </div>
@@ -537,7 +537,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 }
               }}
               placeholder="اكتب سبباً جديداً للاستعارة (مثال: مراجعة قبل الأولمبياد المدرسي)..."
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+              className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
             />
             <button
               type="button"
@@ -554,10 +554,10 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             {(form.predefinedLoanReasons || []).map((reason, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between p-2.5 bg-slate-950 border border-slate-800/80 rounded-xl text-slate-200"
+                className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-800 dark:text-slate-200"
               >
                 <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 font-mono text-[10px] flex items-center justify-center font-bold">
+                  <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono text-[10px] flex items-center justify-center font-bold">
                     {idx + 1}
                   </span>
                   <span className="font-medium text-xs">{reason}</span>
@@ -577,54 +577,54 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         </div>
 
         {/* Institution & Network Hub Card */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
-          <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+          <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
             <Server className="w-4 h-4 text-emerald-400" />
             بيانات المؤسسة وشبكة الخادم المحلي (Localhost / LAN)
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">اسم المؤسسة التعليمية</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اسم المؤسسة التعليمية</label>
               <input
                 type="text"
                 value={form.schoolName}
                 onChange={(e) => setForm({ ...form, schoolName: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100"
               />
             </div>
             <div>
-              <label className="block text-slate-300 font-medium mb-1">اسم المكتبة المركزية</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اسم المكتبة المركزية</label>
               <input
                 type="text"
                 value={form.libraryName}
                 onChange={(e) => setForm({ ...form, libraryName: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100"
               />
             </div>
           </div>
 
-          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1 font-mono text-[11px] text-slate-400">
+          <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1 font-mono text-[11px] text-slate-500 dark:text-slate-400">
             <div className="flex justify-between">
               <span>وضع الخادم:</span>
               <span className="text-emerald-400 font-bold">Localhost Central Server (Node/React Desktop)</span>
             </div>
             <div className="flex justify-between">
               <span>منفذ الخدمة الشبكي:</span>
-              <span className="text-slate-200">Port 3000 (0.0.0.0)</span>
+              <span className="text-slate-800 dark:text-slate-200">Port 3000 (0.0.0.0)</span>
             </div>
           </div>
         </div>
 
         {/* Digital Book Storage & Root URL Configuration Card (Section 19 Requirement) */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                 <HardDrive className="w-4 h-4 text-sky-400" />
                 مسار وجذر ملفات الكتب الرقمية (Digital Books Root Path / Base URL)
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 المسار المعتمد على الخادم لتخزين ملفات الكتب الرقمية (PDF / ePub)، وفحص المجلدات، والاستيراد الجماعي التلقائي
               </p>
             </div>
@@ -634,7 +634,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">
               المسار أو الرابط الأساسي للملفات الرقمية (Root URL / Local Folder Path) *
             </label>
             <input
@@ -643,14 +643,14 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               value={form.digitalBookRootUrl || ''}
               onChange={(e) => setForm({ ...form, digitalBookRootUrl: e.target.value })}
               placeholder="LibraryData/books/digital"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-indigo-500 text-xs"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono outline-none focus:border-indigo-500 text-xs"
             />
             <span className="text-[11px] text-slate-500 mt-1 block leading-relaxed">
               يُستخدم هذا المسار مباشرة في عمليات الاستكشاف الجماعي (Bulk Scan)، الفرز التلقائي قبل الاستيراد، وحل مسارات الكتب الرقمية. يتم حفظ القيمة واسترجاعها تلقائياً عند إعادة تشغيل الخادم.
             </span>
           </div>
 
-          <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1 font-mono text-[11px] text-slate-400">
+          <div className="p-3 bg-slate-50 dark:bg-slate-950/80 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1 font-mono text-[11px] text-slate-500 dark:text-slate-400">
             <div className="flex justify-between">
               <span>القيمة المحفوظة حالياً:</span>
               <span className="text-emerald-400 font-bold">{config.digitalBookRootUrl || 'LibraryData/books/digital'}</span>
@@ -675,25 +675,25 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       {/* Database Maintenance & Backup Section */}
       <div className="space-y-4">
         {/* Notice on Digital Files / Media Storage */}
-        <div className="bg-slate-900/60 border border-indigo-500/20 rounded-2xl p-4 flex items-start gap-3 text-xs text-slate-300">
+        <div className="bg-white dark:bg-slate-900/60 border border-indigo-500/20 rounded-2xl p-4 flex items-start gap-3 text-xs text-slate-700 dark:text-slate-300">
           <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <span className="font-bold text-indigo-300">تنبيه تقني هام بخصوص ملفات الكتب الرقمية والأغلفة:</span>
-            <p className="text-slate-400 leading-relaxed">
-              عمليات النسخ الاحتياطي وتصدير البيانات تغطي قاعدة البيانات المركزية بكامل سجلاتها وبياناتها الوصفية وعلاقات الإعارة والقراءة. أما الملفات الرقمية الأصلية (<code className="text-indigo-300 font-mono">PDF</code> و <code className="text-indigo-300 font-mono">EPUB</code>) والأغلفة فمحفوظة محلياً في المجلد <code className="text-amber-300 font-mono">LibraryData/books/</code> على خادم مشكاة. للحفظ الشامل الكامل للمؤسسة، يُنصح بنسخ مجلد <code className="text-slate-200 font-mono">LibraryData</code> دورياً إلى وحدة تخزين خارجية.
+            <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
+              عمليات النسخ الاحتياطي وتصدير البيانات تغطي قاعدة البيانات المركزية بكامل سجلاتها وبياناتها الوصفية وعلاقات الإعارة والقراءة. أما الملفات الرقمية الأصلية (<code className="text-indigo-300 font-mono">PDF</code> و <code className="text-indigo-300 font-mono">EPUB</code>) والأغلفة فمحفوظة محلياً في المجلد <code className="text-amber-300 font-mono">LibraryData/books/</code> على خادم مشكاة. للحفظ الشامل الكامل للمؤسسة، يُنصح بنسخ مجلد <code className="text-slate-800 dark:text-slate-200 font-mono">LibraryData</code> دورياً إلى وحدة تخزين خارجية.
             </p>
           </div>
         </div>
 
         {/* Card 1: Unified Backup & Google Drive Status */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-5 text-xs">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-5 text-xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
             <div>
               <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                 <Database className="w-4 h-4 text-emerald-400" />
                 <span>منظومة النسخ الاحتياطي التلقائي (محلي وسحابي)</span>
               </h3>
-              <p className="text-[11px] text-slate-400 mt-1">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                 نسخ احتياطي يومي موثوق لقاعدة البيانات مع الاحتفاظ التلقائي بآخر 7 نسخ محلياً وعلى Google Drive الخاص بالمؤسسة
               </p>
             </div>
@@ -701,7 +701,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               <button
                 type="button"
                 onClick={fetchBackupStatus}
-                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all cursor-pointer"
+                className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-all cursor-pointer"
                 title="تحديث حالة النسخ"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -712,9 +712,9 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           {/* Backup Status Overview Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Local Backup Panel */}
-            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <HardDrive className="w-4 h-4 text-emerald-400" />
                   النسخ الاحتياطي المحلي (Local Backup)
                 </span>
@@ -723,15 +723,15 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                     : backupStatus?.local.status === 'failed'
                     ? 'bg-rose-950 text-rose-300 border border-rose-800'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700'
                 }`}>
                   {backupStatus?.local.status === 'successful' ? '✓ ناجح' : backupStatus?.local.status === 'failed' ? '✗ خطأ' : 'جاهز'}
                 </span>
               </div>
-              <div className="space-y-1 text-slate-400 text-[11px] pt-1">
+              <div className="space-y-1 text-slate-500 dark:text-slate-400 text-[11px] pt-1">
                 <div className="flex justify-between">
                   <span>آخر نسخة ناجحة:</span>
-                  <span className="font-mono text-slate-200">
+                  <span className="font-mono text-slate-800 dark:text-slate-200">
                     {backupStatus?.local.lastBackupTime
                       ? new Date(backupStatus.local.lastBackupTime).toLocaleString('ar-SA')
                       : 'لا توجد بعد'}
@@ -739,7 +739,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span>النسخ المحفوظة محلياً:</span>
-                  <span className="font-mono text-slate-200">
+                  <span className="font-mono text-slate-800 dark:text-slate-200">
                     {backupStatus?.local.count ?? 0} / 7
                   </span>
                 </div>
@@ -747,9 +747,9 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             </div>
 
             {/* Cloud Backup Panel */}
-            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Cloud className="w-4 h-4 text-sky-400" />
                   النسخ الاحتياطي السحابي (Google Drive)
                 </span>
@@ -758,7 +758,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                     : backupStatus?.cloud.status === 'waiting'
                     ? 'bg-amber-950 text-amber-300 border border-amber-800'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700'
                 }`}>
                   {backupStatus?.cloud.connected
                     ? backupStatus.cloud.status === 'waiting'
@@ -767,10 +767,10 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                     : 'غير متصل'}
                 </span>
               </div>
-              <div className="space-y-1 text-slate-400 text-[11px] pt-1">
+              <div className="space-y-1 text-slate-500 dark:text-slate-400 text-[11px] pt-1">
                 <div className="flex justify-between">
                   <span>آخر رفع سحابي:</span>
-                  <span className="font-mono text-slate-200">
+                  <span className="font-mono text-slate-800 dark:text-slate-200">
                     {backupStatus?.cloud.lastUploadTime
                       ? new Date(backupStatus.cloud.lastUploadTime).toLocaleString('ar-SA')
                       : 'لا يوجد بعد'}
@@ -778,7 +778,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span>النسخ على Google Drive:</span>
-                  <span className="font-mono text-slate-200">
+                  <span className="font-mono text-slate-800 dark:text-slate-200">
                     {backupStatus?.cloud.count !== null ? `${backupStatus?.cloud.count} / 7` : 'غير معروف'}
                   </span>
                 </div>
@@ -820,7 +820,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 <button
                   type="button"
                   onClick={handleDisconnectDrive}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 border border-slate-700 rounded-xl transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-rose-900/40 text-slate-700 dark:text-slate-300 hover:text-rose-300 border border-slate-300 dark:border-slate-700 rounded-xl transition-all cursor-pointer"
                 >
                   <CloudOff className="w-3.5 h-3.5" />
                   <span>فصل Google Drive</span>
@@ -842,8 +842,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         {/* Modal for Google Drive OAuth Connection (Simple Institutional 1-Click Experience) */}
         {showDriveConnectModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-5 shadow-2xl text-xs">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-5 shadow-2xl text-xs">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                 <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                   <Cloud className="w-5 h-5 text-sky-400" />
                   <span>ربط حساب Google Drive للمؤسسة</span>
@@ -851,7 +851,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowDriveConnectModal(false)}
-                  className="text-slate-400 hover:text-slate-200 cursor-pointer text-base"
+                  className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer text-base"
                 >
                   ✕
                 </button>
@@ -862,7 +862,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                   <Cloud className="w-7 h-7" />
                 </div>
                 <h5 className="font-bold text-slate-100 text-sm">النسخ الاحتياطي السحابي التلقائي الآمن</h5>
-                <p className="text-slate-300 text-xs leading-relaxed">
+                <p className="text-slate-700 dark:text-slate-300 text-xs leading-relaxed">
                   سيتم إنشاء مجلد آمن باسم <strong className="text-sky-300">MISHKAT Backups</strong> في Google Drive التابع للمؤسسة، وحفظ آخر <strong>7 نسخ احتياطية</strong> تلقائياً لمنع فقدان بيانات المكتبة تماماً.
                 </p>
               </div>
@@ -883,20 +883,20 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                   <span>{connectingDrive ? 'جاري فتح نافذة Google...' : 'تسجيل الدخول باستخدام Google للمؤسسة'}</span>
                 </button>
 
-                <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center leading-relaxed">
                   💡 ستفتح نافذة Google الرسمية؛ اختر حساب المؤسسة واضغط "السماح"، وسيتم الربط وإغلاق النافذة آلياً خلال ثوانٍ.
                 </p>
               </div>
 
               {/* Collapsible Manual Code Fallback */}
-              <div className="pt-2 border-t border-slate-800/80">
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80">
                 <details className="text-slate-500 text-[11px] group">
-                  <summary className="cursor-pointer hover:text-slate-400 transition-colors list-none flex items-center justify-between">
+                  <summary className="cursor-pointer hover:text-slate-500 dark:text-slate-400 transition-colors list-none flex items-center justify-between">
                     <span>خيارات الربط اليدوي البديل (إذا تعذر الفتح التلقائي)</span>
                     <span className="text-[10px] group-open:rotate-180 transition-transform">▼</span>
                   </summary>
                   <div className="space-y-2 pt-2.5">
-                    <p className="text-slate-400 text-[11px]">
+                    <p className="text-slate-500 dark:text-slate-400 text-[11px]">
                       إذا قمت بتسجيل الدخول من متصفح آخر، الصق رمز التفويض (Authorization Code) هنا:
                     </p>
                     <div className="flex gap-2">
@@ -905,7 +905,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                         value={authCodeInput}
                         onChange={(e) => setAuthCodeInput(e.target.value)}
                         placeholder="4/0AWtgk..."
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-sky-500 text-xs"
+                        className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-sky-500 text-xs"
                       />
                       <button
                         type="button"
@@ -924,7 +924,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowDriveConnectModal(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl transition-all cursor-pointer"
                 >
                   إغلاق النافذة
                 </button>
@@ -934,14 +934,14 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         )}
 
         {/* Card 2: Restore from Local or Google Drive */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                 <RotateCcw className="w-4 h-4 text-amber-400" />
                 <span>استرجاع قاعدة البيانات المركزية (Database Restore)</span>
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 استعادة النظام من النسخ المحلية أو مباشرة من Google Drive عند تعطل أو استبدال جهاز الكمبيوتر
               </p>
             </div>
@@ -951,7 +951,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-slate-400 leading-relaxed">
+            <div className="text-slate-500 dark:text-slate-400 leading-relaxed">
               يقوم النظام تلقائياً بإنشاء نسخة أمان احتياطية قبل الاسترجاع، وفحص سلامة الملف ومطابقة الجداول قبل لمس أي بيانات، مع إمكانية التراجع الكامل التلقائي في حال أي خطأ.
             </div>
             <button
@@ -972,16 +972,16 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
 
           {showBackupsList && (
-            <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+            <div className="mt-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-4">
               {/* Tabs for Local vs Google Drive */}
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
                 <button
                   type="button"
                   onClick={() => setActiveBackupTab('local')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
                     activeBackupTab === 'local'
                       ? 'bg-indigo-600 text-white shadow-md'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                      : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                   }`}
                 >
                   <HardDrive className="w-3.5 h-3.5" />
@@ -997,7 +997,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
                     activeBackupTab === 'cloud'
                       ? 'bg-sky-600 text-white shadow-md'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                      : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                   }`}
                 >
                   <Cloud className="w-3.5 h-3.5" />
@@ -1008,7 +1008,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               {/* Local Backups Tab */}
               {activeBackupTab === 'local' && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-slate-400 text-xs pb-1">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs pb-1">
                     <span>النسخ الاحتياطية المتوفرة على القرص الصلب المحلي</span>
                     <button
                       type="button"
@@ -1030,11 +1030,11 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                       {backups.map((b) => (
                         <div
                           key={b.fileName}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:border-slate-700 transition-colors"
                         >
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-slate-200 text-xs">{b.fileName}</span>
+                              <span className="font-mono text-slate-800 dark:text-slate-200 text-xs">{b.fileName}</span>
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                 b.type === 'pre_restore' ? 'bg-indigo-950 text-indigo-300 border border-indigo-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                               }`}>
@@ -1064,7 +1064,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               {/* Cloud Backups Tab (Google Drive) */}
               {activeBackupTab === 'cloud' && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-slate-400 text-xs pb-1">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs pb-1">
                     <span>النسخ المحفوظة على Google Drive في مجلد MISHKAT Backups</span>
                     <button
                       type="button"
@@ -1078,8 +1078,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                   </div>
 
                   {!backupStatus?.cloud.connected ? (
-                    <div className="text-center py-6 space-y-3 bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
-                      <p className="text-slate-400">حساب Google Drive غير مربوط حالياً.</p>
+                    <div className="text-center py-6 space-y-3 bg-white dark:bg-slate-900/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                      <p className="text-slate-500 dark:text-slate-400">حساب Google Drive غير مربوط حالياً.</p>
                       <button
                         type="button"
                         onClick={handleConnectDrive}
@@ -1097,11 +1097,11 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                       {driveBackups.map((db) => (
                         <div
                           key={db.id}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:border-slate-700 transition-colors"
                         >
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-slate-200 text-xs">{db.name}</span>
+                              <span className="font-mono text-slate-800 dark:text-slate-200 text-xs">{db.name}</span>
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-950 text-sky-300 border border-sky-800">
                                 Google Drive
                               </span>
@@ -1131,8 +1131,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         </div>
 
         {/* Card 3: Institutional Data Export (Migration & Open JSON) */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
               <FileText className="w-4 h-4 text-cyan-400" />
               <span>تصدير بيانات المؤسسة (ترحيل البيانات المفتوحة)</span>
@@ -1143,14 +1143,14 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-slate-400 leading-relaxed">
+            <div className="text-slate-500 dark:text-slate-400 leading-relaxed">
               تصدير بيانات المؤسسة بصيغة JSON مقروءة وقياسية لأغراض الترحيل لأنظمة أخرى أو المراجعة الخارجية. يتم استبعاد كلمات المرور، أسئلة الأمان، ورموز الجلسات بالكامل حفاظاً على سرية وخصوصية النظام.
             </div>
             <button
               type="button"
               onClick={handleExportInstitutionalDataAction}
               disabled={exportingData}
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
             >
               <Download className={`w-4 h-4 text-cyan-400 ${exportingData ? 'animate-bounce' : ''}`} />
               <span>{exportingData ? 'جاري تصدير البيانات...' : 'تصدير بيانات المؤسسة (JSON)'}</span>
@@ -1159,8 +1159,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         </div>
 
         {/* Card 4: Reset Demo Data */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
               <RotateCcw className="w-4 h-4 text-rose-400" />
               <span>إعادة تعيين قاعدة البيانات المركزية</span>
@@ -1171,7 +1171,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-slate-400 leading-relaxed">
+            <div className="text-slate-500 dark:text-slate-400 leading-relaxed">
               إعادة تعيين قاعدة البيانات المركزية ومسح كافة بيانات النظام (الطلاب، الكتب، الإعارات وغيرها) باستثناء بيانات مدير النظام الافتراضية.
             </div>
             <button

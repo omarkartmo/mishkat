@@ -98,7 +98,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onOpenBookReader,
   onOpenPhysicalBookmark,
 }) => {
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -292,7 +292,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           <button
             type="button"
             onClick={() => handleExecuteSearch()}
-            className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-colors rounded-lg z-10"
+            className="p-1 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-colors rounded-lg z-10"
             title="تنفيذ البحث"
           >
             <Search className="w-4 h-4" />
@@ -311,14 +311,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               }
             }}
             placeholder="ابحث عن كتاب، مؤلف، موضوع، أو تصنيف..."
-            className="w-full bg-slate-100/90 dark:bg-slate-950/90 hover:bg-slate-100 dark:hover:bg-slate-950 border border-slate-200/90 dark:border-slate-800 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-indigo-500/10 rounded-2xl pr-10 pl-24 py-2 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all shadow-xs"
+            className="w-full bg-slate-100/90 dark:bg-slate-950/90 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-slate-950 border border-slate-200/90 dark:border-slate-800 focus:border-indigo-500 focus:bg-white dark:focus:bg-white dark:bg-slate-900 focus:ring-4 focus:ring-indigo-500/10 rounded-2xl pr-10 pl-24 py-2 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all shadow-xs"
           />
           <div className="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
             {localSearch && (
               <button
                 type="button"
                 onClick={handleClearSearch}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-800 dark:text-slate-200 rounded-full hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
                 title="مسح البحث"
               >
                 <X className="w-3.5 h-3.5" />
@@ -387,7 +387,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setIsSearchOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg text-xs"
+                  className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-800 dark:text-slate-200 p-1 rounded-lg text-xs"
                   title="إغلاق"
                 >
                   ✕
@@ -399,11 +399,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 p-2 space-y-1">
               {totalResultsCount === 0 ? (
                 <div className="py-8 text-center space-y-2">
-                  <BookOpen className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
+                  <BookOpen className="w-8 h-8 text-slate-700 dark:text-slate-300 dark:text-slate-600 mx-auto" />
                   <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                     لم يتم العثور على كتب تطابق "{trimmedSearch}"
                   </p>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     جرب البحث بكلمات أخرى، أو باسم المؤلف، أو بالتصنيف
                   </p>
                   <button
@@ -425,7 +425,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                       return (
                         <div
                           key={`p-${book.id}`}
-                          className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 rounded-xl transition-colors flex items-center justify-between gap-3 sm:gap-4 w-full"
+                          className="p-3 hover:bg-slate-50 dark:hover:bg-slate-100 dark:bg-slate-800/60 rounded-xl transition-colors flex items-center justify-between gap-3 sm:gap-4 w-full"
                         >
                           <div className="space-y-1 min-w-0 flex-1">
                             {/* Badges Line (Horizontal & Never Wrap Letters) */}
@@ -501,7 +501,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                       return (
                         <div
                           key={`d-${book.id}`}
-                          className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 rounded-xl transition-colors flex items-center justify-between gap-3 sm:gap-4 w-full"
+                          className="p-3 hover:bg-slate-50 dark:hover:bg-slate-100 dark:bg-slate-800/60 rounded-xl transition-colors flex items-center justify-between gap-3 sm:gap-4 w-full"
                         >
                           <div className="space-y-1 min-w-0 flex-1">
                             {/* Badges Line (Horizontal & Never Wrap Letters) */}
@@ -656,7 +656,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                   {userNotifications.length > 0 && onClearNotifications && (
                     <button
                       onClick={onClearNotifications}
-                      className="text-slate-400 hover:text-rose-500 flex items-center gap-1 cursor-pointer p-1"
+                      className="text-slate-500 dark:text-slate-400 hover:text-rose-500 flex items-center gap-1 cursor-pointer p-1"
                       title="مسح كافة الإشعارات"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -669,7 +669,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
                 {userNotifications.length === 0 ? (
                   <div className="p-8 text-center space-y-2">
-                    <Inbox className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
+                    <Inbox className="w-8 h-8 text-slate-700 dark:text-slate-300 dark:text-slate-600 mx-auto" />
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       لا توجد إشعارات جديدة حالياً
                     </p>
@@ -686,7 +686,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                         onClick={() => handleNotificationItemClick(notif)}
                         className={`p-3 transition-colors cursor-pointer text-right flex gap-2.5 items-start ${
                           notif.isRead
-                            ? 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 opacity-80'
+                            ? 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-100 dark:bg-slate-800/40 opacity-80'
                             : 'bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-indigo-50 dark:hover:bg-indigo-950/40'
                         }`}
                       >
@@ -724,7 +724,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                           <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed break-words">
                             {notif.message}
                           </p>
-                          <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-mono">
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-1 font-mono">
                             {notif.createdAt}
                           </div>
                         </div>
@@ -764,13 +764,23 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         )}
 
         {/* Current Authenticated User & Profile Menu */}
-        <div className="relative" ref={menuRef}>
+        <div className="flex items-center gap-2 relative" ref={menuRef}>
+          {/* Theme Toggle Button */}
+          <button
+            onClick={toggleTheme}
+            className="hidden sm:flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 transition-colors shadow-xs cursor-pointer"
+            title={theme === 'dark' ? 'التبديل للوضع النهاري' : 'التبديل للوضع الليلي'}
+            aria-label="تبديل المظهر"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+
           <button
             onClick={() => {
               setIsUserMenuOpen(!isUserMenuOpen);
               setIsNotificationsOpen(false);
             }}
-            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 rounded-xl transition-all text-right group cursor-pointer shadow-xs shrink-0"
+            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 rounded-xl transition-all text-right group cursor-pointer shadow-xs shrink-0"
             title="الملف الشخصي وإعدادات الجلسة"
             aria-label="حساب المستخدم وتسجيل الخروج"
           >
@@ -803,7 +813,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </div>
 
             <ChevronDown
-              className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-transform shrink-0 ${
+              className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-800 dark:text-slate-200 transition-transform shrink-0 ${
                 isUserMenuOpen ? 'rotate-180' : ''
               }`}
             />
@@ -847,11 +857,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-[10px]">
                   <div className="flex flex-col">
-                    <span className="text-slate-400 dark:text-slate-500">رقم القيد الأكاديمي:</span>
+                    <span className="text-slate-500 dark:text-slate-400 dark:text-slate-500">رقم القيد الأكاديمي:</span>
                     <span className="font-bold text-slate-700 dark:text-slate-200 font-mono truncate">{currentUser?.registrationNumber}</span>
                   </div>
                   <div className="flex flex-col text-left">
-                    <span className="text-slate-400 dark:text-slate-500">حالة الجلسة:</span>
+                    <span className="text-slate-500 dark:text-slate-400 dark:text-slate-500">حالة الجلسة:</span>
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       نشطة ومحمية

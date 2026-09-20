@@ -200,7 +200,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
             <Users className="w-5 h-5 text-indigo-400" />
             إدارة حسابات الطلبة وبيانات الدخول المركزية
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             إدارة سجلات الطلاب، استيراد القوائم المدرسية، وإعادة تعيين كلمات المرور المشفرة على الخادم المركزي
           </p>
         </div>
@@ -208,7 +208,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => setIsBulkPrintModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm"
             title="طباعة مجمعة لبطاقات دخول الطلبة على ورق A4 (6 بطاقات لكل صفحة)"
           >
             <Printer className="w-4 h-4 text-sky-400" />
@@ -217,7 +217,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
 
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
             <span>استيراد جماعي (CSV / Excel)</span>
@@ -253,7 +253,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
             </button>
             <button
               onClick={() => setSelectedStudentIds([])}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium cursor-pointer transition-colors"
+              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium cursor-pointer transition-colors"
             >
               إلغاء التحديد
             </button>
@@ -280,15 +280,15 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
       )}
 
       {/* Search & Filters */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="w-full md:w-80 relative">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="البحث باسم الطالب، رقم التسجيل، أو القسم..."
-            className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl pr-10 pl-4 py-2 text-xs text-slate-200 outline-none"
+            className="w-full bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-xl pr-10 pl-4 py-2 text-xs text-slate-800 dark:text-slate-200 outline-none"
           />
         </div>
 
@@ -296,7 +296,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
           <select
             value={gradeFilter}
             onChange={(e) => setGradeFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 outline-none focus:border-indigo-500"
+            className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500"
           >
             <option value="all">كل الفصول والأقسام</option>
             {grades.map((g) => (
@@ -309,7 +309,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 outline-none focus:border-indigo-500"
+            className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500"
           >
             <option value="all">كل حالات الحسابات</option>
             <option value="active">نشط ومؤهل للإعارة</option>
@@ -319,10 +319,10 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
       </div>
 
       {/* Students Table */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-semibold">
+            <thead className="bg-slate-50 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-semibold">
               <tr>
                 <th className="py-3.5 px-3 w-10 text-center">
                   <input
@@ -335,7 +335,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                         setSelectedStudentIds([]);
                       }
                     }}
-                    className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     title="تحديد كل الطلاب المعروضين"
                   />
                 </th>
@@ -347,7 +347,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                 <th className="py-3.5 px-4 text-center">الإجراءات</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-200">
+            <tbody className="divide-y divide-slate-800/60 text-slate-800 dark:text-slate-200">
               {filteredStudents.map((student) => {
                 const isBlocked = student.isBlocked;
                 const isSelected = selectedStudentIds.includes(student.id);
@@ -355,7 +355,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                 return (
                   <tr
                     key={student.id}
-                    className={`hover:bg-slate-800/40 transition-colors ${
+                    className={`hover:bg-slate-100 dark:bg-slate-800/40 transition-colors ${
                       isSelected ? 'bg-indigo-950/30' : isBlocked ? 'bg-rose-950/15' : ''
                     }`}
                   >
@@ -371,7 +371,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                             setSelectedStudentIds((prev) => prev.filter((id) => id !== student.id));
                           }
                         }}
-                        className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                       />
                     </td>
 
@@ -396,7 +396,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                     </td>
 
                     {/* Grade */}
-                    <td className="py-3.5 px-4 text-slate-300 font-medium">{student.grade || '—'}</td>
+                    <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium">{student.grade || '—'}</td>
 
                     {/* Status */}
                     <td className="py-3.5 px-4">
@@ -415,7 +415,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
 
                     {/* Password Security Status */}
                     <td className="py-3.5 px-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300 font-mono">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 font-mono">
                         <Lock className="w-3 h-3 text-emerald-400" />
                         <span>مشفرة (Bcrypt Hash)</span>
                       </span>
@@ -426,7 +426,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                       <div className="flex items-center justify-center gap-1.5 flex-wrap">
                         <button
                           onClick={() => handleOpenResetModal(student)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
                           title="إعادة تعيين وتوليد كلمة سر عشوائية قوية"
                         >
                           <KeyRound className="w-3 h-3 text-amber-400" />
@@ -442,7 +442,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                               grade: student.grade,
                             });
                           }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
                           title="طباعة بطاقة قيد الطالب"
                         >
                           <Printer className="w-3 h-3 text-sky-400" />
@@ -475,19 +475,19 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
       {/* Password Reset Modal */}
       {resetModalStudent && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-amber-400" />
                 <span>إعادة تعيين كلمة المرور: {resetModalStudent.name}</span>
               </h3>
-              <button onClick={() => setResetModalStudent(null)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+              <button onClick={() => setResetModalStudent(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-4 text-xs">
-              <p className="text-slate-300 leading-relaxed">
+              <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
                 يقوم النظام فوراً بتوليد <strong>كلمة مرور عشوائية قوية وفريدة</strong>، وتشفيرها في قاعدة البيانات (Bcrypt Hash)، وإلغاء صلاحية كافة الجلسات السابقة المفتوحة للطالب فوراً.
               </p>
 
@@ -503,7 +503,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-slate-300 font-medium text-xs flex items-center gap-1.5">
+                  <label className="text-slate-700 dark:text-slate-300 font-medium text-xs flex items-center gap-1.5">
                     <KeyRound className="w-3.5 h-3.5 text-amber-400" />
                     <span>كلمة المرور المقترحة عشوائياً:</span>
                   </label>
@@ -526,18 +526,18 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                   value={newPasswordInput}
                   onChange={(e) => setNewPasswordInput(e.target.value)}
                   placeholder="كلمة مرور عشوائية قوية"
-                  className="w-full bg-slate-950 border border-amber-500/40 focus:border-amber-400 rounded-xl px-3 py-2 text-amber-300 font-mono text-sm tracking-wider outline-none shadow-inner"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-amber-500/40 focus:border-amber-400 rounded-xl px-3 py-2 text-amber-300 font-mono text-sm tracking-wider outline-none shadow-inner"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                   كلمة قوية مؤلفة من أحرف وأرقام عشوائية خالية من الرموز الملتبسة (مثل 0/O و 1/l) لتفادي أخطاء النقل.
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setResetModalStudent(null)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl cursor-pointer"
                 >
                   إلغاء
                 </button>
@@ -559,8 +559,8 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
       {/* Delete Student Confirmation Modal */}
       {deleteModalStudent && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-rose-400 text-sm flex items-center gap-2">
                 <Trash2 className="w-4 h-4 text-rose-400" />
                 <span>تأكيد حذف حساب الطالب</span>
@@ -573,30 +573,30 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                   }
                 }}
                 disabled={isDeleting}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer disabled:opacity-50"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+            <div className="p-4 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">اسم الطالب:</span>
+                <span className="text-slate-500 dark:text-slate-400">اسم الطالب:</span>
                 <span className="font-bold text-slate-100">{deleteModalStudent.name}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">رقم القيد / التسجيل:</span>
+                <span className="text-slate-500 dark:text-slate-400">رقم القيد / التسجيل:</span>
                 <span className="font-mono text-sky-400 font-semibold">{deleteModalStudent.registrationNumber}</span>
               </div>
               {deleteModalStudent.grade && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">القسم / الصف:</span>
-                  <span className="text-slate-300">{deleteModalStudent.grade}</span>
+                  <span className="text-slate-500 dark:text-slate-400">القسم / الصف:</span>
+                  <span className="text-slate-700 dark:text-slate-300">{deleteModalStudent.grade}</span>
                 </div>
               )}
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
               هل أنت متأكد من رغبتك في حذف حساب هذا الطالب من الخادم المركزي؟ سيتم إلغاء وصول الطالب للنظام فوراً.
             </p>
 
@@ -615,7 +615,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                   setDeleteErrorMessage(null);
                 }}
                 disabled={isDeleting}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
               >
                 إلغاء
               </button>
@@ -735,49 +735,49 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
           <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
             <Plus className="w-5 h-5 text-indigo-400" />
             <span>إضافة حساب طالب جديد</span>
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اسم الطالب الكامل *</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اسم الطالب الكامل *</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="مثال: يحيى بن إبراهيم الحارثي"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">رقم التسجيل المدرسي (اسم المستخدم) *</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">رقم التسجيل المدرسي (اسم المستخدم) *</label>
             <input
               type="text"
               required
               value={regNumber}
               onChange={(e) => setRegNumber(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">القسم / المستوى الدراسي</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">القسم / المستوى الدراسي</label>
             <input
               type="text"
               value={grade}
               onChange={(e) => setGrade(e.target.value)}
               placeholder="مثال: الصف الحادي عشر - علمي"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100"
             />
           </div>
 
@@ -793,7 +793,7 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-slate-300 font-medium text-[11px] flex items-center gap-1.5">
+              <label className="text-slate-700 dark:text-slate-300 font-medium text-[11px] flex items-center gap-1.5">
                 <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
                 <span>كلمة المرور المقترحة عشوائياً للطالب:</span>
               </label>
@@ -816,15 +816,15 @@ const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSave }) =>
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="كلمة مرور عشوائية قوية"
-              className="w-full bg-slate-950 border border-indigo-500/40 rounded-xl px-3 py-2 text-indigo-300 font-mono text-xs outline-none focus:border-indigo-400 shadow-inner"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-indigo-500/40 rounded-xl px-3 py-2 text-indigo-300 font-mono text-xs outline-none focus:border-indigo-400 shadow-inner"
             />
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl cursor-pointer"
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl cursor-pointer"
             >
               إلغاء
             </button>
@@ -885,13 +885,13 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
           <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
             استيراد قائمة الطلبة وتوليد الحسابات بالخادم المركزي
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -904,9 +904,9 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
             </div>
 
             {result.credentials && result.credentials.length > 0 && (
-              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <span className="font-semibold text-slate-200">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
                     بطاقات الدخول المولدة ({result.credentials.length} طالب):
                   </span>
                   <button
@@ -928,13 +928,13 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
                   </button>
                 </div>
 
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
                   عدد صفحات A4 المقدرة: <strong>{Math.ceil(result.credentials.length / 6)}</strong> صفحة (تخطيط 2×3 مع خطوط قص منقطة).
                 </div>
 
                 <div className="max-h-44 overflow-y-auto divide-y divide-slate-800/60 font-mono text-[11px] pr-1">
                   {result.credentials.slice(0, 15).map((c, idx) => (
-                    <div key={idx} className="py-1.5 flex items-center justify-between text-slate-300">
+                    <div key={idx} className="py-1.5 flex items-center justify-between text-slate-700 dark:text-slate-300">
                       <span>{c.name} ({c.regNumber})</span>
                       <span className="text-amber-400 font-bold tracking-wider">{c.tempPass}</span>
                     </div>
@@ -951,7 +951,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium cursor-pointer"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium cursor-pointer"
               >
                 إغلاق
               </button>
@@ -959,7 +959,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
           </div>
         ) : (
           <div className="space-y-3 text-xs">
-            <p className="text-slate-300 leading-relaxed">
+            <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
               قم بلصق بيانات ملف Excel أو CSV بالصيغة: <code>رقم التسجيل, اسم الطالب, القسم</code>. سيقوم النظام
               بإنشاء الحسابات وتشفير كلمات المرور في قاعدة البيانات المركزية.
             </p>
@@ -968,13 +968,13 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
               rows={8}
               value={csvContent}
               onChange={(e) => setCsvContent(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-slate-200 outline-none focus:border-emerald-500"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 font-mono text-[11px] text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500"
             />
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-medium"
               >
                 إلغاء
               </button>
@@ -1025,13 +1025,13 @@ const StudentCredentialCardModal: React.FC<StudentCredentialCardModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2 text-indigo-400">
             <KeyRound className="w-5 h-5" />
             <h3 className="font-bold text-slate-100 text-base">بطاقة بيانات دخول الطالب المركزية</h3>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1042,9 +1042,9 @@ const StudentCredentialCardModal: React.FC<StudentCredentialCardModalProps> = ({
         </div>
 
         {/* Card visual representation */}
-        <div className="p-5 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
-          <div className="border-b border-slate-800/80 pb-3">
-            <span className="text-[11px] text-slate-400 block mb-1">اسم الطالب الكامل:</span>
+        <div className="p-5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-4">
+          <div className="border-b border-slate-200 dark:border-slate-800/80 pb-3">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block mb-1">اسم الطالب الكامل:</span>
             <span className="text-base font-bold text-slate-100">{card.name}</span>
             {card.grade && (
               <span className="text-xs text-indigo-300 block mt-0.5">{card.grade}</span>
@@ -1052,18 +1052,18 @@ const StudentCredentialCardModal: React.FC<StudentCredentialCardModalProps> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl">
-              <span className="text-[11px] text-slate-400 block mb-1">رقم القيد (المستخدم):</span>
+            <div className="p-3 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block mb-1">رقم القيد (المستخدم):</span>
               <span className="text-sm font-bold font-mono text-indigo-300">{card.registrationNumber}</span>
             </div>
 
-            <div className="p-3 bg-slate-900/90 border border-amber-500/30 rounded-xl bg-amber-500/5">
+            <div className="p-3 bg-white dark:bg-slate-900/90 border border-amber-500/30 rounded-xl bg-amber-500/5">
               <span className="text-[11px] text-amber-400 block mb-1">كلمة المرور الجديدة:</span>
               <span className="text-base font-bold font-mono text-amber-300 tracking-wider select-all">{card.password}</span>
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed pt-1">
             ⚠️ <strong>تنبيه أمني:</strong> لا تُحفظ كلمة المرور في النظام كنص صريح. يرجى تسليم هذه البيانات للطالب أو طباعة البطاقة الورقية له الآن.
           </p>
         </div>
@@ -1072,9 +1072,9 @@ const StudentCredentialCardModal: React.FC<StudentCredentialCardModalProps> = ({
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-semibold transition-all cursor-pointer"
           >
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
+            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
             <span>{copied ? 'تم النسخ بنجاح' : 'نسخ بيانات الدخول'}</span>
           </button>
 
@@ -1091,7 +1091,7 @@ const StudentCredentialCardModal: React.FC<StudentCredentialCardModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer"
             >
               إغلاق
             </button>
@@ -1146,13 +1146,13 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2 text-sky-400">
             <Printer className="w-5 h-5" />
             <h3 className="font-bold text-slate-100 text-base">طباعة مجمعة لبطاقات دخول الطلبة (A4)</h3>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1166,7 +1166,7 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
 
         {/* Scope selector */}
         <div className="space-y-3 text-xs">
-          <label className="block text-slate-300 font-semibold">تحديد نطاق الطباعة:</label>
+          <label className="block text-slate-700 dark:text-slate-300 font-semibold">تحديد نطاق الطباعة:</label>
           <div className="grid grid-cols-2 gap-2.5">
             {selectedStudentIds.length > 0 && (
               <button
@@ -1175,7 +1175,7 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
                 className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
                   scope === 'selected'
                     ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 font-bold'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                 }`}
               >
                 <div>الطلاب المحددون بالجدول</div>
@@ -1189,7 +1189,7 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
               className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
                 scope === 'filtered'
                   ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 font-bold'
-                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
               }`}
             >
               <div>الطلاب المعروضون بالبحث</div>
@@ -1202,7 +1202,7 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
               className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
                 scope === 'grade'
                   ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 font-bold'
-                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
               }`}
             >
               <div>حسب الصف / القسم الدراسي</div>
@@ -1215,7 +1215,7 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
               className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
                 scope === 'all'
                   ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 font-bold'
-                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
               }`}
             >
               <div>جميع طلاب المدرسة بالكامل</div>
@@ -1225,11 +1225,11 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
 
           {scope === 'grade' && grades.length > 0 && (
             <div className="pt-1">
-              <label className="block text-slate-400 mb-1 text-[11px]">اختر الصف أو القسم:</label>
+              <label className="block text-slate-500 dark:text-slate-400 mb-1 text-[11px]">اختر الصف أو القسم:</label>
               <select
                 value={selectedGrade}
                 onChange={(e) => setSelectedGrade(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 text-xs"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 text-xs"
               >
                 {grades.map((g) => (
                   <option key={g} value={g}>
@@ -1242,16 +1242,16 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
         </div>
 
         {/* Print calculation breakdown */}
-        <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2 text-xs">
-          <div className="flex items-center justify-between text-slate-300">
+        <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2 text-xs">
+          <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
             <span>إجمالي بطاقات الطلبة المستهدفة:</span>
             <span className="font-bold text-slate-100 font-mono text-sm">{studentCount} بطاقة</span>
           </div>
-          <div className="flex items-center justify-between text-slate-300">
+          <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
             <span>توزيع البطاقات على الصفحات:</span>
             <span className="font-semibold text-sky-400 font-mono">6 بطاقات / صفحة A4 (2×3)</span>
           </div>
-          <div className="flex items-center justify-between text-slate-300 border-t border-slate-800/80 pt-2 font-bold">
+          <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 border-t border-slate-200 dark:border-slate-800/80 pt-2 font-bold">
             <span>عدد أوراق الطباعة A4 المقدرة:</span>
             <span className="text-emerald-400 font-mono text-sm">{pageCount} {pageCount === 1 ? 'صفحة' : 'صفحات'}</span>
           </div>
@@ -1259,15 +1259,15 @@ const BulkPrintCardsModal: React.FC<BulkPrintCardsModalProps> = ({
 
         {/* Security explanation & actions */}
         <div className="space-y-3 pt-1">
-          <p className="text-[11px] text-slate-300 leading-relaxed bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
+          <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
             🔐 <strong>إلزام أمني:</strong> كلمات المرور السابقة مشفرة بنظام Bcrypt ولا يمكن استرجاعها كنص صريح. لطباعة بطاقات بيانات دخول صالحة، سيقوم هذا الإجراء بتوليد كلمات مرور جديدة فريدة وعشوائية لكل طالب فوراً عبر الخادم المركزي، وتحديثها، وإلغاء الجلسات السابقة، ثم فتح محرك الطباعة A4 (6 بطاقات / ورقة) ببيانات الاعتماد الحقيقية.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
             >
               إلغاء
             </button>

@@ -86,10 +86,9 @@ export class UpdaterService {
     this.updateStatus.message = 'جاري التحقق من وجود إصدارات جديدة معتمدة...';
 
     try {
-      // Official GitHub Releases API by default or custom feed URL
-      const githubRepo = process.env.MISHKAT_GITHUB_REPO || 'omarkartmo/mishkat';
-      const defaultGithubFeed = `https://api.github.com/repos/${githubRepo}/releases/latest`;
-      const targetUrl = feedUrl || process.env.MISHKAT_UPDATE_FEED_URL || defaultGithubFeed;
+      // Use Update Access Service by default
+      const defaultAccessServiceUrl = 'http://localhost:3001/api/update/latest';
+      const targetUrl = feedUrl || process.env.MISHKAT_UPDATE_ACCESS_SERVICE_URL || defaultAccessServiceUrl;
 
       let manifest: ReleaseManifest | null = null;
       try {
@@ -99,15 +98,43 @@ export class UpdaterService {
           signal: controller.signal,
           headers: {
             'User-Agent': 'Mishkat-Server-Updater-v1',
-            'Accept': 'application/vnd.github.v3+json, application/json',
+            'Accept': 'application/json',
           },
         });
         clearTimeout(timeout);
 
         if (res.ok) {
           const rawData = await res.json();
-          // Check if response is GitHub Release format
-          if (rawData.tag_name) {
+          
+          // Check if response is Update Access Service format
+          if (rawData.manifestUrl && rawData.downloadUrl) {
+            try {
+              const mRes = await fetch(rawData.manifestUrl);
+              if (mRes.ok) {
+                manifest = await mRes.json();
+                if (manifest) {
+                  // Crucial: Use the temporary direct download URL provided by the service
+                  manifest.downloadUrl = rawData.downloadUrl;
+                }
+              }
+            } catch (err) {
+              console.error("Failed to fetch manifest from Update Access Service", err);
+            }
+            
+            // Fallback if manifest is missing or fetch failed, though sha256 will be empty
+            if (!manifest) {
+              manifest = {
+                version: rawData.version,
+                releaseDate: rawData.publishedAt || new Date().toISOString(),
+                description: rawData.releaseNotes || 'تحديث رسمي معتمد لنظام المشكاة',
+                sha256: '', // Not available here, will skip verification later if empty
+                downloadUrl: rawData.downloadUrl,
+                criticalSecurityUpdate: false,
+              };
+            }
+          }
+          // Legacy Check (Fallback for older direct public repo configurations if needed)
+          else if (rawData.tag_name) {
             const rawVersion = String(rawData.tag_name).replace(/^v/, '');
             let downloadUrl = '';
             let sha256 = '';

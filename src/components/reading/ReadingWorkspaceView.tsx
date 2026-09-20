@@ -138,7 +138,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
             <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight leading-snug break-words">
               مفكرة التلخيص وتدوين الفوائد المعرفية
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed break-words">
+            <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 max-w-2xl leading-relaxed break-words">
               بيئتك المخصصة لتلخيص الكتب الورقية والرقمية بهيكلية منهجية، وتدوين الشواهد والفوائد العلمية ومشاركتها في أبحاثك ودراستك.
             </p>
           </div>
@@ -178,7 +178,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
             className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
               activeSection === 'summaries'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800'
             }`}
           >
             <Sparkles className="w-4 h-4" />
@@ -190,7 +190,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
             className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
               activeSection === 'notes'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800'
             }`}
           >
             <FileText className="w-4 h-4" />
@@ -200,7 +200,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
 
         {/* Search input in workspace */}
         <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
           <input
             type="text"
             placeholder="بحث في العناوين، الأفكار، أو الوسوم..."
@@ -255,12 +255,12 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
             {/* Tag Filter Pills */}
             {allSummaryTags.length > 0 && (
               <div className="flex items-center gap-1.5 overflow-x-auto">
-                <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <Tag className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
                 <button
                   onClick={() => setSelectedTagFilter('all')}
                   className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium transition-all ${
                     selectedTagFilter === 'all'
-                      ? 'bg-slate-800 text-white'
+                      ? 'bg-slate-100 dark:bg-slate-800 text-white'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                   }`}
                 >
@@ -357,7 +357,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
 
                     {/* Main Idea box */}
                     <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-2xl">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
                         الأطروحة المركزية:
                       </span>
                       <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed line-clamp-3">
@@ -418,7 +418,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
 
                   {/* Summary Actions Footer */}
                   <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400 font-mono">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                       {summary.createdAt}
                     </span>
 
@@ -432,7 +432,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
 
                       <button
                         onClick={() => handleCopySummary(summary)}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors"
                         title="نسخ نص الملخص"
                       >
                         {copiedId === summary.id ? (
@@ -447,7 +447,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
                           setSelectedSummaryToEdit(summary);
                           setIsSummaryModalOpen(true);
                         }}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors"
                         title="تعديل الملخص"
                       >
                         <Edit3 className="w-4 h-4" />
@@ -455,7 +455,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
 
                       <button
                         onClick={() => onDeleteSummary(summary.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
+                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
                         title="حذف"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -579,7 +579,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
 
                     <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-400 font-mono text-[10px]">{note.createdAt}</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">{note.createdAt}</span>
                         {matchedDigital && onOpenDigitalBook && (
                           <button
                             type="button"
@@ -599,14 +599,14 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
                             setSelectedNoteToEdit(note);
                             setIsNoteModalOpen(true);
                           }}
-                          className="p-1 text-slate-400 hover:text-indigo-600 rounded"
+                          className="p-1 text-slate-500 dark:text-slate-400 hover:text-indigo-600 rounded"
                           title="تعديل"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => onDeleteNote(note.id)}
-                          className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          className="p-1 text-slate-500 dark:text-slate-400 hover:text-rose-600 rounded"
                           title="حذف"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -637,7 +637,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
                   >
                     {selectedSummaryViewDetail.bookMedium === 'physical' ? 'كتاب ورقي' : 'كتاب إلكتروني'}
                   </span>
-                  <span className="text-xs text-slate-400 font-mono">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                     تاريخ التدوين: {selectedSummaryViewDetail.createdAt}
                   </span>
                 </div>
@@ -652,7 +652,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleCopySummary(selectedSummaryViewDetail)}
-                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 rounded-xl transition-colors"
                   title="نسخ الملخص بالكامل"
                 >
                   {copiedId === selectedSummaryViewDetail.id ? (
@@ -663,7 +663,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
                 </button>
                 <button
                   onClick={() => setSelectedSummaryViewDetail(null)}
-                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl"
+                  className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-800 dark:text-slate-200 rounded-xl"
                 >
                   ✕
                 </button>
@@ -723,7 +723,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
                             {ch.chapterTitle}
                           </h5>
                           {ch.pagesRange && (
-                            <span className="text-[11px] text-slate-400 font-mono font-semibold">
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono font-semibold">
                               {ch.pagesRange}
                             </span>
                           )}
@@ -759,7 +759,7 @@ export const ReadingWorkspaceView: React.FC<ReadingWorkspaceViewProps> = ({
                             «{qItem.quote}»
                           </span>
                           {qItem.page && (
-                            <span className="text-[11px] font-mono text-slate-400 font-bold shrink-0">
+                            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-bold shrink-0">
                               ص {qItem.page}
                             </span>
                           )}

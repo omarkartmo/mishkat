@@ -134,7 +134,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
 
       {/* Ingestion Observability Panel (admin only) */}
       {userRole === 'admin' && showObservability && (
-        <div className="bg-slate-900/80 border border-sky-900/50 rounded-2xl p-5 shadow-xl">
+        <div className="bg-white dark:bg-slate-900/80 border border-sky-900/50 rounded-2xl p-5 shadow-xl">
           <IngestionObservabilityPanel categories={categories} />
         </div>
       )}
@@ -143,7 +143,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
       <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3.5 shadow-sm">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
@@ -154,7 +154,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-800 dark:text-slate-200"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -181,7 +181,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
             className={`px-3 py-1.5 rounded-xl font-medium transition-all shrink-0 cursor-pointer ${
               selectedCategory === 'all'
                 ? 'bg-emerald-600 text-white font-semibold'
-                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800'
+                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-slate-800'
             }`}
           >
             جميع الأقسام ({books.length})
@@ -195,8 +195,8 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`px-3 py-1.5 rounded-xl font-medium transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                   isSelected
-                    ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold'
-                    : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800'
+                    ? 'bg-white dark:bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold'
+                    : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-slate-800'
                 }`}
               >
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
@@ -211,7 +211,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
       {/* Digital Books Grid */}
       {filteredBooks.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-3xl">
-          <Library className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
+          <Library className="w-12 h-12 text-slate-500 dark:text-slate-400 dark:text-slate-600 mx-auto mb-3" />
           <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">لا توجد كتب رقمية مطابقة للبحث</h3>
           <p className="text-xs text-slate-500 mt-1">
             يمكنك استيراد مجلد كامل أو كتب جديدة من "بوابة المكتبات المعتمدة" بضغطة زر
@@ -226,7 +226,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
             return (
               <div
                 key={book.id}
-                className="bg-white dark:bg-slate-900/80 hover:bg-slate-50 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-2xl p-5 flex flex-col justify-between transition-all group shadow-sm hover:shadow-md"
+                className="bg-white dark:bg-slate-900/80 hover:bg-slate-50 dark:hover:bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-300 dark:border-slate-700 rounded-2xl p-5 flex flex-col justify-between transition-all group shadow-sm hover:shadow-md"
               >
                 <div className="space-y-3">
                   {/* Top Bar: Category & Format Badge */}
@@ -256,7 +256,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
                       <button
                         onClick={() => onToggleFavorite(book.id)}
                         className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          isFav ? 'text-amber-500 bg-amber-400/10' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                          isFav ? 'text-amber-500 bg-amber-400/10' : 'text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-700 dark:text-slate-300'
                         }`}
                         title="إضافة للمفضلة"
                       >
@@ -305,7 +305,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
 
                 {/* Card Actions Footer */}
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-slate-400 font-mono">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                     {book.fileSize ? book.fileSize : (book.fileSizeMb ? `${book.fileSizeMb} MB` : 'غير متوفر')}
                   </span>
 
@@ -313,7 +313,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
                     {userRole === 'admin' && onUpdateBook && (
                       <button
                         onClick={() => setEditingBook(book)}
-                        className="p-2 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-xl transition-all cursor-pointer"
+                        className="p-2 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-300 dark:border-slate-700 rounded-xl transition-all cursor-pointer"
                         title="تعديل معلومات الكتاب الرقمي"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -400,7 +400,7 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
               <button
                 onClick={() => !isDeleting && setBookToDelete(null)}
                 disabled={isDeleting}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer disabled:opacity-50"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-800 dark:text-slate-200 cursor-pointer disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>

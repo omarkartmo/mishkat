@@ -381,7 +381,7 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
                     <Info className="w-4 h-4 text-indigo-400 shrink-0" />
                     <span>نموذج ملف CSV المعتمد للمكتبة</span>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
+                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                     حمل النموذج الجاهز المُعرب، وافتحه في Microsoft Excel أو Google Sheets، واملأ بيانات كتبك ثم ارفعه هنا.
                   </p>
                 </div>
@@ -398,7 +398,7 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
               {/* Upload Drop Zone */}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-700 hover:border-amber-500/80 bg-slate-950/50 hover:bg-slate-950 rounded-3xl p-8 sm:p-12 text-center transition-all cursor-pointer group"
+                className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-amber-500/80 bg-slate-50 dark:bg-slate-950/50 hover:bg-slate-50 dark:bg-slate-950 rounded-3xl p-8 sm:p-12 text-center transition-all cursor-pointer group"
               >
                 <input
                   type="file"
@@ -413,28 +413,28 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
                 <h4 className="text-base font-bold text-white mb-1">
                   انقر لاختيار ملف الـ CSV أو اسحبه وأفلته هنا
                 </h4>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
                   يدعم الملفات بصيغة CSV المشفرة بـ UTF-8. سيتم استخراج وفحص العناوين، المؤلفين، التصنيفات، وأماكن الرفوف تلقائياً.
                 </p>
               </div>
 
               {/* Supported Columns Guide */}
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80">
-                <div className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-amber-400" />
                   <span>الأعمدة المدعومة في النموذج:</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5 text-[11px] text-slate-400 font-mono">
-                  <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-bold">العنوان (إلزامي)</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800">المؤلف</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800">التصنيف</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800">دار النشر</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800">سنة النشر</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800">الرقم المعياري</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800 text-emerald-300">عدد النسخ</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800">الخزانة</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800">الرف</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800">الملخص</span>
+                <div className="flex flex-wrap gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-amber-300 font-bold">العنوان (إلزامي)</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">المؤلف</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">التصنيف</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">دار النشر</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">سنة النشر</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">الرقم المعياري</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-emerald-300">عدد النسخ</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">الخزانة</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">الرف</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">الملخص</span>
                 </div>
               </div>
             </div>
@@ -451,9 +451,9 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
               )}
 
               {/* Toolbar & Stats */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/70 p-3 rounded-2xl border border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-300 font-semibold">الملف: {fileName}</span>
+                  <span className="text-xs text-slate-700 dark:text-slate-300 font-semibold">الملف: {fileName}</span>
                   <div className="flex items-center gap-2 text-xs font-mono">
                     <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                       جاهز: {validCount}
@@ -474,15 +474,15 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="بحث في البيانات المعروضة..."
-                    className="w-full bg-slate-900 border border-slate-700/80 rounded-xl pr-9 pl-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 rounded-xl pr-9 pl-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
               {/* Preview Table */}
-              <div className="border border-slate-800 rounded-2xl overflow-hidden max-h-[50vh] overflow-y-auto">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden max-h-[50vh] overflow-y-auto">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800 sticky top-0 z-10">
+                  <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10">
                     <tr>
                       <th className="p-3 w-10">#</th>
                       <th className="p-3">عنوان الكتاب</th>
@@ -494,22 +494,22 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
                       <th className="p-3 w-12 text-center">إجراء</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                  <tbody className="divide-y divide-slate-800/60 text-slate-700 dark:text-slate-300">
                     {filteredRows.map((row, idx) => (
-                      <tr key={row.id} className="hover:bg-slate-800/40 transition-colors">
+                      <tr key={row.id} className="hover:bg-slate-100 dark:bg-slate-800/40 transition-colors">
                         <td className="p-3 text-slate-500 font-mono">{idx + 1}</td>
                         <td className="p-3 font-semibold text-white">
                           <div>{row.title || <span className="text-rose-400 italic">بدون عنوان</span>}</div>
                           {row.isbn && <div className="text-[10px] text-slate-500 font-mono">ردمك: {row.isbn}</div>}
                         </td>
-                        <td className="p-3 text-slate-300">{row.author}</td>
+                        <td className="p-3 text-slate-700 dark:text-slate-300">{row.author}</td>
                         <td className="p-3">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-amber-300 border border-slate-700">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-amber-300 border border-slate-300 dark:border-slate-700">
                             {row.categoryName}
                           </span>
                         </td>
                         <td className="p-3 font-mono font-semibold text-emerald-400">{row.totalCopies}</td>
-                        <td className="p-3 text-slate-400 font-mono text-[11px]">
+                        <td className="p-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
                           {row.cabinet ? `خ:${row.cabinet}` : ''} {row.shelf ? `ر:${row.shelf}` : ''}
                         </td>
                         <td className="p-3">
@@ -528,7 +528,7 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
                         <td className="p-3 text-center">
                           <button
                             onClick={() => handleDeleteRow(row.id)}
-                            className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
+                            className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
                             title="حذف هذا السطر"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -554,7 +554,7 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
             <div className="py-16 text-center space-y-4">
               <div className="w-16 h-16 rounded-full border-4 border-amber-500/20 border-t-amber-500 animate-spin mx-auto" />
               <h4 className="text-base font-bold text-white">جاري استيراد وحفظ الكتب في الخادم المركزي...</h4>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                 يتم التحقق من البيانات، توليد باركود النسخ، وتحديث سجلات الفهرسة والمكتبة.
               </p>
             </div>
@@ -567,7 +567,7 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
                 <CheckCircle2 className="w-10 h-10" />
               </div>
               <h4 className="text-lg font-bold text-white">تم الاستيراد الجماعي بنجاح!</h4>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
                 تمت إضافة <span className="font-bold text-emerald-400 font-mono">{importedSuccessCount}</span> كتاب ورقي جديد إلى الفهرس المركزي بنجاح.
               </p>
             </div>
@@ -575,13 +575,13 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between shrink-0">
+        <div className="p-4 sm:p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 flex items-center justify-between shrink-0">
           {step === 'preview' ? (
             <>
               <button
                 type="button"
                 onClick={() => setStep('upload')}
-                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-white hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
               >
                 اختيار ملف آخر
               </button>
@@ -589,7 +589,7 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-white hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
                 >
                   إلغاء
                 </button>
@@ -619,7 +619,7 @@ export const BulkCsvImportContent: React.FC<BulkCsvImportContentProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-white hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
               >
                 إغلاق
               </button>
@@ -641,9 +641,9 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 shrink-0">
+        <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
               <FileSpreadsheet className="w-5 h-5" />
@@ -655,14 +655,14 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                   Bulk CSV
                 </span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 أضف عشرات أو مئات الكتب الورقية للفهرس المكتبي بدقة وسرعة عبر ملف بيانات Excel / CSV
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-white hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

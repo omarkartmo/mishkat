@@ -60,7 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="w-10 h-10 rounded-xl overflow-hidden bg-transparent hover:bg-slate-800/50 cursor-pointer transition-all shrink-0 group relative flex items-center justify-center"
+              className="w-10 h-10 rounded-xl overflow-hidden bg-transparent hover:bg-slate-100 dark:bg-slate-800/50 cursor-pointer transition-all shrink-0 group relative flex items-center justify-center"
               title={isCollapsed ? 'انقر لتوسيع وإظهار أسماء القوائم' : 'انقر لطي القائمة الجانبية وتوفير مساحة العمل'}
               aria-label="تبديل حجم القائمة الجانبية"
             >
@@ -90,7 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               onClick={onCloseMobile}
-              className="lg:hidden p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="lg:hidden p-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
               title="إغلاق القائمة"
             >
               <CloseIcon className="w-5 h-5" />
@@ -171,7 +171,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Main Section */}
             <div>
               {!isCollapsed && (
-                <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider px-3 mb-2">
+                <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-400 uppercase tracking-wider px-3 mb-2">
                   الرئيسية والمطالعة
                 </div>
               )}
@@ -225,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Circulation Section for Librarian */}
             <div>
               {!isCollapsed && (
-                <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider px-3 mb-2">
+                <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-400 uppercase tracking-wider px-3 mb-2">
                   مكتب الإعارة والتداول
                 </div>
               )}
@@ -322,7 +322,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">متصل محلياً</span>
             </div>
-            <div className="text-[11px] text-slate-400 font-mono truncate">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate">
               المكتبة المركزية المتكاملة
             </div>
           </div>
@@ -364,11 +364,11 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, badge, 
       } rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer relative group ${
         active
           ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold'
-          : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-800/60'
+          : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-100 dark:bg-slate-800/60'
       }`}
     >
       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
-        <span className={`${active ? 'text-white' : 'text-slate-400 group-hover:text-indigo-400 transition-colors'}`}>
+        <span className={`${active ? 'text-white' : 'text-slate-500 dark:text-slate-400 group-hover:text-indigo-400 transition-colors'}`}>
           {icon}
         </span>
         {!isCollapsed && <span>{label}</span>}

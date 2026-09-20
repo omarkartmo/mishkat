@@ -617,12 +617,12 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-[110] flex flex-col bg-slate-950 text-slate-100 ${
+      className={`fixed inset-0 z-[110] flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-100 ${
         isFullscreen ? '' : 'sm:p-3'
       }`}
     >
       {/* Top Header Bar */}
-      <div className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-3 sm:px-5 shrink-0 shadow-sm relative z-40">
+      <div className="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-5 shrink-0 shadow-sm relative z-40">
         {/* Book Info & Close Control */}
         <div className="flex items-center gap-3">
           <button
@@ -635,10 +635,10 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           </button>
 
           <div className="hidden sm:flex flex-col">
-            <span className="font-bold text-xs sm:text-sm text-slate-200 truncate max-w-[200px] md:max-w-[320px]">
+            <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-200 truncate max-w-[200px] md:max-w-[320px]">
               {book.title}
             </span>
-            <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
               {book.author} ({isEpub ? 'ePub' : 'PDF'})
             </span>
           </div>
@@ -648,27 +648,27 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         <div className="flex items-center gap-2 sm:gap-3">
           {/* PDF Zoom Controls */}
           {!isEpub ? (
-            <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-xl border border-slate-800 text-xs">
+            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
               <button
                 onClick={() => setScale((s) => Math.max(0.6, Number((s - 0.15).toFixed(2))))}
-                className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="p-1 text-slate-500 dark:text-slate-400 hover:text-white transition-colors cursor-pointer"
                 title="تصغير"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
-              <span className="text-[10px] font-mono text-slate-300 w-9 text-center">
+              <span className="text-[10px] font-mono text-slate-700 dark:text-slate-300 w-9 text-center">
                 {Math.round(scale * 100)}%
               </span>
               <button
                 onClick={() => setScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))))}
-                className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="p-1 text-slate-500 dark:text-slate-400 hover:text-white transition-colors cursor-pointer"
                 title="تكبير"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setScale(isMobile ? 1.0 : 1.2)}
-                className="p-1 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                className="p-1 text-slate-500 hover:text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
                 title="إعادة ضبط الحجم"
               >
                 <RotateCcw className="w-3 h-3" />
@@ -676,28 +676,28 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             </div>
           ) : (
             /* EPUB Typography & Theme Controls */
-            <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-xl border border-slate-800 text-xs">
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
               <button
                 onClick={() => setEpubFontSize((s) => Math.max(14, s - 2))}
-                className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer text-[10px] font-bold"
+                className="p-1 text-slate-500 dark:text-slate-400 hover:text-white transition-colors cursor-pointer text-[10px] font-bold"
                 title="تصغير الخط"
               >
                 A-
               </button>
-              <span className="text-[10px] font-mono text-slate-300 w-7 text-center">
+              <span className="text-[10px] font-mono text-slate-700 dark:text-slate-300 w-7 text-center">
                 {epubFontSize}
               </span>
               <button
                 onClick={() => setEpubFontSize((s) => Math.min(30, s + 2))}
-                className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer text-[10px] font-bold"
+                className="p-1 text-slate-500 dark:text-slate-400 hover:text-white transition-colors cursor-pointer text-[10px] font-bold"
                 title="تكبير الخط"
               >
                 A+
               </button>
-              <div className="h-3 w-px bg-slate-800 mx-0.5" />
+              <div className="h-3 w-px bg-slate-100 dark:bg-slate-800 mx-0.5" />
               <button
                 onClick={() => setEpubTheme(epubTheme === 'dark' ? 'light' : 'dark')}
-                className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="p-1 text-slate-500 dark:text-slate-400 hover:text-white transition-colors cursor-pointer"
                 title={epubTheme === 'dark' ? 'الوضع المضيء' : 'الوضع الليلي'}
               >
                 {epubTheme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-sky-400" />}
@@ -707,17 +707,17 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
           {/* Page Navigation */}
           {!isEpub ? (
-            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage <= 1}
-                className="p-1 text-slate-300 hover:text-white disabled:opacity-30 transition-colors cursor-pointer"
+                className="p-1 text-slate-700 dark:text-slate-300 hover:text-white disabled:opacity-30 transition-colors cursor-pointer"
                 title="الصفحة السابقة"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
 
-              <div className="flex items-center gap-1 font-mono text-xs text-slate-200">
+              <div className="flex items-center gap-1 font-mono text-xs text-slate-800 dark:text-slate-200">
                 <input
                   type="number"
                   value={currentPage}
@@ -725,7 +725,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                     const val = Number(e.target.value);
                     if (val >= 1 && val <= numPages) setCurrentPage(val);
                   }}
-                  className="w-10 text-center bg-slate-900 border border-slate-700 rounded px-1 py-0.5 outline-none focus:border-indigo-500 text-xs"
+                  className="w-10 text-center bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 outline-none focus:border-indigo-500 text-xs"
                   min={1}
                   max={numPages}
                 />
@@ -736,25 +736,25 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
               <button
                 onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
                 disabled={currentPage >= numPages}
-                className="p-1 text-slate-300 hover:text-white disabled:opacity-30 transition-colors cursor-pointer"
+                className="p-1 text-slate-700 dark:text-slate-300 hover:text-white disabled:opacity-30 transition-colors cursor-pointer"
                 title="الصفحة التالية"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
               <button
                 onClick={() => epubRenditionRef.current?.prev()}
-                className="p-1 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                className="p-1 text-slate-700 dark:text-slate-300 hover:text-white transition-colors cursor-pointer"
                 title="الصفحة السابقة"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
-              <span className="text-[11px] font-mono text-slate-400">تصفح ePub</span>
+              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">تصفح ePub</span>
               <button
                 onClick={() => epubRenditionRef.current?.next()}
-                className="p-1 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                className="p-1 text-slate-700 dark:text-slate-300 hover:text-white transition-colors cursor-pointer"
                 title="الصفحة التالية"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -767,7 +767,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             <button
               onClick={() => setShowToc(!showToc)}
               className={`p-1.5 rounded-xl text-xs flex items-center gap-1 transition-all cursor-pointer ${
-                showToc ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                showToc ? 'bg-sky-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-700'
               }`}
               title="فهرس فصول الكتاب"
             >
@@ -780,7 +780,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           <button
             onClick={() => setShowNotes(!showNotes)}
             className={`p-1.5 rounded-xl text-xs flex items-center gap-1 transition-all cursor-pointer ${
-              showNotes ? 'bg-indigo-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              showNotes ? 'bg-indigo-600 text-white shadow' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-700'
             }`}
             title="دفتر الملاحظات والاقتباسات"
           >
@@ -791,7 +791,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           {/* Fullscreen Reading Mode (Section 15 Requirement) */}
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-all cursor-pointer"
+            className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-white rounded-xl transition-all cursor-pointer"
             title={isFullscreen ? 'الخروج من ملء الشاشة' : 'وضع ملء الشاشة للتركيز'}
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -803,13 +803,13 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       <div className="flex-1 flex overflow-hidden relative">
         {/* Table of Contents Drawer (EPUB) */}
         {isEpub && showToc && (
-          <div className="w-72 bg-slate-900 border-l border-slate-800 flex flex-col h-full z-30 shadow-2xl animate-in slide-in-from-right-5 duration-200">
-            <div className="p-3.5 border-b border-slate-800 flex items-center justify-between">
+          <div className="w-72 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col h-full z-30 shadow-2xl animate-in slide-in-from-right-5 duration-200">
+            <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h4 className="font-bold text-slate-100 text-xs sm:text-sm flex items-center gap-2">
                 <List className="w-4 h-4 text-sky-400" />
                 فهرس فصول الكتاب
               </h4>
-              <button onClick={() => setShowToc(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+              <button onClick={() => setShowToc(false)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -823,7 +823,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                       setEpubCurrentChapter(item.label);
                     }
                   }}
-                  className="w-full text-right p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors truncate block"
+                  className="w-full text-right p-2 rounded-xl text-slate-700 dark:text-slate-300 hover:text-white hover:bg-slate-100 dark:bg-slate-800 transition-colors truncate block"
                 >
                   {item.label}
                 </button>
@@ -834,20 +834,20 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
         {/* Research Notes Drawer (Section 14 Requirement: Notes Must Remain) */}
         {showNotes && (
-          <div className="w-80 md:w-88 bg-slate-900 border-l border-slate-800 flex flex-col h-full z-30 shadow-2xl animate-in slide-in-from-right-5 duration-200">
-            <div className="p-3.5 border-b border-slate-800 flex items-center justify-between">
+          <div className="w-80 md:w-88 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col h-full z-30 shadow-2xl animate-in slide-in-from-right-5 duration-200">
+            <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h4 className="font-bold text-slate-100 text-xs sm:text-sm flex items-center gap-2">
                 <MessageSquarePlus className="w-4 h-4 text-indigo-400" />
                 دفتر الملاحظات والاقتباسات
               </h4>
-              <button onClick={() => setShowNotes(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+              <button onClick={() => setShowNotes(false)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Note creation form */}
-            <form onSubmit={handleCreateNote} className="p-3 border-b border-slate-800 space-y-2 text-xs">
-              <span className="text-slate-300 font-semibold block text-[11px]">
+            <form onSubmit={handleCreateNote} className="p-3 border-b border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+              <span className="text-slate-700 dark:text-slate-300 font-semibold block text-[11px]">
                 تدوين ملاحظة في (صفحة {currentPage}):
               </span>
               <input
@@ -855,7 +855,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                 value={selectedQuote}
                 onChange={(e) => setSelectedQuote(e.target.value)}
                 placeholder="اقتباس نصي من الصفحة (اختياري)..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500 text-xs"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-2 text-slate-800 dark:text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500 text-xs"
               />
               <textarea
                 rows={3}
@@ -863,7 +863,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                 value={newNoteContent}
                 onChange={(e) => setNewNoteContent(e.target.value)}
                 placeholder="اكتب تحليلك المنهجي، الشواهد، أو الفائدة..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 placeholder-slate-500 resize-none outline-none focus:border-indigo-500 text-xs"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-2 text-slate-800 dark:text-slate-200 placeholder-slate-500 resize-none outline-none focus:border-indigo-500 text-xs"
               />
               <button
                 type="submit"
@@ -883,7 +883,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                 bookNotes.map((note) => (
                   <div
                     key={note.id}
-                    className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5 group hover:border-slate-700 transition-all"
+                    className="p-3 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1.5 group hover:border-slate-300 dark:border-slate-700 transition-all"
                   >
                     <div className="flex items-center justify-between text-[11px] text-amber-400 font-medium">
                       <span>صفحة {note.pageNumber}</span>
@@ -896,11 +896,11 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                       </button>
                     </div>
                     {note.quote && (
-                      <div className="text-[10px] text-slate-400 italic bg-slate-900 p-1.5 rounded border-r-2 border-amber-500">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 italic bg-white dark:bg-slate-900 p-1.5 rounded border-r-2 border-amber-500">
                         "{note.quote}"
                       </div>
                     )}
-                    <p className="text-slate-200 leading-relaxed text-xs">{note.content}</p>
+                    <p className="text-slate-800 dark:text-slate-200 leading-relaxed text-xs">{note.content}</p>
                     <div className="text-[10px] text-slate-500 font-mono">{note.createdAt}</div>
                   </div>
                 ))
@@ -913,21 +913,21 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         <div
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="flex-1 overflow-auto flex flex-col items-center justify-start p-2 sm:p-6 bg-slate-950 select-text relative touch-pan-y"
+          className="flex-1 overflow-auto flex flex-col items-center justify-start p-2 sm:p-6 bg-slate-50 dark:bg-slate-950 select-text relative touch-pan-y"
         >
           {isLoading ? (
-            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400 py-20">
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-500 dark:text-slate-400 py-20">
               <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
               <p className="font-medium text-sm">جاري تحميل وثيقة الكتاب من الخادم المركزي...</p>
             </div>
           ) : error ? (
             /* Pure In-Platform Error Recovery (Section 16: Zero External Fallback) */
-            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-rose-400 max-w-md text-center p-8 rounded-2xl bg-slate-900/90 border border-rose-500/20 my-auto shadow-2xl">
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-rose-400 max-w-md text-center p-8 rounded-2xl bg-white dark:bg-slate-900/90 border border-rose-500/20 my-auto shadow-2xl">
               <AlertCircle className="w-12 h-12 text-rose-400" />
               <div>
                 <h4 className="font-bold text-base text-rose-300 mb-1">تعذر فتح الكتاب في القارئ المدمج</h4>
                 <p className="text-xs text-rose-300/80 leading-relaxed">{error}</p>
-                {errorCode && <span className="text-[10px] font-mono text-slate-400 mt-1 block">رمز الخطأ: {errorCode}</span>}
+                {errorCode && <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-1 block">رمز الخطأ: {errorCode}</span>}
               </div>
               <div className="flex items-center gap-3 mt-3">
                 <button
@@ -938,7 +938,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                 </button>
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors text-xs font-semibold cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl transition-colors text-xs font-semibold cursor-pointer"
                 >
                   العودة للمكتبة
                 </button>
@@ -946,7 +946,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             </div>
           ) : isEpub ? (
             /* Real EPUB Reader Stage (Section 13) */
-            <div className="w-full max-w-4xl h-full flex-1 bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col">
+            <div className="w-full max-w-4xl h-full flex-1 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col">
               <div
                 ref={epubContainerRef}
                 className="flex-1 w-full h-full overflow-y-auto"
@@ -963,7 +963,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
               }}
             >
               {showRenderSpinner && (
-                <div className="absolute top-3 right-3 bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700/60 flex items-center gap-2 z-10 shadow-xl text-slate-300 text-xs animate-in fade-in duration-150">
+                <div className="absolute top-3 right-3 bg-white dark:bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-300 dark:border-slate-700/60 flex items-center gap-2 z-10 shadow-xl text-slate-700 dark:text-slate-300 text-xs animate-in fade-in duration-150">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
                   <span className="text-[11px] font-medium">جاري معالجة الصفحة...</span>
                 </div>

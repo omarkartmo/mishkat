@@ -1232,10 +1232,10 @@ export default function App() {
   // If verifying session with Central Server, show clean loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex items-center justify-center font-sans selection:bg-indigo-500 selection:text-white" dir="rtl">
+      <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-100 flex items-center justify-center font-sans selection:bg-indigo-500 selection:text-white" dir="rtl">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-400">جاري التحقق من الجلسة مع الخادم المركزي...</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">جاري التحقق من الجلسة مع الخادم المركزي...</p>
         </div>
       </div>
     );
@@ -1252,7 +1252,7 @@ export default function App() {
       {isMobileMenuOpen && (
         <div
           onClick={() => setIsMobileMenuOpen(false)}
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 lg:hidden animate-in fade-in duration-200"
+          className="fixed inset-0 bg-slate-50 dark:bg-slate-950/60 backdrop-blur-xs z-40 lg:hidden animate-in fade-in duration-200"
           aria-hidden="true"
         />
       )}

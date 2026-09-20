@@ -63,13 +63,13 @@ export const AdminSecuritySettings: React.FC = () => {
   };
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
-      <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-3">
+    <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+      <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
         <Shield className="w-4 h-4 text-indigo-400" />
         إعدادات أمان حساب المشرف
       </h3>
 
-      <div className="text-slate-400 mb-4">
+      <div className="text-slate-500 dark:text-slate-400 mb-4">
         يمكنك هنا تغيير كلمة المرور الخاصة بحساب الإدارة، وإعداد "سؤال الأمان" لاستخدامه في حالة نسيان كلمة المرور.
       </div>
 
@@ -88,47 +88,47 @@ export const AdminSecuritySettings: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1">
-          <label className="block text-slate-300 font-medium">كلمة المرور الحالية (مطلوبة) *</label>
+          <label className="block text-slate-700 dark:text-slate-300 font-medium">كلمة المرور الحالية (مطلوبة) *</label>
           <input
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
             required
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/50">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-800/50">
           <div className="space-y-1">
-            <label className="block text-slate-300 font-medium">كلمة المرور الجديدة (اختياري)</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium">كلمة المرور الجديدة (اختياري)</label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
               placeholder="اتركه فارغاً إذا لم ترغب بتغييرها"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/50">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-800/50">
           <div className="space-y-1">
-            <label className="block text-slate-300 font-medium">سؤال الأمان (اختياري)</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium">سؤال الأمان (اختياري)</label>
             <input
               type="text"
               value={securityQuestion}
               onChange={(e) => setSecurityQuestion(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
               placeholder="مثال: ما هو اسم معلمك الأول؟"
             />
           </div>
           <div className="space-y-1">
-            <label className="block text-slate-300 font-medium">إجابة سؤال الأمان (اختياري)</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium">إجابة سؤال الأمان (اختياري)</label>
             <input
               type="text"
               value={securityAnswer}
               onChange={(e) => setSecurityAnswer(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
               placeholder="الإجابة السرية"
             />
           </div>

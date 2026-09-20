@@ -244,21 +244,21 @@ export const InternetPolicyView: React.FC = () => {
             <Shield className="w-6 h-6 text-indigo-400" />
             سياسة الإنترنت والمواقع المحظورة
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             إدارة سياسة وصول الطلاب لشبكة الإنترنت داخل المدرسة وحماية البيئة الأكاديمية.
           </p>
         </div>
 
         {/* EXCLUDE SERVER PC TOGGLE */}
-        <div className="flex items-center gap-2 bg-slate-900/30 border border-slate-800/80 px-3 py-1.5 rounded-lg transition-colors hover:border-slate-700 hover:bg-slate-900/60 mt-1">
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800/80 px-3 py-1.5 rounded-lg transition-colors hover:border-slate-300 dark:border-slate-700 hover:bg-white dark:bg-slate-900/60 mt-1">
           <input 
              type="checkbox" 
              id="excludeServer" 
              checked={excludeServer}
              onChange={(e) => updateExcludeServer(e.target.checked)}
-             className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer" 
+             className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer" 
           />
-          <label htmlFor="excludeServer" className="text-[11px] font-medium text-slate-300 cursor-pointer select-none">
+          <label htmlFor="excludeServer" className="text-[11px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
             استثناء الخادم (Server PC)
           </label>
         </div>
@@ -271,7 +271,7 @@ export const InternetPolicyView: React.FC = () => {
           className={`relative overflow-hidden p-4 rounded-xl border text-right transition-all duration-300 ${
             policyMode === 'OPEN' 
               ? 'bg-emerald-900/30 border-emerald-500/50 shadow-md shadow-emerald-900/20 scale-[1.01]' 
-              : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700 opacity-60 hover:opacity-100'
+              : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:bg-slate-800/80 hover:border-slate-300 dark:border-slate-700 opacity-60 hover:opacity-100'
           }`}
         >
           {policyMode === 'OPEN' && (
@@ -281,7 +281,7 @@ export const InternetPolicyView: React.FC = () => {
             <Wifi className={`w-5 h-5 ${policyMode === 'OPEN' ? 'text-emerald-400' : 'text-slate-500'}`} />
             {policyMode === 'OPEN' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
           </div>
-          <h3 className={`text-sm font-bold mb-1 ${policyMode === 'OPEN' ? 'text-emerald-300' : 'text-slate-300'}`}>مفتوح كلياً</h3>
+          <h3 className={`text-sm font-bold mb-1 ${policyMode === 'OPEN' ? 'text-emerald-300' : 'text-slate-700 dark:text-slate-300'}`}>مفتوح كلياً</h3>
           <p className="text-[11px] text-slate-500 leading-relaxed">الإنترنت متاح للطلاب بدون قيود. لا ينصح به في الدوام.</p>
         </button>
 
@@ -290,7 +290,7 @@ export const InternetPolicyView: React.FC = () => {
           className={`relative overflow-hidden p-4 rounded-xl border text-right transition-all duration-300 ${
             policyMode === 'RESTRICTED' 
               ? 'bg-amber-900/30 border-amber-500/50 shadow-md shadow-amber-900/20 scale-[1.01]' 
-              : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700 opacity-60 hover:opacity-100'
+              : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:bg-slate-800/80 hover:border-slate-300 dark:border-slate-700 opacity-60 hover:opacity-100'
           }`}
         >
           {policyMode === 'RESTRICTED' && (
@@ -300,7 +300,7 @@ export const InternetPolicyView: React.FC = () => {
             <Shield className={`w-5 h-5 ${policyMode === 'RESTRICTED' ? 'text-amber-400' : 'text-slate-500'}`} />
             {policyMode === 'RESTRICTED' && <CheckCircle2 className="w-4 h-4 text-amber-400" />}
           </div>
-          <h3 className={`text-sm font-bold mb-1 ${policyMode === 'RESTRICTED' ? 'text-amber-300' : 'text-slate-300'}`}>مقيد (موصى به)</h3>
+          <h3 className={`text-sm font-bold mb-1 ${policyMode === 'RESTRICTED' ? 'text-amber-300' : 'text-slate-700 dark:text-slate-300'}`}>مقيد (موصى به)</h3>
           <p className="text-[11px] text-slate-500 leading-relaxed">تطبيق قواعد الحظر لمنع الوصول للمواقع المشتتة والمضرة.</p>
         </button>
 
@@ -309,7 +309,7 @@ export const InternetPolicyView: React.FC = () => {
           className={`relative overflow-hidden p-4 rounded-xl border text-right transition-all duration-300 ${
             policyMode === 'OFFLINE' 
               ? 'bg-rose-900/30 border-rose-500/50 shadow-md shadow-rose-900/20 scale-[1.01]' 
-              : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700 opacity-60 hover:opacity-100'
+              : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:bg-slate-800/80 hover:border-slate-300 dark:border-slate-700 opacity-60 hover:opacity-100'
           }`}
         >
           {policyMode === 'OFFLINE' && (
@@ -319,7 +319,7 @@ export const InternetPolicyView: React.FC = () => {
             <WifiOff className={`w-5 h-5 ${policyMode === 'OFFLINE' ? 'text-rose-400' : 'text-slate-500'}`} />
             {policyMode === 'OFFLINE' && <CheckCircle2 className="w-4 h-4 text-rose-400" />}
           </div>
-          <h3 className={`text-sm font-bold mb-1 ${policyMode === 'OFFLINE' ? 'text-rose-300' : 'text-slate-300'}`}>بدون إنترنت</h3>
+          <h3 className={`text-sm font-bold mb-1 ${policyMode === 'OFFLINE' ? 'text-rose-300' : 'text-slate-700 dark:text-slate-300'}`}>بدون إنترنت</h3>
           <p className="text-[11px] text-slate-500 leading-relaxed">إيقاف الإنترنت تماماً، والسماح بمكتبة المشكاة المحلية فقط.</p>
         </button>
       </div>
@@ -329,8 +329,8 @@ export const InternetPolicyView: React.FC = () => {
           
           {/* LEFT COLUMN: Categories */}
           <div className="xl:col-span-1 space-y-5">
-            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
+            <div className="bg-white dark:bg-slate-900/60 backdrop-blur-md border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-2">
                 <Layers className="w-4 h-4 text-indigo-400" />
                 إدارة الفئات
               </h3>
@@ -339,7 +339,7 @@ export const InternetPolicyView: React.FC = () => {
                 <input
                   type="text"
                   placeholder="فئة جديدة (ألعاب)"
-                  className="flex-1 bg-slate-950/50 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs transition-all outline-none"
+                  className="flex-1 bg-slate-50 dark:bg-slate-950/50 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs transition-all outline-none"
                   value={newCategoryName}
                   onChange={e => setNewCategoryName(e.target.value)}
                 />
@@ -354,8 +354,8 @@ export const InternetPolicyView: React.FC = () => {
 
               <div className="space-y-2">
                 {categories.map(cat => (
-                  <div key={cat.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition-all group">
-                    <span className="text-sm font-medium text-slate-300">{cat.name}</span>
+                  <div key={cat.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-100 dark:bg-slate-800/30 hover:bg-slate-100 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/50 hover:border-slate-600 transition-all group">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{cat.name}</span>
                     <button
                       onClick={() => deleteCategory(cat.id)}
                       className="text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all p-1"
@@ -373,17 +373,17 @@ export const InternetPolicyView: React.FC = () => {
 
           {/* RIGHT COLUMN: Sites & Bulk Add */}
           <div className="xl:col-span-3 space-y-5">
-            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-sm">
+            <div className="bg-white dark:bg-slate-900/60 backdrop-blur-md border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm">
               
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
                 <div className="flex items-center gap-4">
-                  <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                     <Globe className="w-4 h-4 text-indigo-400" />
                     النطاقات المحظورة
                   </h3>
                   
                   <select
-                    className="bg-slate-900/80 border border-slate-700 text-slate-300 rounded-md px-2 py-1 text-[11px] outline-none focus:border-indigo-500 cursor-pointer"
+                    className="bg-white dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-md px-2 py-1 text-[11px] outline-none focus:border-indigo-500 cursor-pointer"
                     value={filterCategoryId}
                     onChange={e => setFilterCategoryId(e.target.value)}
                   >
@@ -396,22 +396,22 @@ export const InternetPolicyView: React.FC = () => {
                 </div>
                 
                 {/* TABS */}
-                <div className="flex p-1 bg-slate-950/50 rounded-lg border border-slate-800">
+                <div className="flex p-1 bg-slate-50 dark:bg-slate-950/50 rounded-lg border border-slate-200 dark:border-slate-800">
                   <button
                     onClick={() => setActiveTab('preset')}
-                    className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${activeTab === 'preset' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:text-slate-300'}`}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${activeTab === 'preset' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
                   >
                     حزم جاهزة
                   </button>
                   <button
                     onClick={() => setActiveTab('single')}
-                    className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${activeTab === 'single' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:text-slate-300'}`}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${activeTab === 'single' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
                   >
                     إضافة يدوية
                   </button>
                   <button
                     onClick={() => setActiveTab('bulk')}
-                    className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${activeTab === 'bulk' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:text-slate-300'}`}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${activeTab === 'bulk' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
                   >
                     إضافة بالجملة
                   </button>
@@ -419,7 +419,7 @@ export const InternetPolicyView: React.FC = () => {
               </div>
 
               {/* INPUT AREA BASED ON TAB */}
-              <div className="mb-6 p-4 bg-slate-950/40 border border-slate-800/50 rounded-xl">
+              <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/50 rounded-xl">
                 
                 {activeTab === 'preset' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -432,16 +432,16 @@ export const InternetPolicyView: React.FC = () => {
                           className={`flex items-center gap-3 p-3 rounded-lg border text-right transition-all group ${
                             isSelected 
                               ? 'bg-indigo-900/30 border-indigo-500/50' 
-                              : 'bg-slate-900/80 border-slate-700/60 hover:border-indigo-500/50'
+                              : 'bg-white dark:bg-slate-900/80 border-slate-300 dark:border-slate-700/60 hover:border-indigo-500/50'
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                            isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-slate-600 bg-slate-950/50'
+                            isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-slate-600 bg-slate-50 dark:bg-slate-950/50'
                           }`}>
                             {isSelected && <CheckCircle2 className="w-3 h-3" />}
                           </div>
                           <div>
-                            <h4 className="text-[11px] font-bold text-slate-200">{preset.name}</h4>
+                            <h4 className="text-[11px] font-bold text-slate-800 dark:text-slate-200">{preset.name}</h4>
                             <p className="text-[10px] text-slate-500 mt-0.5">{preset.domains.length} مواقع</p>
                           </div>
                         </button>
@@ -454,7 +454,7 @@ export const InternetPolicyView: React.FC = () => {
                   <div className="flex flex-col gap-3">
                     <div className="flex gap-3">
                       <select
-                        className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-indigo-500 w-48"
+                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-indigo-500 w-48"
                         value={selectedCategoryId}
                         onChange={e => setSelectedCategoryId(e.target.value)}
                       >
@@ -472,7 +472,7 @@ export const InternetPolicyView: React.FC = () => {
                           <input
                             type="text"
                             placeholder="facebook.com"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg pr-9 pl-3 py-2 text-slate-200 text-xs focus:border-indigo-500 outline-none transition-colors"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pr-9 pl-3 py-2 text-slate-800 dark:text-slate-200 text-xs focus:border-indigo-500 outline-none transition-colors"
                             value={newSiteDomain}
                             onChange={e => setNewSiteDomain(e.target.value)}
                             dir="ltr"
@@ -490,7 +490,7 @@ export const InternetPolicyView: React.FC = () => {
                       <form onSubmit={submitBulk} className="flex flex-col gap-2">
                         <textarea
                           placeholder="الصق الروابط هنا (رابط واحد في كل سطر)..."
-                          className="w-full h-24 bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 text-xs focus:border-indigo-500 outline-none transition-colors resize-none"
+                          className="w-full h-24 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-slate-800 dark:text-slate-200 text-xs focus:border-indigo-500 outline-none transition-colors resize-none"
                           value={bulkDomains}
                           onChange={e => setBulkDomains(e.target.value)}
                           dir="ltr"
@@ -512,9 +512,9 @@ export const InternetPolicyView: React.FC = () => {
               </div>
 
               {/* SITES TABLE */}
-              <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50">
+              <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50">
                 <table className="w-full text-xs text-right">
-                  <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 text-[10px] uppercase tracking-wider">
+                  <thead className="bg-white dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider">
                     <tr>
                       <th className="w-10 px-4 py-3 font-semibold text-center">حالة</th>
                       <th className="px-4 py-3 font-semibold">النطاق المحظور</th>
@@ -529,7 +529,7 @@ export const InternetPolicyView: React.FC = () => {
                       if (filterCategoryId === 'NONE') return !site.categoryId;
                       return site.categoryId === filterCategoryId;
                     }).map(site => (
-                      <tr key={site.id} className="hover:bg-slate-800/40 transition-colors group">
+                      <tr key={site.id} className="hover:bg-slate-100 dark:bg-slate-800/40 transition-colors group">
                         <td className="px-4 py-2.5 text-center">
                           <button 
                             onClick={() => deleteSite(site.id)}
@@ -539,12 +539,12 @@ export const InternetPolicyView: React.FC = () => {
                             <CheckCircle2 className="w-3 h-3" />
                           </button>
                         </td>
-                        <td className="px-4 py-2.5 font-medium text-slate-200" dir="ltr" style={{ textAlign: 'right' }}>
+                        <td className="px-4 py-2.5 font-medium text-slate-800 dark:text-slate-200" dir="ltr" style={{ textAlign: 'right' }}>
                           {site.domain}
                         </td>
                         <td className="px-4 py-2.5">
                           {site.categoryName ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700/50">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700/50">
                               {site.categoryName}
                             </span>
                           ) : (

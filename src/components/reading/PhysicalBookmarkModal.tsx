@@ -189,7 +189,7 @@ export const PhysicalBookmarkModal: React.FC<PhysicalBookmarkModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-800 dark:text-slate-200 p-1 rounded-lg cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -204,7 +204,7 @@ export const PhysicalBookmarkModal: React.FC<PhysicalBookmarkModalProps> = ({
                 <span>عنوان الكتاب الورقي:</span>
                 <span className="text-rose-500">*</span>
               </label>
-              <span className="text-[11px] text-slate-400">اكتب اسم الكتاب لاقتراحه تلقائياً</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">اكتب اسم الكتاب لاقتراحه تلقائياً</span>
             </div>
 
             <div className="relative">
@@ -220,7 +220,7 @@ export const PhysicalBookmarkModal: React.FC<PhysicalBookmarkModalProps> = ({
                 onFocus={() => setShowSuggestions(true)}
                 className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 font-medium focus:outline-none focus:border-amber-500 pl-9"
               />
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+              <Search className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute left-3 top-3 pointer-events-none" />
             </div>
 
             {/* Smart Suggestions Dropdown */}
@@ -231,7 +231,7 @@ export const PhysicalBookmarkModal: React.FC<PhysicalBookmarkModalProps> = ({
                   <span>اضغط للتعبئة التلقائية</span>
                 </div>
                 {filteredBooks.length === 0 ? (
-                  <div className="p-3 text-center text-xs text-slate-400">
+                  <div className="p-3 text-center text-xs text-slate-500 dark:text-slate-400">
                     لم يتم العثور على كتاب مطابق، يمكنك كتابة العنوان ومتابعة القراءة.
                   </div>
                 ) : (
@@ -320,7 +320,7 @@ export const PhysicalBookmarkModal: React.FC<PhysicalBookmarkModalProps> = ({
                   onChange={(e) => handlePageChange(Number(e.target.value))}
                   className="w-20 px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-center font-bold text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                 />
-                <span className="text-xs text-slate-400">من إجمالي:</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">من إجمالي:</span>
                 <input
                   type="number"
                   min={1}

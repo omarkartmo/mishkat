@@ -287,7 +287,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
       {/* Filter & Search Bar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
         <div className="w-full md:w-80 relative">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
@@ -304,7 +304,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               statusFilter === 'PENDING_REVIEW'
                 ? 'bg-amber-600 text-white font-bold'
-                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
@@ -316,7 +316,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               statusFilter === 'NEEDS_MANUAL_ACQUISITION'
                 ? 'bg-purple-600 text-white font-bold'
-                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             <Upload className="w-3.5 h-3.5" />
@@ -328,7 +328,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               statusFilter === 'READY_FOR_FINAL_APPROVAL'
                 ? 'bg-sky-600 text-white font-bold'
-                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -340,7 +340,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               statusFilter === 'APPROVED'
                 ? 'bg-emerald-600 text-white font-bold'
-                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             <span>المعتمدة ({submissions.filter((s) => getNormStatus(s.status) === 'APPROVED').length})</span>
@@ -351,7 +351,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               statusFilter === 'REJECTED'
                 ? 'bg-rose-600 text-white font-bold'
-                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             <XCircle className="w-3.5 h-3.5" />
@@ -362,8 +362,8 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
             onClick={() => setStatusFilter('all')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
               statusFilter === 'all'
-                ? 'bg-slate-800 text-white font-bold'
-                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-slate-100 dark:bg-slate-800 text-white font-bold'
+                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-800 dark:text-slate-200'
             }`}
           >
             الكل ({submissions.length})
@@ -374,7 +374,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
       {/* Submissions List */}
       {filteredSubmissions.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
-          <CheckCircle2 className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+          <CheckCircle2 className="w-12 h-12 text-slate-500 dark:text-slate-400 mx-auto mb-3" />
           <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">لا توجد طلبات في هذا القسم حالياً</h3>
           <p className="text-xs text-slate-500 mt-1">تمت معالجة كافة السجلات بنجاح</p>
         </div>
@@ -418,7 +418,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
                       {!isApproved && !isRejected && (
                         <button
                           onClick={() => handleOpenEditModal(sub)}
-                          className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded-md transition-colors cursor-pointer"
+                          className="text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded-md transition-colors cursor-pointer"
                           title="تعديل بيانات الكتاب قبل الاعتماد"
                         >
                           <Edit3 className="w-4 h-4" />
@@ -475,14 +475,14 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
                   {/* Student Submitter & Suggested Category */}
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
                     <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                      <span className="block text-slate-400 text-[10px]">مقدم الطلب:</span>
+                      <span className="block text-slate-500 dark:text-slate-400 text-[10px]">مقدم الطلب:</span>
                       <strong className="text-slate-800 dark:text-slate-200">{sub.studentName}</strong>
-                      <span className="font-mono text-slate-400 block text-[10px]">{sub.studentRegNumber}</span>
+                      <span className="font-mono text-slate-500 dark:text-slate-400 block text-[10px]">{sub.studentRegNumber}</span>
                     </div>
                     <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                      <span className="block text-slate-400 text-[10px]">التصنيف المقترح:</span>
+                      <span className="block text-slate-500 dark:text-slate-400 text-[10px]">التصنيف المقترح:</span>
                       <strong className="text-indigo-600 dark:text-indigo-300">{cat?.name || 'عام'}</strong>
-                      <span className="text-slate-400 block text-[10px]">تاريخ الإرسال: {sub.submittedAt}</span>
+                      <span className="text-slate-500 dark:text-slate-400 block text-[10px]">تاريخ الإرسال: {sub.submittedAt}</span>
                     </div>
                   </div>
 
@@ -704,7 +704,7 @@ export const ReviewQueueView: React.FC<ReviewQueueViewProps> = ({
                 <Edit3 className="w-5 h-5 text-indigo-500" />
                 تعديل وتدقيق بيانات الاقتراح
               </h3>
-              <button onClick={() => setEditingSub(null)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+              <button onClick={() => setEditingSub(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>

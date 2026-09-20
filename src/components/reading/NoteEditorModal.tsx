@@ -178,7 +178,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-800 dark:text-slate-200 p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -231,13 +231,13 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
                     onFocus={() => setShowSuggestions(true)}
                     className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 font-semibold pl-7"
                   />
-                  <Search className="w-3 h-3 text-slate-400 absolute left-2 top-2 pointer-events-none" />
+                  <Search className="w-3 h-3 text-slate-500 dark:text-slate-400 absolute left-2 top-2 pointer-events-none" />
                 </div>
 
                 {showSuggestions && (
                   <div className="absolute top-full right-0 left-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                     {filteredBooks.length === 0 ? (
-                      <div className="p-2.5 text-center text-xs text-slate-400">
+                      <div className="p-2.5 text-center text-xs text-slate-500 dark:text-slate-400">
                         لم يُعثر على كتاب مطابق
                       </div>
                     ) : (
@@ -249,7 +249,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
                           className="w-full text-right p-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center justify-between"
                         >
                           <span className="truncate">{b.title}</span>
-                          <span className="text-[10px] text-slate-400 font-normal shrink-0">{b.author}</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal shrink-0">{b.author}</span>
                         </button>
                       ))
                     )}

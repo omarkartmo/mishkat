@@ -1,0 +1,8 @@
+﻿{
+    "version":  "1.1.0",
+    "description":  "Official Update for Mishkat Server",
+    "sha256":  "C1B674AFFCEFFB67F07834CF448D38C6CDC3E54D69E7165A4D3BFD108FB667B5",
+    "downloadUrl":  "https://github.com/omarkartmo/mishkat/releases/download/v1.1.0/mishkat-server-v1.1.0-win-x64.zip",
+    "releaseDate":  "2026-09-20T22:01:05Z",
+    "criticalSecurityUpdate":  false
+}

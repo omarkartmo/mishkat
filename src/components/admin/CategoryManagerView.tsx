@@ -64,7 +64,7 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
             <FolderTree className="w-5 h-5 text-indigo-400" />
             إدارة التصنيفات وإعادة الفهرسة الجماعية
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             تنظيم هيكل الأقسام العلمية، وتطبيق سياسة الأمان الإلزامية لإعادة تصنيف الكتب عند حذف أي قسم
           </p>
         </div>
@@ -74,7 +74,7 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
             <button
               onClick={onRefresh}
               disabled={isLoading}
-              className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              className="p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl transition-all cursor-pointer disabled:opacity-50"
               title="تحديث من الخادم المركزي"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
@@ -111,13 +111,13 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
       )}
 
       {/* Safety Policy Notice */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-start gap-3">
+      <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-start gap-3">
         <div className="p-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl shrink-0 mt-0.5">
           <ShieldAlert className="w-4 h-4" />
         </div>
-        <div className="text-xs text-slate-300 space-y-1">
+        <div className="text-xs text-slate-700 dark:text-slate-300 space-y-1">
           <div className="font-bold text-slate-100">سياسة سلامة البيانات وإعادة التوزيع التلقائي:</div>
-          <p className="text-slate-400 leading-relaxed">
+          <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
             عند حذف أي تصنيف يحتوي على كتب ورقية أو إلكترونية، يفرض النظام اختيار تصنيف بديل لنقل جميع الكتب المرتبطة إليه فوراً، منعاً لفقدان السجلات أو وجود كتب يتيمة بدون تصنيف.
           </p>
         </div>
@@ -125,14 +125,14 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
 
       {/* Loading Skeleton or Empty State */}
       {isLoading && categories.length === 0 ? (
-        <div className="p-12 text-center space-y-3 bg-slate-900/40 border border-slate-800 rounded-2xl">
+        <div className="p-12 text-center space-y-3 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
-          <p className="text-xs text-slate-400">جاري تحميل التصنيفات من الخادم المركزي...</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">جاري تحميل التصنيفات من الخادم المركزي...</p>
         </div>
       ) : categories.length === 0 && !error ? (
-        <div className="p-12 text-center space-y-3 bg-slate-900/40 border border-slate-800 rounded-2xl">
+        <div className="p-12 text-center space-y-3 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <FolderTree className="w-10 h-10 text-slate-600 mx-auto" />
-          <p className="text-sm font-semibold text-slate-300">لا توجد تصنيفات مسجلة في الخادم المركزي.</p>
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">لا توجد تصنيفات مسجلة في الخادم المركزي.</p>
           <p className="text-xs text-slate-500">انقر على زر "إضافة قسم / تصنيف جديد" للبدء في تنظيم مكتبتك.</p>
         </div>
       ) : null}
@@ -146,7 +146,7 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
           return (
             <div
               key={cat.id}
-              className="bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between space-y-4 transition-all shadow-sm group"
+              className="bg-white dark:bg-slate-900/80 hover:bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between space-y-4 transition-all shadow-sm group"
             >
               <div className="space-y-3">
                 {/* Color Dot & Actions */}
@@ -156,13 +156,13 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
                       className="w-3.5 h-3.5 rounded-full shadow-md"
                       style={{ backgroundColor: cat.color }}
                     />
-                    <span className="text-[11px] font-mono text-slate-400">رمز: {cat.id}</span>
+                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">رمز: {cat.id}</span>
                   </div>
 
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setEditingCategory(cat)}
-                      className="p-1 text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-800 transition-colors"
+                      className="p-1 text-slate-500 dark:text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:bg-slate-800 transition-colors"
                       title="تعديل بيانات القسم"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -175,7 +175,7 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
                           const remainingCats = categories.filter((c) => c.id !== cat.id);
                           setTargetCategoryId(remainingCats[0]?.id || '');
                         }}
-                        className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
+                        className="p-1 text-slate-500 dark:text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:bg-slate-800 transition-colors"
                         title="حذف التصنيف مع نقل الكتب"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -191,29 +191,29 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
                       {cat.name}
                     </h3>
                     {cat.nameEn && (
-                      <span className="text-[11px] text-slate-400 font-mono">({cat.nameEn})</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">({cat.nameEn})</span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">{cat.description}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{cat.description}</p>
                 </div>
               </div>
 
               {/* Book Counts Stats */}
-              <div className="pt-3 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-slate-400 text-[11px]">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 text-[11px]">
                     <BookOpen className="w-3.5 h-3.5 text-sky-400" />
                     ورقي:
                   </span>
-                  <span className="font-mono font-bold text-slate-200">{physCount}</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{physCount}</span>
                 </div>
 
-                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-slate-400 text-[11px]">
+                <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 text-[11px]">
                     <Library className="w-3.5 h-3.5 text-emerald-400" />
                     رقمي:
                   </span>
-                  <span className="font-mono font-bold text-slate-200">{digCount}</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{digCount}</span>
                 </div>
               </div>
             </div>
@@ -247,15 +247,15 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
       {/* Safe Delete with Mandatory Reclassification Modal */}
       {deletingCategory && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-rose-400" />
                 حذف التصنيف وإعادة التوجيه الإجباري
               </h3>
               <button
                 onClick={() => !isDeleting && setDeletingCategory(null)}
-                className="text-slate-400 hover:text-slate-200"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -267,11 +267,11 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
               </div>
             )}
 
-            <div className="text-xs text-slate-300 space-y-2">
+            <div className="text-xs text-slate-700 dark:text-slate-300 space-y-2">
               <p>
                 أنت على وشك حذف تصنيف <strong className="text-rose-400">"{deletingCategory.name}"</strong> من الخادم المركزي.
               </p>
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
                 <div>
                   عدد الكتب الورقية المرتبطة:{' '}
                   <strong className="text-slate-100 font-mono">
@@ -288,14 +288,14 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
             </div>
 
             <div className="space-y-1 text-xs">
-              <label className="block text-slate-300 font-medium">
+              <label className="block text-slate-700 dark:text-slate-300 font-medium">
                 اختر التصنيف البديل لنقل جميع هذه الكتب إليه فوراً: *
               </label>
               <select
                 value={targetCategoryId}
                 onChange={(e) => setTargetCategoryId(e.target.value)}
                 disabled={isDeleting}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-medium outline-none focus:border-indigo-500 disabled:opacity-50"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-medium outline-none focus:border-indigo-500 disabled:opacity-50"
               >
                 {categories
                   .filter((c) => c.id !== deletingCategory.id)
@@ -307,12 +307,12 @@ export const CategoryManagerView: React.FC<CategoryManagerViewProps> = ({
               </select>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setDeletingCategory(null)}
                 disabled={isDeleting}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs disabled:opacity-50"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs disabled:opacity-50"
               >
                 إلغاء
               </button>
@@ -389,7 +389,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
         <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
           <Plus className="w-5 h-5 text-indigo-400" />
           إضافة تصنيف علمي جديد
@@ -403,7 +403,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
 
         <form onSubmit={handleSubmit} className="space-y-3 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اسم القسم / التصنيف (بالعربية) *</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اسم القسم / التصنيف (بالعربية) *</label>
             <input
               type="text"
               required
@@ -411,36 +411,36 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
               onChange={(e) => setName(e.target.value)}
               placeholder="مثال: العلوم والتكنولوجيا المعاصرة"
               disabled={isSubmitting}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اسم القسم (بالإنجليزية - اختياري)</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اسم القسم (بالإنجليزية - اختياري)</label>
             <input
               type="text"
               value={nameEn}
               onChange={(e) => setNameEn(e.target.value)}
               placeholder="e.g. Science & Technology"
               disabled={isSubmitting}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50 font-mono"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50 font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">وصف مختصر للقسم</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">وصف مختصر للقسم</label>
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="بيان نطاق وتخصص المراجع التابعة لهذا القسم..."
               disabled={isSubmitting}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اللون المميز للقسم</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اللون المميز للقسم</label>
             <div className="flex items-center gap-2">
               <input
                 type="color"
@@ -449,16 +449,16 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ onClose, onSave }) 
                 disabled={isSubmitting}
                 className="w-10 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
               />
-              <span className="font-mono text-slate-300">{color}</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{color}</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium disabled:opacity-50"
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-medium disabled:opacity-50"
             >
               إلغاء
             </button>
@@ -514,7 +514,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category, onClose
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
         <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
           <Edit2 className="w-5 h-5 text-indigo-400" />
           تعديل بيانات التصنيف
@@ -528,41 +528,41 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category, onClose
 
         <form onSubmit={handleSubmit} className="space-y-3 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اسم القسم / التصنيف (بالعربية) *</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اسم القسم / التصنيف (بالعربية) *</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isSubmitting}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اسم القسم (بالإنجليزية - اختياري)</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اسم القسم (بالإنجليزية - اختياري)</label>
             <input
               type="text"
               value={nameEn}
               onChange={(e) => setNameEn(e.target.value)}
               disabled={isSubmitting}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50 font-mono"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 disabled:opacity-50 font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">وصف القسم</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">وصف القسم</label>
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={isSubmitting}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اللون المميز للقسم</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">اللون المميز للقسم</label>
             <div className="flex items-center gap-2">
               <input
                 type="color"
@@ -571,16 +571,16 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category, onClose
                 disabled={isSubmitting}
                 className="w-10 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
               />
-              <span className="font-mono text-slate-300">{color}</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{color}</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium disabled:opacity-50"
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-medium disabled:opacity-50"
             >
               إلغاء
             </button>
