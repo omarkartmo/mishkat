@@ -267,12 +267,13 @@ Section "MISHKAT Core Installation" SecCore
 
     SetOutPath "$INSTDIR"
     File /nonfatal "..\src-tauri\target\release\mishkat-student.exe"
+    File /nonfatal "..\src-tauri\icons\icon.ico"
 
     ; Student Shortcuts
     CreateDirectory "$SMPROGRAMS\MISHKAT"
     ${If} ${FileExists} "$INSTDIR\mishkat-student.exe"
-      CreateShortCut "$SMPROGRAMS\MISHKAT\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe"
-      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe"
+      CreateShortCut "$SMPROGRAMS\MISHKAT\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe" "" "$INSTDIR\icon.ico" 0
+      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe" "" "$INSTDIR\icon.ico" 0
     ${Else}
       ; Fallback shortcut to web kiosk if desktop binary built separately
       CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "http://localhost:3000"

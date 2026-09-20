@@ -161,13 +161,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               <Bookmark className="w-4 h-4 shrink-0" />
               <span>مفكرة القراءة والتلخيص</span>
             </button>
-            <button
-              onClick={() => onNavigate('portals')}
-              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap"
-            >
-              <Globe2 className="w-4 h-4 text-sky-400 shrink-0" />
-              <span>المكتبات المعتمدة</span>
-            </button>
+
           </div>
         </div>
 

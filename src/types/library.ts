@@ -7,7 +7,6 @@ export type NavigationTab =
   | 'digital'
   | 'favorites'
   | 'reading_workspace'
-  | 'portals'
   | 'reviews'
   | 'students'
   | 'categories'
@@ -127,57 +126,6 @@ export type SubmissionStatus =
   | 'APPROVED'
   | 'REJECTED';
 
-export type PortalStatus =
-  | 'APPROVED_BROWSABLE'
-  | 'BROWSE_ONLY'
-  | 'DISABLED'
-  | 'DRAFT'
-  | 'DISCOVERING'
-  | 'ANALYZING'
-  | 'TESTING'
-  | 'VERIFIED'
-  | 'STATIC_SNAPSHOT'
-  | 'UNSUPPORTED'
-  | 'FAILED'
-  | 'NEEDS_REVIEW'
-  | 'BLOCKED';
-
-export type PortalCapabilityType =
-  | 'LIVE_OFFICIAL_API'
-  | 'LIVE_OAI_PMH'
-  | 'LIVE_OFFICIAL_SEARCH'
-  | 'LIVE_STRUCTURED_METADATA'
-  | 'STATIC_VERIFIED_SNAPSHOT'
-  | 'BROWSE_ONLY'
-  | 'UNSUPPORTED';
-
-export type IntegrationMethod =
-  | 'LIVE_OFFICIAL_API'
-  | 'LIVE_OAI_PMH'
-  | 'LIVE_OFFICIAL_SEARCH'
-  | 'LIVE_STRUCTURED_METADATA'
-  | 'STATIC_VERIFIED_SNAPSHOT'
-  | 'BROWSE_ONLY'
-  | 'OFFICIAL_API'
-  | 'OAI_PMH'
-  | 'OFFICIAL_SEARCH_ENDPOINT'
-  | 'STRUCTURED_METADATA'
-  | 'VERIFIED_WEB_SEARCH'
-  | 'MANUAL_VERIFIED_CATALOG'
-  | 'NONE';
-
-export interface PortalCapabilities {
-  searchSupported: boolean;
-  recordLookupSupported: boolean;
-  canonicalUrlsSupported: boolean;
-  metadataSupported: boolean;
-  fullTextSupported: boolean;
-  verificationSupported: boolean;
-  isLiveSearchSupported?: boolean;
-  isStaticSnapshot?: boolean;
-  isBrowseOnly?: boolean;
-  operationalMode?: 'LIVE_SOURCE' | 'BROWSE_ONLY' | 'STATIC_SNAPSHOT';
-}
 
 export interface PendingBookSubmission {
   id: string;
@@ -214,23 +162,6 @@ export interface PendingBookSubmission {
   pagesEstimated?: number;
 }
 
-export interface WhitelistedPortal {
-  id: string;
-  name: string;
-  description: string;
-  url: string;
-  category: string;
-  icon: string;
-  isFeatured: boolean;
-  notes?: string;
-  allowedDomains: string[];
-  status?: PortalStatus;
-  integrationMethod?: IntegrationMethod;
-  capabilities?: PortalCapabilities;
-  lastVerifiedAt?: string;
-  healthStatus?: string;
-  discoveryDetails?: any;
-}
 
 export type BookMedium = 'physical' | 'digital';
 

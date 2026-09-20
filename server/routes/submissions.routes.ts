@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { serverConfig } from '../config';
 import { isWithinDirectory, isSystemDangerousPath, verifyFileMagicBytes } from '../utils/pathSafety';
-import { DigitalDownloadService } from '../services/portals/digitalDownloadService';
+
 
 const router = Router();
 
@@ -418,14 +418,7 @@ router.post('/:id/review', authenticateToken, requireRole('admin', 'librarian'),
         // CASE A: Direct download URL is present -> Attempt automatic server-side download & validation
         if (sub.download_url && !finalFilePath) {
           try {
-            const downloadRes = await DigitalDownloadService.downloadAndValidate(sub.download_url, {
-              bookId,
-              format: sub.format || 'pdf',
-              allowLocalhost: process.env.NODE_ENV === 'test',
-            });
-            finalFilePath = downloadRes.filePath;
-            finalFileSize = downloadRes.fileSizeStr;
-            finalFileHash = downloadRes.fileHash;
+            throw new Error('خدمة التحميل التلقائي موقوفة بسبب إزالة البوابات المعتمدة');
           } catch (dlErr: any) {
             // Case B transition: if remote link is not directly downloadable, transition explicitly to NEEDS_MANUAL_ACQUISITION
             await client.query(`

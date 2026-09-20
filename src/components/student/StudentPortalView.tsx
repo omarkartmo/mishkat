@@ -106,15 +106,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
           {/* Account Status Badge & Quick Portal Icon */}
           <div className="shrink-0 flex flex-wrap items-center gap-2.5 sm:gap-3 pt-2 md:pt-0">
-            {/* Compact Quick Portal Gateway Icon */}
-            <button
-              onClick={() => onNavigate('portals')}
-              title="بوابة المكتبات المعتمدة - تصفح واستيراد الكتب"
-              className="p-3 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-sky-400 text-sky-200 hover:text-white rounded-2xl flex items-center gap-2 transition-all cursor-pointer shadow-md group"
-            >
-              <Globe2 className="w-5 h-5 text-sky-400 group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-semibold hidden sm:inline">بوابة المكتبات</span>
-            </button>
+
 
             {currentUser.isBlocked ? (
               <div className="bg-rose-950/90 border border-rose-600/80 rounded-2xl p-3.5 text-xs text-rose-200 flex items-center gap-2.5 shadow-lg">
@@ -551,13 +543,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             <Clock className="w-5 h-5 text-amber-500" />
             متابعة الكتب التي رشحتها للمكتبة المركزية ({mySubmissions.length})
           </h3>
-          <button
-            onClick={() => onNavigate('portals')}
-            className="px-3 py-1.5 bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 dark:hover:bg-sky-900/50 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Globe2 className="w-3.5 h-3.5 text-sky-500" />
-            <span>ترشيح كتاب عبر البوابة</span>
-          </button>
+
         </div>
 
         {mySubmissions.length === 0 ? (

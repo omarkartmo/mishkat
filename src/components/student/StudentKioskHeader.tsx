@@ -58,39 +58,7 @@ export const StudentKioskHeader: React.FC<StudentKioskHeaderProps> = ({
       <header className="h-10 bg-slate-950 border-b border-slate-800/80 px-3 flex items-center justify-between text-xs text-slate-300 select-none z-30">
         {/* Left: Controlled Browser Navigation Controls */}
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onBack || (() => window.history.back())}
-            title="رجوع للخلف"
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onForward || (() => window.history.forward())}
-            title="تقدم للأمام"
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onRefresh || (() => window.location.reload())}
-            title="تحديث الصفحة"
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onNavigateHome}
-            title="الصفحة الرئيسية للطالب"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-purple-300 border border-slate-800 cursor-pointer transition-colors"
-          >
-            <Home className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-medium">الرئيسية</span>
-          </button>
+          {/* Controls removed as requested */}
         </div>
 
         {/* Center: Educational Application Badge */}
@@ -103,13 +71,7 @@ export const StudentKioskHeader: React.FC<StudentKioskHeaderProps> = ({
 
         {/* Right: Server Status & Report Problem Button */}
         <div className="flex items-center gap-2.5">
-          {/* Server Status Indicator */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[10px]">
-            <span className={`w-2 h-2 rounded-full ${queueLength > 0 ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
-            <span className="text-slate-400">
-              {queueLength > 0 ? `جاري المزامنة (${queueLength})` : 'متصل بالخادم'}
-            </span>
-          </div>
+          {/* Server Status Indicator Removed */}
 
           {/* Report Problem Button */}
           <button

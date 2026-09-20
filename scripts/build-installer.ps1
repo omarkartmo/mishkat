@@ -20,12 +20,14 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Production build failed!"
 }
 
-Write-Host "  -> Building Tauri Student App..." -ForegroundColor Yellow
-npx @tauri-apps/cli build
+Write-Host "  -> Building Student App (Pure Rust)..." -ForegroundColor Yellow
+Set-Location "$ProjectRoot\src-tauri"
+cargo build --release
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Tauri Student build failed. Aborting installer build!"
+    Write-Error "Student App build failed. Aborting installer build!"
 }
-Write-Host "  ✓ Tauri Student build complete." -ForegroundColor Green
+Set-Location $ProjectRoot
+Write-Host "  ✓ Student App build complete." -ForegroundColor Green
 
 # 2. Verify Output Artifacts
 Write-Host "[2/5] Verifying Production Artifacts..." -ForegroundColor Yellow

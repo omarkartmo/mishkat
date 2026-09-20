@@ -160,13 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ) : undefined
                 }
               />
-              <NavItem
-                icon={<Globe2 className="w-4 h-4 text-sky-500" />}
-                label="بوابة المكتبات المعتمدة"
-                active={activeTab === 'portals'}
-                onClick={() => onSelectTab('portals')}
-                isCollapsed={isCollapsed}
-              />
+
             </div>
           </div>
         )}
@@ -224,13 +218,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     ) : undefined
                   }
                 />
-                <NavItem
-                  icon={<Globe2 className="w-4 h-4 text-sky-500" />}
-                  label="بوابة المكتبات المعتمدة"
-                  active={activeTab === 'portals'}
-                  onClick={() => onSelectTab('portals')}
-                  isCollapsed={isCollapsed}
-                />
+
               </div>
             </div>
 
@@ -298,9 +286,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 <NavItem
                   icon={<Settings className="w-4 h-4" />}
-                  label="إعدادات النظام والنسخ"
+                  label="تكوين وإعدادات النظام"
                   active={activeTab === 'settings'}
                   onClick={() => onSelectTab('settings')}
+                  isCollapsed={isCollapsed}
+                />
+                <NavItem
+                  icon={<Shield className="w-4 h-4 text-red-500" />}
+                  label="سياسة الإنترنت"
+                  active={activeTab === 'internet_policy'}
+                  onClick={() => onSelectTab('internet_policy')}
                   isCollapsed={isCollapsed}
                 />
                 <NavItem

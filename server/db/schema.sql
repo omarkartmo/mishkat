@@ -338,25 +338,7 @@ CREATE TABLE IF NOT EXISTS pending_submissions (
 CREATE INDEX IF NOT EXISTS idx_submissions_status ON pending_submissions(status);
 CREATE INDEX IF NOT EXISTS idx_submissions_student ON pending_submissions(student_id);
 
--- 15. Whitelisted Academic Portals
-CREATE TABLE IF NOT EXISTS whitelisted_portals (
-    id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(200) NOT NULL,
-    description TEXT,
-    url TEXT NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    icon VARCHAR(50) DEFAULT 'Globe',
-    is_featured BOOLEAN DEFAULT TRUE,
-    notes TEXT,
-    allowed_domains TEXT[] NOT NULL,
-    status VARCHAR(50) DEFAULT 'DRAFT',
-    integration_method VARCHAR(50) DEFAULT 'NONE',
-    capabilities JSONB DEFAULT '{"searchSupported":false,"recordLookupSupported":false,"canonicalUrlsSupported":false,"metadataSupported":false,"fullTextSupported":false,"verificationSupported":false}'::jsonb,
-    last_verified_at TIMESTAMP WITH TIME ZONE,
-    health_status VARCHAR(50) DEFAULT 'UNKNOWN',
-    discovery_details JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+
 
 -- 16. App Notifications
 CREATE TABLE IF NOT EXISTS notifications (

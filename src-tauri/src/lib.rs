@@ -1,10 +1,11 @@
-
 use std::net::{TcpStream, SocketAddr};
 use std::time::Duration;
 use std::thread;
 use std::sync::mpsc;
 use std::io::{Write, Read};
 use std::process::Command;
+use winreg::enums::*;
+use winreg::RegKey;
 
 fn get_local_ipv4_bases() -> Vec<String> {
     let mut bases = Vec::new();
@@ -48,6 +49,34 @@ fn show_error_msg_and_retry() -> bool {
     false
 }
 
+fn set_system_proxy(pac_url: &str) {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(internet_settings) = hkcu.open_subkey_with_flags(
+        r#"Software\Microsoft\Windows\CurrentVersion\Internet Settings"#,
+        KEY_ALL_ACCESS,
+    ) {
+        // Enable AutoConfigURL (PAC file)
+        let _ = internet_settings.set_value("AutoConfigURL", &pac_url.to_string());
+        
+        // Ensure proxy is enabled conceptually, though AutoConfigURL overrides standard proxy
+        let _ = internet_settings.set_value("ProxyEnable", &0u32); 
+
+        // Refresh system settings
+        let refresh_script = r#"
+            $signature = @'
+            [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
+            public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+'@
+            $wininet = Add-Type -MemberDefinition $signature -Name "WinINet" -Namespace "Win32" -PassThru
+            $wininet::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0)
+            $wininet::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)
+        "#;
+        let _ = Command::new("powershell")
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", refresh_script])
+            .output();
+    }
+}
+
 pub fn run() {
     loop {
         let bases = get_local_ipv4_bases();
@@ -82,8 +111,14 @@ pub fn run() {
         
         match rx.recv_timeout(Duration::from_secs(2)) {
             Ok(ip) => {
-                let url = format!("http://{}:3000", ip);
+                let url = format!("http://{}:3000/student", ip);
+                let pac_url = format!("http://{}:3000/api/v1/internet-policy/proxy.pac", ip);
+                
                 if cfg!(target_os = "windows") {
+                    // 1. Set System Proxy to enforce Internet Policy
+                    set_system_proxy(&pac_url);
+                    
+                    // 2. Open default browser directly to the student portal
                     let _ = Command::new("cmd")
                         .args(["/C", "start", &url])
                         .spawn();

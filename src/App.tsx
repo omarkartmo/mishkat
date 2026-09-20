@@ -8,7 +8,6 @@ import {
   LoanRecord,
   PendingBookSubmission,
   SystemConfig,
-  WhitelistedPortal,
   StudentNote,
   ReadingProgress,
   LoanPurpose,
@@ -27,12 +26,12 @@ import { PhysicalLibraryView } from './components/physical/PhysicalLibraryView';
 import { LoanManagerView } from './components/circulation/LoanManagerView';
 import { DigitalLibraryView } from './components/digital/DigitalLibraryView';
 import { BookReaderModal } from './components/reader/BookReaderModal';
-import { WhitelistedPortalsView } from './components/portals/WhitelistedPortalsView';
 import { ReviewQueueView } from './components/admin/ReviewQueueView';
 import { StudentManagerView } from './components/students/StudentManagerView';
 import { CategoryManagerView } from './components/admin/CategoryManagerView';
 import { StudentPortalView } from './components/student/StudentPortalView';
 import { SystemSettingsView } from './components/admin/SystemSettingsView';
+import { InternetPolicyView } from './components/admin/InternetPolicyView';
 import { SystemSupportDashboard } from './components/admin/SystemSupportDashboard';
 import { StudentKioskHeader } from './components/student/StudentKioskHeader';
 import { telemetryService } from './services/telemetry/telemetryService';
@@ -53,7 +52,6 @@ import { summaryRepository } from './services/summaryRepository';
 import { favoriteRepository } from './services/favoriteRepository';
 import { readingProgressRepository } from './services/readingProgressRepository';
 import { submissionRepository } from './services/submissionRepository';
-import { portalRepository } from './services/portalRepository';
 import { userRepository } from './services/userRepository';
 import { settingsRepository } from './services/settingsRepository';
 import { INITIAL_SYSTEM_CONFIG } from './data/initialData';
@@ -126,10 +124,6 @@ export default function App() {
   const [isSubmissionsLoading, setIsSubmissionsLoading] = useState(false);
   const [submissionsError, setSubmissionsError] = useState<string | null>(null);
 
-  // Server-authoritative Academic Portals State (Phase 6.1 - Portals Migration)
-  const [portals, setPortals] = useState<WhitelistedPortal[]>([]);
-  const [isPortalsLoading, setIsPortalsLoading] = useState(false);
-  const [portalsError, setPortalsError] = useState<string | null>(null);
 
   // Server-authoritative Users/Students State (Phase 6.2 - Users Migration)
   const [users, setUsers] = useState<User[]>([]);
@@ -357,23 +351,6 @@ export default function App() {
     }
   };
 
-  // Load server-authoritative portals (Phase 6.1 - Portals Migration)
-  const loadPortals = async () => {
-    setIsPortalsLoading(true);
-    try {
-      const res = await portalRepository.getPortals();
-      if (res.success && Array.isArray(res.data)) {
-        setPortals(res.data);
-        setPortalsError(null);
-      } else {
-        setPortalsError(res.error?.message || 'تعذر استرجاع بوابات المعرفة من الخادم المركزي.');
-      }
-    } catch (err: any) {
-      setPortalsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بوابات المعرفة.');
-    } finally {
-      setIsPortalsLoading(false);
-    }
-  };
 
   // Load server-authoritative users (Phase 6.2 - Users Migration)
   const loadUsers = async () => {
@@ -438,7 +415,6 @@ export default function App() {
     loadFavorites();
     loadReadingProgress();
     loadSubmissions();
-    loadPortals();
     loadUsers();
     loadSettings();
   };
@@ -456,7 +432,6 @@ export default function App() {
     loadFavorites();
     loadReadingProgress();
     loadSubmissions();
-    loadPortals();
     loadUsers();
     loadSettings();
   }, []);
@@ -474,7 +449,6 @@ export default function App() {
       loadFavorites();
       loadReadingProgress();
       loadSubmissions();
-      loadPortals();
       loadUsers();
       loadSettings();
     }
@@ -498,7 +472,7 @@ export default function App() {
   // Switch Active User / Role with strict RBAC enforcement
   const handleUserChange = (user: User) => {
     setAuthUser(user);
-    const adminOnlyTabs: NavigationTab[] = ['overview', 'loans', 'reviews', 'students', 'categories', 'settings'];
+    const adminOnlyTabs: NavigationTab[] = ['overview', 'loans', 'reviews', 'students', 'categories', 'settings', 'internet_policy'];
     if (user.role === 'student' && adminOnlyTabs.includes(activeTab)) {
       setActiveTab('student_portal');
     } else if (user.role === 'admin' && activeTab === 'student_portal') {
@@ -511,7 +485,6 @@ export default function App() {
     loadFavorites();
     loadReadingProgress();
     loadSubmissions();
-    loadPortals();
     loadUsers();
     loadSettings();
   };
@@ -519,7 +492,7 @@ export default function App() {
   const handleNavigateToTab = (tab: NavigationTab) => {
     setIsMobileMenuOpen(false);
     if (currentUser.role === 'student') {
-      const adminTabs: NavigationTab[] = ['overview', 'loans', 'reviews', 'students', 'categories', 'settings'];
+      const adminTabs: NavigationTab[] = ['overview', 'loans', 'reviews', 'students', 'categories', 'settings', 'internet_policy'];
       if (adminTabs.includes(tab)) {
         setActiveTab('student_portal');
         return;
@@ -1100,60 +1073,6 @@ export default function App() {
     }
   };
 
-  // Portal Handlers (Phase 6.1 - Portals Migration)
-  const handleAddPortal = async (portal: Omit<WhitelistedPortal, 'id'>) => {
-    try {
-      const res = await portalRepository.createPortal(portal);
-      if (res.success) {
-        await loadPortals();
-      } else {
-        alert(res.error?.message || 'تعذر إضافة بوابة المعرفة في الخادم المركزي.');
-      }
-    } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء إضافة البوابة.');
-    }
-  };
-
-  const handleUpdatePortal = async (id: string, updates: Partial<WhitelistedPortal>) => {
-    try {
-      const res = await portalRepository.updatePortal(id, updates);
-      if (res.success) {
-        await loadPortals();
-      } else {
-        alert(res.error?.message || 'تعذر تحديث بوابة المعرفة في الخادم المركزي.');
-      }
-    } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء تحديث البوابة.');
-    }
-  };
-
-  const handleDeletePortal = async (id: string) => {
-    try {
-      const res = await portalRepository.deletePortal(id);
-      if (res.success) {
-        await loadPortals();
-      } else {
-        alert(res.error?.message || 'تعذر حذف بوابة المعرفة من الخادم المركزي.');
-      }
-    } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء حذف البوابة.');
-    }
-  };
-
-  const handleTogglePortalFeatured = async (id: string) => {
-    const portal = portals.find((p) => p.id === id);
-    if (!portal) return;
-    try {
-      const res = await portalRepository.togglePortalFeatured(portal);
-      if (res.success) {
-        await loadPortals();
-      } else {
-        alert(res.error?.message || 'تعذر تحديث حالة التمييز للبوابة في الخادم المركزي.');
-      }
-    } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء تحديث حالة التمييز للبوابة.');
-    }
-  };
 
   // User & Student Handlers (Phase 6.2 - Users Migration)
   const handleAddStudent = async (newStudent: Omit<User, 'id'>) => {
@@ -1537,18 +1456,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'portals' && (
-            <WhitelistedPortalsView
-              portals={portals}
-              currentUser={currentUser}
-              categories={categories}
-              onSubmitIngestion={handleSubmitIngestion}
-              onAddPortal={handleAddPortal}
-              onDeletePortal={handleDeletePortal}
-              onUpdatePortal={handleUpdatePortal}
-              onToggleFeatured={handleTogglePortalFeatured}
-            />
-          )}
 
           {activeTab === 'reviews' && currentUser.role === 'admin' && (
             <ReviewQueueView
@@ -1690,6 +1597,10 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'internet_policy' && currentUser.role === 'admin' && (
+            <InternetPolicyView />
+          )}
+
           {activeTab === 'support' && currentUser.role === 'admin' && (
             <SystemSupportDashboard />
           )}
@@ -1724,3 +1635,4 @@ export default function App() {
     </div>
   );
 }
+

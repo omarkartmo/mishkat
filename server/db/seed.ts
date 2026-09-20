@@ -10,7 +10,7 @@ import {
   INITIAL_STUDENTS,
   INITIAL_ADMIN,
   INITIAL_LOANS,
-  INITIAL_WHITELISTED_PORTALS,
+
   INITIAL_SYSTEM_CONFIG,
   INITIAL_BOOK_SUMMARIES,
   INITIAL_STUDENT_NOTES,
@@ -290,50 +290,6 @@ export async function seedInitialData(): Promise<void> {
     }
   }
 
-  // Portals
-  console.log('🌱 [Seeder] Seeding initial academic portals...');
-  for (const portal of INITIAL_WHITELISTED_PORTALS) {
-    await db.query(`
-      INSERT INTO whitelisted_portals (
-        id, name, description, url, category, icon, is_featured, notes, allowed_domains,
-        status, integration_method, capabilities, last_verified_at, health_status, discovery_details
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, $13, $14)
-      ON CONFLICT (id) DO UPDATE SET
-        status = EXCLUDED.status,
-        integration_method = EXCLUDED.integration_method,
-        capabilities = EXCLUDED.capabilities,
-        discovery_details = EXCLUDED.discovery_details,
-        notes = EXCLUDED.notes;
-    `, [
-      portal.id,
-      portal.name,
-      portal.description,
-      portal.url,
-      portal.category,
-      portal.icon,
-      portal.isFeatured,
-      portal.notes || null,
-      portal.allowedDomains,
-      (portal as any).status || 'VERIFIED',
-      (portal as any).integrationMethod || 'BROWSE_ONLY',
-      JSON.stringify((portal as any).capabilities || {
-        searchSupported: false,
-        recordLookupSupported: false,
-        canonicalUrlsSupported: true,
-        metadataSupported: true,
-        fullTextSupported: false,
-        verificationSupported: true,
-      }),
-      (portal as any).healthStatus || 'HEALTHY',
-      JSON.stringify((portal as any).discoveryDetails || {
-        verifiedByAdmin: true,
-        discoveryMethod: (portal as any).integrationMethod || 'BROWSE_ONLY',
-        positiveTestPassed: true,
-        negativeTestPassed: true,
-        isolationTestPassed: true,
-      }),
-    ]);
-  }
 
   // System Settings
   const { rows: configRows } = await db.query("SELECT key FROM system_settings WHERE key = 'library_config'");
