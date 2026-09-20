@@ -220,6 +220,7 @@ export class UpdaterService {
     stagingDir: string;
     rollbackSnapshotDir: string;
     preUpdateBackupPath: string;
+    pgDataDir: string;
   }): string {
     const scriptPath = path.join(serverConfig.dirs.temp, 'apply-update.bat');
     const rootDir = process.cwd();
@@ -236,9 +237,17 @@ echo [1/6] Stopping MishkatLibraryService...
 net stop MishkatLibraryService >nul 2>&1
 timeout /t 2 /nobreak >nul
 
-echo [2/6] Backing up current binaries for atomic rollback...
+echo [2/6] Backing up current binaries and database for atomic rollback...
 if not exist "${options.rollbackSnapshotDir}\\dist" mkdir "${options.rollbackSnapshotDir}\\dist"
 xcopy /E /I /Y "${rootDir}\\dist" "${options.rollbackSnapshotDir}\\dist" >nul
+if exist "${rootDir}\\server\\db\\migrations" (
+  if not exist "${options.rollbackSnapshotDir}\\migrations" mkdir "${options.rollbackSnapshotDir}\\migrations"
+  xcopy /E /I /Y "${rootDir}\\server\\db\\migrations" "${options.rollbackSnapshotDir}\\migrations" >nul
+)
+if exist "${options.pgDataDir}" (
+  if not exist "${options.rollbackSnapshotDir}\\pgdata" mkdir "${options.rollbackSnapshotDir}\\pgdata"
+  xcopy /E /I /Y "${options.pgDataDir}" "${options.rollbackSnapshotDir}\\pgdata" >nul
+)
 
 echo [3/6] Deploying staged update binaries...
 if exist "${options.stagingDir}\\dist" (
@@ -269,9 +278,17 @@ for /L %%i in (1,1,10) do (
 :ROLLBACK
 echo [CRITICAL] Health check failed or timeout reached. Executing 3-layer atomic rollback...
 net stop MishkatLibraryService >nul 2>&1
+timeout /t 2 /nobreak >nul
 xcopy /E /I /Y "${options.rollbackSnapshotDir}\\dist" "${rootDir}\\dist" >nul
+if exist "${options.rollbackSnapshotDir}\\migrations" (
+  xcopy /E /I /Y "${options.rollbackSnapshotDir}\\migrations" "${rootDir}\\server\\db\\migrations" >nul
+)
+if exist "${options.rollbackSnapshotDir}\\pgdata" (
+  rmdir /S /Q "${options.pgDataDir}" 2>nul
+  xcopy /E /I /Y "${options.rollbackSnapshotDir}\\pgdata" "${options.pgDataDir}" >nul
+)
 net start MishkatLibraryService
-echo [ROLLBACK] Application files restored to previous version and service restarted.
+echo [ROLLBACK] Application files and database restored to previous version and service restarted.
 exit /b 1
 
 :VERIFIED
@@ -364,46 +381,57 @@ exit /b 0
             execSync(`unzip -o -q "${packageZipPath}" -d "${stagingDir}"`, { timeout: 30000 });
           }
 
-          // Generate detached updater runner script
-          this.generateDetachedUpdateScript({
-            stagingDir,
-            rollbackSnapshotDir,
-            preUpdateBackupPath: preUpdateBackupPath || '',
-          });
+          // Generation happens below with pgDataDir
 
           // Stage dist directory
           const stagedDist = path.join(stagingDir, 'dist');
-          if (fs.existsSync(stagedDist)) {
-            this.copyRecursive(stagedDist, distDir);
-          }
+          // WE NO LONGER COPY IN-PLACE HERE. 
+          // The detached .bat script will handle copying after stopping the service.
 
           // Stage migration files
           const stagedMigrations = path.join(stagingDir, 'server', 'db', 'migrations');
-          const targetMigrations = path.join(process.cwd(), 'server', 'db', 'migrations');
-          if (fs.existsSync(stagedMigrations) && fs.existsSync(targetMigrations)) {
-            this.copyRecursive(stagedMigrations, targetMigrations);
-          }
+          // WE NO LONGER COPY IN-PLACE HERE.
+
+          // Spawn the detached updater script
+          const { spawn } = require('child_process');
+          const batPath = this.generateDetachedUpdateScript({
+            stagingDir,
+            rollbackSnapshotDir,
+            preUpdateBackupPath: preUpdateBackupPath || '',
+            pgDataDir: serverConfig.dirs.pgdata
+          });
+
+          this.updateStatus.progressPercent = 75;
+          this.updateStatus.message = 'الخطوة 5: إطلاق معالج التحديث المنفصل وإعادة تشغيل الخدمة...';
+
+          const subprocess = spawn('cmd.exe', ['/c', batPath], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+          });
+          subprocess.unref();
+
+          // We mark as completed from the perspective of this Node process.
+          // The actual health check is done by the detached script.
+          this.updateStatus.state = 'completed';
+          this.updateStatus.progressPercent = 100;
+          this.updateStatus.message = '✅ تم استخراج التحديث وبدأت عملية التثبيت في الخلفية. سيتم إعادة تشغيل النظام الآن.';
+          
+          // Gracefully exit the current process to release file locks.
+          // In a real service, net stop will kill us anyway, but this ensures file locks are released for testing too.
+          setTimeout(() => {
+            console.log('Exiting process to allow detached updater to replace files...');
+            process.exit(0);
+          }, 1000);
+
+          return { success: true, message: this.updateStatus.message };
+
         } catch (unzipErr: any) {
           console.warn('⚠️ [Updater] Archive staging note:', unzipErr.message);
+          throw unzipErr;
         }
-      }
-
-      // 6. Run database migrations to ensure new schema changes apply cleanly
-      this.updateStatus.progressPercent = 75;
-      this.updateStatus.message = 'الخطوة 5: تطبيق ترحيلات قاعدة البيانات (Migrations)...';
-      await runMigrations();
-
-      // 7. Post-update health check
-      this.updateStatus.state = 'verifying';
-      this.updateStatus.progressPercent = 90;
-      this.updateStatus.message = 'الخطوة 6: التحقق من صحة النظام بعد التحديث...';
-
-      // Clean up temporary staging
-      if (fs.existsSync(rollbackSnapshotDir)) {
-        fs.rmSync(rollbackSnapshotDir, { recursive: true, force: true });
-      }
-      if (fs.existsSync(stagingDir)) {
-        fs.rmSync(stagingDir, { recursive: true, force: true });
+      } else {
+         throw new Error("ملف حزمة التحديث يجب أن يكون بصيغة .zip");
       }
 
       this.readCurrentVersion();

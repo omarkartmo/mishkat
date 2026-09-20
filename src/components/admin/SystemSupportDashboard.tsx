@@ -176,20 +176,11 @@ export const SystemSupportDashboard: React.FC = () => {
     return `${m} دقيقة`;
   };
 
-  if (isLoading && !healthData) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400 gap-3">
-        <RefreshCw className="w-8 h-8 animate-spin text-indigo-500" />
-        <p className="text-sm">جاري جلب مؤشرات صحة النظام وتشخيص الأجهزة...</p>
-      </div>
-    );
-  }
-
   const h = healthData?.health;
   const s = healthData?.students;
 
   return (
-    <div className="space-y-6 animate-fade-in text-slate-100">
+    <div className="p-8 max-w-[1600px] mx-auto space-y-6 animate-fade-in text-slate-100 pb-10">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
         <div>

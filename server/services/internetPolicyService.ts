@@ -21,6 +21,24 @@ export class InternetPolicyService {
     return { success: true };
   }
 
+  async getExcludeServer(): Promise<boolean> {
+    const { rows } = await db.query("SELECT value FROM system_settings WHERE key = 'internet_policy_exclude_server'");
+    if (rows.length > 0) {
+      const val = rows[0].value;
+      return val === true || val === 'true';
+    }
+    return true; // Default is true as requested
+  }
+
+  async setExcludeServer(exclude: boolean) {
+    await db.query(
+      `INSERT INTO system_settings (key, value) VALUES ('internet_policy_exclude_server', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(exclude)]
+    );
+    return { success: true };
+  }
+
   async getCategories() {
     const { rows } = await db.query('SELECT * FROM blocked_categories ORDER BY name ASC');
     return rows.map(r => ({

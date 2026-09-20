@@ -2,6 +2,7 @@ import express from 'express';
 import { internetPolicyService } from '../services/internetPolicyService';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
+import os from 'os';
 
 const router = express.Router();
 
@@ -9,7 +10,20 @@ const router = express.Router();
 router.get('/proxy.pac', async (req, res) => {
   try {
     const mode = await internetPolicyService.getPolicyMode();
+    const excludeServer = await internetPolicyService.getExcludeServer();
     let pacContent = `function FindProxyForURL(url, host) {\n`;
+
+    if (excludeServer) {
+      const ips = ['127.0.0.1', '::1'];
+      const ifaces = os.networkInterfaces();
+      for (const name of Object.keys(ifaces)) {
+        for (const iface of ifaces[name] || []) {
+          ips.push(iface.address);
+        }
+      }
+      pacContent += `  var serverIps = ${JSON.stringify(ips)};\n`;
+      pacContent += `  if (serverIps.indexOf(myIpAddress()) !== -1) return "DIRECT";\n\n`;
+    }
 
     // Always allow localhost/127.0.0.1 for local app access
     pacContent += `  if (shExpMatch(host, "127.0.0.1") || shExpMatch(host, "localhost") || shExpMatch(host, "*.local")) {\n`;
@@ -43,6 +57,26 @@ router.get('/proxy.pac', async (req, res) => {
 
 router.use(authenticateToken);
 router.use(requireRole('admin'));
+
+// Exclude Server Preference
+router.get('/exclude-server', async (req, res) => {
+  try {
+    const excludeServer = await internetPolicyService.getExcludeServer();
+    res.json({ excludeServer });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch exclude server preference' });
+  }
+});
+
+router.put('/exclude-server', async (req, res) => {
+  try {
+    const { excludeServer } = req.body;
+    await internetPolicyService.setExcludeServer(!!excludeServer);
+    res.json({ success: true, excludeServer: !!excludeServer });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update exclude server preference' });
+  }
+});
 
 // Policy Mode
 router.get('/mode', async (req, res) => {

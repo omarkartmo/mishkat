@@ -28,6 +28,7 @@ export const InternetPolicyView: React.FC = () => {
   const [sites, setSites] = useState<BlockedSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [policyMode, setPolicyMode] = useState<PolicyMode>('RESTRICTED');
+  const [excludeServer, setExcludeServer] = useState(true);
   
   // Forms
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -42,13 +43,13 @@ export const InternetPolicyView: React.FC = () => {
   }, []);
 
   const fetchData = async () => {
-    setLoading(true);
     try {
       const headers = { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` };
-      const [catsRes, sitesRes, modeRes] = await Promise.all([
+      const [catsRes, sitesRes, modeRes, excludeRes] = await Promise.all([
         fetch('/api/v1/internet-policy/categories', { headers }),
         fetch('/api/v1/internet-policy/sites', { headers }),
-        fetch('/api/v1/internet-policy/mode', { headers })
+        fetch('/api/v1/internet-policy/mode', { headers }),
+        fetch('/api/v1/internet-policy/exclude-server', { headers })
       ]);
       if (catsRes.ok) setCategories(await catsRes.json());
       if (sitesRes.ok) setSites(await sitesRes.json());
@@ -56,10 +57,30 @@ export const InternetPolicyView: React.FC = () => {
         const modeData = await modeRes.json();
         setPolicyMode(modeData.mode || 'RESTRICTED');
       }
+      if (excludeRes.ok) {
+        const excludeData = await excludeRes.json();
+        setExcludeServer(excludeData.excludeServer ?? true);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateExcludeServer = async (exclude: boolean) => {
+    setExcludeServer(exclude);
+    try {
+      await fetch('/api/v1/internet-policy/exclude-server', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}`
+        },
+        body: JSON.stringify({ excludeServer: exclude })
+      });
+    } catch (e) {
+      console.error('Failed to update exclude server setting', e);
     }
   };
 
@@ -215,20 +236,32 @@ export const InternetPolicyView: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return <div className="p-8 text-center text-slate-400">جاري التحميل...</div>;
-  }
-
   return (
     <div className="p-8 max-w-[1600px] mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 pb-10">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-          <Shield className="w-6 h-6 text-indigo-400" />
-          سياسة الإنترنت والمواقع المحظورة
-        </h2>
-        <p className="text-xs text-slate-400">
-          إدارة سياسة وصول الطلاب لشبكة الإنترنت داخل المدرسة وحماية البيئة الأكاديمية.
-        </p>
+      <div className="flex justify-between items-start">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+            <Shield className="w-6 h-6 text-indigo-400" />
+            سياسة الإنترنت والمواقع المحظورة
+          </h2>
+          <p className="text-xs text-slate-400">
+            إدارة سياسة وصول الطلاب لشبكة الإنترنت داخل المدرسة وحماية البيئة الأكاديمية.
+          </p>
+        </div>
+
+        {/* EXCLUDE SERVER PC TOGGLE */}
+        <div className="flex items-center gap-2 bg-slate-900/30 border border-slate-800/80 px-3 py-1.5 rounded-lg transition-colors hover:border-slate-700 hover:bg-slate-900/60 mt-1">
+          <input 
+             type="checkbox" 
+             id="excludeServer" 
+             checked={excludeServer}
+             onChange={(e) => updateExcludeServer(e.target.checked)}
+             className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer" 
+          />
+          <label htmlFor="excludeServer" className="text-[11px] font-medium text-slate-300 cursor-pointer select-none">
+            استثناء الخادم (Server PC)
+          </label>
+        </div>
       </div>
 
       {/* MASTER POLICY TOGGLE */}
