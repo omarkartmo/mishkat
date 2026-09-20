@@ -1172,14 +1172,14 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-slate-400 leading-relaxed">
-              إعادة تعيين قاعدة البيانات المركزية واسترجاع السجلات النموذجية الافتراضية الأولية للنظام.
+              إعادة تعيين قاعدة البيانات المركزية ومسح كافة بيانات النظام (الطلاب، الكتب، الإعارات وغيرها) باستثناء بيانات مدير النظام الافتراضية.
             </div>
             <button
               type="button"
               onClick={() => {
                 if (
                   window.confirm(
-                    '⚠️ تحذير: هل أنت متأكد من رغبتك في إعادة تعيين كافة البيانات واسترجاع النسخة النموذجية الأصلية؟'
+                    '⚠️ تحذير: هل أنت متأكد من رغبتك في مسح كافة البيانات واستعادة نسخة النظام الأساسية الفارغة؟ لا يمكن التراجع عن هذا الإجراء.'
                   )
                 ) {
                   onResetData();
@@ -1188,7 +1188,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               className="flex items-center gap-2 px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl font-semibold transition-all shrink-0 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>استعادة البيانات النموذجية</span>
+              <span>استعادة نسخة النظام الأساسية</span>
             </button>
           </div>
         </div>

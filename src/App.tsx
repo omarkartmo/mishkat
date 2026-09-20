@@ -1201,7 +1201,7 @@ export default function App() {
       const res = await settingsRepository.resetDatabase();
       if (res.success) {
         await refreshAllState();
-        alert(res.data?.message || 'تمت استعادة البيانات النموذجية الأولية بنجاح في الخادم المركزي.');
+        alert(res.data?.message || 'تمت استعادة نسخة النظام الأساسية بنجاح في الخادم المركزي.');
       } else {
         alert(res.error?.message || 'تعذر إعادة تعيين قاعدة البيانات في الخادم المركزي.');
       }

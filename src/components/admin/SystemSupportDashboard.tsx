@@ -18,8 +18,12 @@ import {
   ChevronUp,
   FileText,
   AlertCircle,
+  HelpCircle,
+  X,
+  Send,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
+import { telemetryService } from '../../services/telemetry/telemetryService';
 
 interface HealthData {
   health: {
@@ -99,6 +103,12 @@ export const SystemSupportDashboard: React.FC = () => {
   const [clientStations, setClientStations] = useState<ClientStation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Modal states for Reporting a Problem
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [problemDescription, setProblemDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
   const [expandedSignature, setExpandedSignature] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'errors' | 'clients' | 'updater'>('overview');
 
@@ -167,6 +177,25 @@ export const SystemSupportDashboard: React.FC = () => {
     }
   };
 
+  const handleReportSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!problemDescription.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      telemetryService.reportManualProblem('SystemSupportDashboard', problemDescription.trim());
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        setIsReportModalOpen(false);
+        setProblemDescription('');
+        setSubmitSuccess(false);
+        setIsSubmitting(false);
+      }, 1500);
+    } catch {
+      setIsSubmitting(false);
+    }
+  };
+
   const formatUptime = (seconds: number) => {
     const d = Math.floor(seconds / (3600 * 24));
     const h = Math.floor((seconds % (3600 * 24)) / 3600);
@@ -208,6 +237,15 @@ export const SystemSupportDashboard: React.FC = () => {
               {h?.status === 'healthy' ? 'الخادم في حالة ممتازة' : h?.status === 'degraded' ? 'تنبيه: أداء منخفض' : 'حالة حرجة'}
             </span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsReportModalOpen(true)}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-colors"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>إبلاغ عن مشكلة</span>
+          </button>
 
           <button
             type="button"
@@ -597,6 +635,79 @@ export const SystemSupportDashboard: React.FC = () => {
                 <span>{isCheckingUpdate ? 'جاري الفحص...' : 'فحص وجود تحديثات جديدة معتمدة'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Problem Modal */}
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-slate-100 font-bold text-sm">
+                <HelpCircle className="w-4 h-4 text-purple-400" />
+                <span>الإبلاغ عن مشكلة تقنية</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {submitSuccess ? (
+              <div className="py-6 text-center space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                <h4 className="text-sm font-bold text-slate-100">تم إرسال التقرير بنجاح</h4>
+                <p className="text-xs text-slate-400">
+                  شكراً لك. تم إرسال المعلومات التشخيصية بنجاح ليتم مراجعتها.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleReportSubmit} className="space-y-3">
+                <div className="text-xs text-slate-400">
+                  سيتم إرسال وصف المشكلة ومعلومات الشاشة الحالية فقط دون أي بيانات خاصة.
+                </div>
+
+                <div>
+                  <label className="block text-xs text-slate-300 font-medium mb-1">
+                    ما المشكلة التي واجهتك؟ *
+                  </label>
+                  <textarea
+                    required
+                    rows={4}
+                    value={problemDescription}
+                    onChange={(e) => setProblemDescription(e.target.value)}
+                    placeholder="مثال: تعذر تحميل الصفحة رقم 5 في الكتاب أو بطء في عرض الفهرس..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsReportModalOpen(false)}
+                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !problemDescription.trim()}
+                    className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-lg shadow-purple-600/20"
+                  >
+                    {isSubmitting ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span>إرسال التقرير</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

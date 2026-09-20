@@ -16,6 +16,50 @@ import {
   INITIAL_STUDENT_NOTES,
 } from '../../src/data/initialData';
 
+export async function seedCoreData(): Promise<void> {
+  // Check if roles exist
+  const { rows: roles } = await db.query('SELECT id FROM roles LIMIT 1');
+  if (roles.length === 0) {
+    console.log('🌱 [Seeder] Seeding initial RBAC roles & permissions...');
+    await db.query(`
+      INSERT INTO roles (id, name, description) VALUES
+      ('admin', 'أمين المكتبة العام (مدير النظام)', 'صلاحيات كاملة لإدارة المكتبة، الإعارات، الحسابات، والإعدادات'),
+      ('librarian', 'مساعد أمين المكتبة', 'إدارة الإعارات ومطابقة الكتب وعمليات الجرد'),
+      ('student', 'طالب / باحث', 'تصفح المكتبة، طلب استعارة، تدوين الملخصات والفوائد والمطالعة')
+      ON CONFLICT (id) DO NOTHING;
+    `);
+  }
+
+  // Check if Admin exists
+  const { rows: adminRows } = await db.query('SELECT id FROM users WHERE registration_number = $1', [INITIAL_ADMIN.registrationNumber]);
+  if (adminRows.length === 0) {
+    console.log('🌱 [Seeder] Seeding initial admin account...');
+    const adminPassHash = await bcrypt.hash('admin123', 10);
+    await db.query(`
+      INSERT INTO users (id, registration_number, name, email, role_id, password_hash, is_active, is_blocked)
+      VALUES ($1, $2, $3, $4, $5, $6, true, false)
+      ON CONFLICT (registration_number) DO NOTHING;
+    `, [
+      INITIAL_ADMIN.id,
+      INITIAL_ADMIN.registrationNumber,
+      INITIAL_ADMIN.name,
+      INITIAL_ADMIN.email || 'admin@mishkat.edu',
+      'admin',
+      adminPassHash,
+    ]);
+  }
+
+  // System Settings
+  const { rows: configRows } = await db.query("SELECT key FROM system_settings WHERE key = 'library_config'");
+  if (configRows.length === 0) {
+    await db.query(`
+      INSERT INTO system_settings (key, value)
+      VALUES ('library_config', $1)
+      ON CONFLICT (key) DO NOTHING;
+    `, [JSON.stringify(INITIAL_SYSTEM_CONFIG)]);
+  }
+}
+
 export async function seedInitialData(): Promise<void> {
   // Check if roles exist
   const { rows: roles } = await db.query('SELECT id FROM roles LIMIT 1');

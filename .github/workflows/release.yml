@@ -1,0 +1,89 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    name: Build & Release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Verify Version Consistency
+        id: version_check
+        shell: pwsh
+        run: |
+          $packageVersion = (Get-Content package.json | ConvertFrom-Json).version
+          $tagVersion = $env:GITHUB_REF_NAME -replace '^v',''
+          
+          Write-Host "Package.json version: $packageVersion"
+          Write-Host "Tag version: $tagVersion"
+          
+          if ($packageVersion -ne $tagVersion) {
+            Write-Error "Version mismatch! package.json ($packageVersion) does not match tag ($tagVersion)."
+            exit 1
+          }
+          Write-Output "VERSION=$packageVersion" >> $env:GITHUB_ENV
+
+      - name: Build and Package
+        shell: pwsh
+        run: .\scripts\build-update.ps1
+
+      - name: Verify ZIP Artifact
+        shell: pwsh
+        run: |
+          $zipPath = "updates\mishkat-server-v${env:VERSION}-win-x64.zip"
+          if (-not (Test-Path $zipPath)) {
+            Write-Error "Required ZIP artifact missing: $zipPath"
+            exit 1
+          }
+          Write-Host "ZIP artifact verified: $zipPath"
+
+      - name: Verify Manifest Artifact
+        shell: pwsh
+        run: |
+          $manifestPath = "updates\release-manifest.json"
+          if (-not (Test-Path $manifestPath)) {
+            Write-Error "Required manifest artifact missing: $manifestPath"
+            exit 1
+          }
+          
+          $manifest = Get-Content $manifestPath | ConvertFrom-Json
+          $requiredFields = @('version', 'releaseDate', 'description', 'sha256', 'downloadUrl', 'criticalSecurityUpdate')
+          foreach ($field in $requiredFields) {
+            if (-not ($field -in $manifest.PSObject.Properties.Name)) {
+              Write-Error "Manifest missing required field: $field"
+              exit 1
+            }
+          }
+          
+          if ($manifest.version -ne $env:VERSION) {
+            Write-Error "Manifest version ($($manifest.version)) does not match expected version ($env:VERSION)."
+            exit 1
+          }
+          
+          Write-Host "Manifest artifact verified successfully."
+
+      - name: Create Published Release & Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Mishkat Server v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            updates/mishkat-server-v${{ env.VERSION }}-win-x64.zip
+            updates/release-manifest.json

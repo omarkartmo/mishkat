@@ -1,0 +1,8 @@
+{
+  "version": "9.9.9",
+  "releaseDate": "2026-09-20T19:41:30.319Z",
+  "description": "Test Release for Update Access Service",
+  "sha256": "8739c76e681f900923b900c9df0ef75cf421d39cabb54650c4b9ad19b6a76d85",
+  "downloadUrl": "https://github.com/omarkartmo/mishkat/releases/download/v9.9.9-test/mishkat-server-v9.9.9-win-x64.zip",
+  "criticalSecurityUpdate": false
+}

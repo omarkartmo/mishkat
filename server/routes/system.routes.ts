@@ -6,7 +6,7 @@ import { serverConfig } from '../config';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
-import { seedInitialData } from '../db/seed';
+import { seedInitialData, seedCoreData } from '../db/seed';
 
 import {
   createDatabaseBackup,
@@ -694,7 +694,7 @@ systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async 
       `);
     });
 
-    await seedInitialData();
+    await seedCoreData();
 
     await recordAuditLog(
       req.user!.id,
@@ -709,7 +709,7 @@ systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async 
 
     res.json({
       success: true,
-      data: { message: 'تمت إعادة تعيين قاعدة البيانات المركزية واسترجاع البيانات النموذجية بنجاح.' },
+      data: { message: 'تمت إعادة تعيين قاعدة البيانات المركزية بنجاح واستعادة نسخة النظام الأساسية.' },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'RESET_FAILED', message: err.message } });
