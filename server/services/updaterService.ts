@@ -402,10 +402,10 @@ exit /b 0
         try {
           if (process.platform === 'win32') {
             execSync(`powershell.exe -NoProfile -NonInteractive -Command "Expand-Archive -LiteralPath '${packageZipPath}' -DestinationPath '${stagingDir}' -Force"`, {
-              timeout: 30000,
+              timeout: 300000,
             });
           } else {
-            execSync(`unzip -o -q "${packageZipPath}" -d "${stagingDir}"`, { timeout: 30000 });
+            execSync(`unzip -o -q "${packageZipPath}" -d "${stagingDir}"`, { timeout: 300000 });
           }
 
           // Generation happens below with pgDataDir
@@ -487,8 +487,12 @@ exit /b 0
             await restoreDatabaseFromBackup(backupJson as any, client);
           });
         }
+        
+        // Update status after successful rollback
+        this.updateStatus.message = `🛡️ فشل التحديث (${err.message}). تم استعادة النسخة السابقة الآمنة تلقائياً بنجاح.`;
       } catch (rollbackErr: any) {
         console.error('CRITICAL: Rollback failed:', rollbackErr.message);
+        this.updateStatus.message = `❌ فشل التحديث وفشلت أيضاً عملية استعادة النسخة الاحتياطية (${rollbackErr.message}). يُرجى تدخل الدعم الفني.`;
       } finally {
         if (fs.existsSync(rollbackSnapshotDir)) {
           fs.rmSync(rollbackSnapshotDir, { recursive: true, force: true });
@@ -497,7 +501,7 @@ exit /b 0
 
       return {
         success: false,
-        message: `فشل التحديث: ${err.message}. تم التراجع التلقائي واستعادة حالة النظام السابقة بأمان.`,
+        message: this.updateStatus.message,
       };
     }
   }
