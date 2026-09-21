@@ -83,7 +83,14 @@ if (Test-Path $ZipPath) {
 }
 
 Write-Host "`n[4/5] Compressing update package..." -ForegroundColor Yellow
-Compress-Archive -Path "$StagingDir\*" -DestinationPath $ZipPath -Force
+$TarCmd = Get-Command tar.exe -ErrorAction SilentlyContinue
+if ($TarCmd) {
+    Write-Host "Using fast system tar.exe for ZIP compression..." -ForegroundColor Green
+    & tar.exe -a -c -f $ZipPath -C $StagingDir .
+} else {
+    Write-Host "Falling back to Compress-Archive..." -ForegroundColor Yellow
+    Compress-Archive -Path "$StagingDir\*" -DestinationPath $ZipPath -Force
+}
 
 # 6. Compute SHA-256 and generate manifest
 Write-Host "`n[5/5] Generating Manifest and SHA-256..." -ForegroundColor Yellow
