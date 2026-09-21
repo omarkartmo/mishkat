@@ -165,6 +165,7 @@ export const SystemSupportDashboard: React.FC = () => {
         setUpdateStatus((prev: any) => ({
           ...prev,
           availableVersion: res.data.latestRelease?.version || null,
+          latestRelease: res.data.latestRelease || null,
           message: res.data.hasUpdate
             ? `يتوفر تحديث معتمد: ${res.data.latestRelease.version}`
             : 'النظام محدث إلى أحدث إصدار.',
@@ -172,6 +173,26 @@ export const SystemSupportDashboard: React.FC = () => {
       }
     } catch {
       // Handled cleanly
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleApplyUpdate = async () => {
+    if (!updateStatus?.latestRelease) return;
+    setIsCheckingUpdate(true);
+    try {
+      const res = await apiClient.post<any>('/support/updater/apply', {
+        downloadUrl: updateStatus.latestRelease.downloadUrl,
+        expectedSha256: updateStatus.latestRelease.sha256,
+      });
+      if (res.success) {
+        alert('تم تحميل حزمة التحديث بنجاح، جاري إعادة التشغيل لتطبيق التحديث...');
+      } else {
+        alert(res.error?.message || 'فشل التحديث');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء التحديث');
     } finally {
       setIsCheckingUpdate(false);
     }
@@ -254,7 +275,7 @@ export const SystemSupportDashboard: React.FC = () => {
             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>تحديث الآن</span>
+            <span>تحديث البيانات</span>
           </button>
         </div>
       </div>
@@ -620,20 +641,32 @@ export const SystemSupportDashboard: React.FC = () => {
               </ul>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex gap-2">
               <button
                 type="button"
                 onClick={handleCheckUpdate}
                 disabled={isCheckingUpdate}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold cursor-pointer transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl font-bold cursor-pointer transition-all flex items-center justify-center gap-2 border border-slate-700"
               >
                 {isCheckingUpdate ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
                   <RefreshCw className="w-4 h-4" />
                 )}
-                <span>{isCheckingUpdate ? 'جاري الفحص...' : 'فحص وجود تحديثات جديدة معتمدة'}</span>
+                <span>{isCheckingUpdate ? 'جاري الفحص...' : 'فحص تحديثات'}</span>
               </button>
+
+              {updateStatus?.availableVersion && (
+                <button
+                  type="button"
+                  onClick={handleApplyUpdate}
+                  disabled={isCheckingUpdate}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold cursor-pointer transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                  <span>تحديث النظام الآن</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

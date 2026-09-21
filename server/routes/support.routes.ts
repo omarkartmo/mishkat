@@ -181,19 +181,18 @@ supportRouter.post('/updater/check', authenticateToken, requireRole('admin'), as
 // POST /api/v1/support/updater/apply
 supportRouter.post('/updater/apply', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { packageZipPath, expectedSha256 } = req.body;
-    if (!packageZipPath || typeof packageZipPath !== 'string') {
+    const { downloadUrl, expectedSha256 } = req.body;
+    if (!downloadUrl || !expectedSha256) {
       return res.status(400).json({
         success: false,
-        error: { message: 'packageZipPath is required to apply update' },
+        error: { message: 'downloadUrl and expectedSha256 are required to apply update' },
       });
     }
 
-    // Resolve relative filenames securely into controlled temporary update directory
-    let targetZipPath = packageZipPath.trim();
-    if (!path.isAbsolute(targetZipPath)) {
-      targetZipPath = path.join(serverConfig.dirs.temp, path.basename(targetZipPath));
-    }
+    const targetZipPath = path.join(serverConfig.dirs.temp, `mishkat-update-${Date.now()}.zip`);
+
+    // Download the ZIP first
+    await updaterService.downloadReleasePackage(downloadUrl, targetZipPath);
 
     const result = await updaterService.applyCertifiedUpdate(targetZipPath, expectedSha256);
 
