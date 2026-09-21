@@ -161,6 +161,28 @@ supportRouter.get('/outbound-queue', authenticateToken, requireRole('admin'), as
   }
 });
 
+// POST /api/v1/support/flush-queue
+supportRouter.post('/flush-queue', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const endpoint = req.body?.endpoint;
+    const result = await supportAgentService.flushOutboundQueue(endpoint);
+    const summary = await supportAgentService.getOutboundQueueSummary();
+    return res.status(200).json({
+      success: true,
+      data: {
+        sent: result.sent,
+        failed: result.failed,
+        summary,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to flush outbound queue', details: err.message },
+    });
+  }
+});
+
 // =========================================================================
 // 3. MISHKAT Updater Endpoints (Admin Only)
 // =========================================================================

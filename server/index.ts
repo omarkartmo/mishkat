@@ -29,6 +29,7 @@ import { auditRouter, backupRouter, healthRouter, systemRouter, incomingRouter }
 import { supportRouter, clientEventsRouter } from './routes/support.routes';
 import { startIncomingWatcher, stopIncomingWatcher } from './services/incomingWatcher';
 import { backupScheduler } from './services/backupScheduler';
+import { supportAgentService } from './services/supportAgentService';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 
@@ -117,6 +118,12 @@ export async function createExpressApp() {
       backupScheduler.start();
     } catch (schedErr: any) {
       logger.warn(`[BackupScheduler] Could not start scheduler: ${schedErr.message}`);
+    }
+
+    try {
+      supportAgentService.startOutboundQueueWorker();
+    } catch (suppErr: any) {
+      logger.warn(`[SupportAgent] Could not start outbound worker: ${suppErr.message}`);
     }
   }
 

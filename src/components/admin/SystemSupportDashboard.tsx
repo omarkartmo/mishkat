@@ -211,6 +211,30 @@ export const SystemSupportDashboard: React.FC = () => {
     }
   };
 
+  const [isFlushingQueue, setIsFlushingQueue] = useState(false);
+  const [flushResult, setFlushResult] = useState<string | null>(null);
+
+  const handleFlushQueue = async () => {
+    setIsFlushingQueue(true);
+    setFlushResult(null);
+    try {
+      const res = await apiClient.post<any>('/support/flush-queue', {});
+      if (res.success && res.data) {
+        if (res.data.summary) {
+          setOutboundQueue(res.data.summary);
+        }
+        setFlushResult(`تم الإرسال: ${res.data.sent} ناجح، ${res.data.failed} فاشل`);
+      } else {
+        setFlushResult('فشل تفريغ الطابور');
+      }
+    } catch (err: any) {
+      setFlushResult(err.message || 'تعذر الاتصال بمركز دعم المطور');
+    } finally {
+      setIsFlushingQueue(false);
+      setTimeout(() => setFlushResult(null), 5000);
+    }
+  };
+
   const handleReportSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!problemDescription.trim()) return;
@@ -219,6 +243,11 @@ export const SystemSupportDashboard: React.FC = () => {
     try {
       telemetryService.reportManualProblem('SystemSupportDashboard', problemDescription.trim());
       setSubmitSuccess(true);
+      // Opportunistically trigger queue flush after a short delay for ingestion
+      setTimeout(() => {
+        handleFlushQueue();
+      }, 1200);
+
       setTimeout(() => {
         setIsReportModalOpen(false);
         setProblemDescription('');
@@ -474,11 +503,31 @@ export const SystemSupportDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Explanation note */}
-            <div className="text-[11px] text-slate-500 border-t border-slate-800/60 pt-2">
-              {(outboundQueue?.sentCount ?? 0) > 0
-                ? '✅ التقارير تُرسل تلقائياً إلى خادم دعم المطور مع إعادة المحاولة التلقائية عند الفشل.'
-                : '📦 التقارير محفوظة محلياً — سيتم إرسالها عند تهيئة خادم الدعم المركزي (MISHKAT_SUPPORT_API_URL).'}
+            {/* Action Bar & Explanation note */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-800/60 pt-3">
+              <div className="text-[11px] text-slate-400">
+                {(outboundQueue?.sentCount ?? 0) > 0
+                  ? '✅ تم إرسال التقارير بنجاح إلى مركز دعم المطور (Developer Support Hub).'
+                  : '📦 التقارير تُخزن في قاعدة البيانات المحلية وتُرسل تلقائياً إلى خادم المطور (Port 4000) كل دقيقة أو عند الضغط على إرسال.'}
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                {flushResult && (
+                  <span className="text-xs text-sky-400 font-medium animate-fade-in bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800/40">
+                    {flushResult}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleFlushQueue}
+                  disabled={isFlushingQueue}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+                  title="إرسال التقارير المعلقة والفاشلة إلى سيرفر دعم المطور فوراً"
+                >
+                  <Send className={`w-3.5 h-3.5 ${isFlushingQueue ? 'animate-spin' : ''}`} />
+                  <span>{isFlushingQueue ? 'جاري الإرسال...' : 'إرسال التقارير للمطور الآن'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

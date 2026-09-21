@@ -218,6 +218,29 @@ export class SupportAgentService {
         ]
       );
 
+      // If event is critical, a crash, or a manual user/student report, forward to developer outbound queue
+      if (eventType === 'manual_report' || eventType === 'crash' || severity === 'critical') {
+        this.enqueueOutboundReport({
+          sourceType: 'client',
+          clientDeviceId: clientId,
+          userRole: eventType === 'manual_report' ? 'student' : 'client_station',
+          component: sanitizedRoute || 'client_station',
+          errorType: eventType,
+          errorCode,
+          severity: severity as 'critical' | 'warning' | 'info',
+          message: sanitizedMessage,
+          stackTrace: sanitizedStack || undefined,
+          diagnosticContext: {
+            clientId,
+            appVersion: ev.appVersion || '1.0.0',
+            route: sanitizedRoute,
+            ...this.sanitizeMetadata(ev.metadata),
+          },
+        }).catch((err) => {
+          console.warn('⚠️ [SupportAgent] Outbound forwarding notice:', err.message);
+        });
+      }
+
       ingested++;
     }
 
@@ -624,7 +647,25 @@ export class SupportAgentService {
       console.warn('⚠️ [SupportAgent] Enqueue outbound report notice:', err.message);
     }
 
+    // Trigger opportunistic background delivery to developer support hub
+    this.flushOutboundQueue().catch(() => {});
+
     return reportId;
+  }
+
+  private outboundFlushTimer: any = null;
+
+  /**
+   * Starts periodic background worker to retry delivery of queued support reports
+   */
+  public startOutboundQueueWorker(intervalMs: number = 60000): void {
+    if (this.outboundFlushTimer) return;
+    this.outboundFlushTimer = setInterval(() => {
+      this.flushOutboundQueue().catch(() => {});
+    }, intervalMs);
+    if (this.outboundFlushTimer && typeof this.outboundFlushTimer.unref === 'function') {
+      this.outboundFlushTimer.unref();
+    }
   }
 
   /**
@@ -632,7 +673,7 @@ export class SupportAgentService {
    * Applies Exponential Backoff, Idempotent Delivery, and ACK verification.
    */
   public async flushOutboundQueue(apiEndpoint?: string): Promise<{ sent: number; failed: number }> {
-    const targetUrl = apiEndpoint || process.env.MISHKAT_SUPPORT_API_URL;
+    const targetUrl = apiEndpoint || process.env.MISHKAT_SUPPORT_API_URL || 'http://127.0.0.1:4000/api/v1/support/ingest';
     if (!targetUrl) {
       // Offline / Developer endpoint not configured: reports remain safely queued on disk
       return { sent: 0, failed: 0 };

@@ -15,7 +15,8 @@
     "lint": "tsc --noEmit",
     "test": "vitest run --fileParallelism=false",
     "test:e2e": "playwright test",
-    "release:build": "powershell ./scripts/build-update.ps1"
+    "release:build": "powershell ./scripts/build-update.ps1",
+    "support:hub": "node tools/developer-support-hub/index.cjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
