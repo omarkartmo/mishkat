@@ -148,6 +148,19 @@ supportRouter.get('/recent-events', authenticateToken, requireRole('admin'), asy
   }
 });
 
+// GET /api/v1/support/outbound-queue
+supportRouter.get('/outbound-queue', authenticateToken, requireRole('admin'), async (_req: Request, res: Response) => {
+  try {
+    const summary = await supportAgentService.getOutboundQueueSummary();
+    return res.status(200).json({ success: true, data: summary });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to fetch outbound queue summary', details: err.message },
+    });
+  }
+});
+
 // =========================================================================
 // 3. MISHKAT Updater Endpoints (Admin Only)
 // =========================================================================

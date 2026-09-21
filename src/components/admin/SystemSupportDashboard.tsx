@@ -21,6 +21,7 @@ import {
   HelpCircle,
   X,
   Send,
+  Inbox,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { telemetryService } from '../../services/telemetry/telemetryService';
@@ -97,10 +98,18 @@ interface ClientStation {
   todayErrorsCount: number;
 }
 
+interface OutboundQueueSummary {
+  pendingCount: number;
+  sentCount: number;
+  failedCount: number;
+  totalCount: number;
+}
+
 export const SystemSupportDashboard: React.FC = () => {
   const [healthData, setHealthData] = useState<HealthData | null>(null);
   const [aggregatedErrors, setAggregatedErrors] = useState<AggregatedError[]>([]);
   const [clientStations, setClientStations] = useState<ClientStation[]>([]);
+  const [outboundQueue, setOutboundQueue] = useState<OutboundQueueSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -118,11 +127,12 @@ export const SystemSupportDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [healthRes, errorsRes, clientsRes, updaterRes] = await Promise.all([
+      const [healthRes, errorsRes, clientsRes, updaterRes, queueRes] = await Promise.all([
         apiClient.get<HealthData>('/support/health-summary'),
         apiClient.get<AggregatedError[]>('/support/aggregated-errors'),
         apiClient.get<{ clients: ClientStation[] }>('/support/clients'),
         apiClient.get<any>('/support/updater/status').catch(() => ({ success: false, data: null })),
+        apiClient.get<OutboundQueueSummary>('/support/outbound-queue').catch(() => ({ success: false, data: null })),
       ]);
 
       if (healthRes.success && healthRes.data) {
@@ -136,6 +146,9 @@ export const SystemSupportDashboard: React.FC = () => {
       }
       if (updaterRes.success && updaterRes.data) {
         setUpdateStatus(updaterRes.data);
+      }
+      if (queueRes && queueRes.success && queueRes.data) {
+        setOutboundQueue(queueRes.data);
       }
     } catch (err) {
       console.error('Failed to load support dashboard:', err);
@@ -427,6 +440,45 @@ export const SystemSupportDashboard: React.FC = () => {
                 <div className="text-xl font-bold text-slate-200">{s?.totalRegisteredCount}</div>
                 <div className="text-xs text-slate-400">إجمالي الأجهزة المعتمدة</div>
               </div>
+            </div>
+          </div>
+
+          {/* Outbound Support Queue Panel */}
+          <div className="p-5 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-200">
+                <Inbox className="w-4 h-4 text-sky-400" />
+                <span>طابور التقارير الصادرة (Outbound Report Queue)</span>
+              </div>
+              <span className="text-xs text-slate-400">
+                {outboundQueue
+                  ? `${outboundQueue.totalCount} تقرير في الطابور`
+                  : 'جاري التحميل...'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                <div className="text-xl font-bold text-amber-400">{outboundQueue?.pendingCount ?? '-'}</div>
+                <div className="text-xs text-slate-400">معلّق الإرسال</div>
+              </div>
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                <div className="text-xl font-bold text-emerald-400">{outboundQueue?.sentCount ?? '-'}</div>
+                <div className="text-xs text-slate-400">تم إرساله</div>
+              </div>
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                <div className={`text-xl font-bold ${
+                  (outboundQueue?.failedCount ?? 0) > 0 ? 'text-rose-400' : 'text-slate-500'
+                }`}>{outboundQueue?.failedCount ?? '-'}</div>
+                <div className="text-xs text-slate-400">فشل الإرسال</div>
+              </div>
+            </div>
+
+            {/* Explanation note */}
+            <div className="text-[11px] text-slate-500 border-t border-slate-800/60 pt-2">
+              {(outboundQueue?.sentCount ?? 0) > 0
+                ? '✅ التقارير تُرسل تلقائياً إلى خادم دعم المطور مع إعادة المحاولة التلقائية عند الفشل.'
+                : '📦 التقارير محفوظة محلياً — سيتم إرسالها عند تهيئة خادم الدعم المركزي (MISHKAT_SUPPORT_API_URL).'}
             </div>
           </div>
         </div>

@@ -139,7 +139,7 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    telemetryService.init({ appVersion: '1.0.0' });
+    telemetryService.init({ appVersion: __APP_VERSION__ });
   }, []);
 
   // Load server-authoritative categories
