@@ -38,7 +38,6 @@ import {
   DigitalBook,
   Category,
 } from '../../types/library';
-import { useTheme } from '../../context/ThemeContext';
 import { matchesArabicQuery } from '../../utils/searchUtils';
 
 interface HeaderBarProps {
@@ -98,7 +97,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onOpenBookReader,
   onOpenPhysicalBookmark,
 }) => {
-  const { theme } = useTheme();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);

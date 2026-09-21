@@ -33,6 +33,7 @@ interface SidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onCloseMobile?: () => void;
+  appVersion?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -45,7 +46,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed = false,
   onToggleCollapse,
   onCloseMobile,
+  appVersion,
 }) => {
+  const displayVersion = appVersion || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0');
+
   return (
     <aside
       className={`${
@@ -75,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <h1 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 truncate">
                   <span className="truncate">نظام المشكاة الذكي</span>
                   <span className="text-[10px] bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 font-mono px-1.5 py-0.5 rounded border border-indigo-500/20 shrink-0">
-                    v1.0
+                    v{displayVersion}
                   </span>
                 </h1>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">

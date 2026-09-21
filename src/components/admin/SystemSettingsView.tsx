@@ -39,6 +39,7 @@ interface SystemSettingsViewProps {
   onResetData: () => void;
   onCreateBackup?: () => void;
   onExportInstitutionalData?: () => void;
+  onRefreshData?: () => Promise<void> | void;
 }
 
 export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
@@ -48,6 +49,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   onResetData,
   onCreateBackup,
   onExportInstitutionalData,
+  onRefreshData,
 }) => {
   const [form, setForm] = useState<SystemConfig>({
     ...config,
@@ -285,7 +287,9 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       const res = await settingsRepository.restoreBackup(fileName);
       if (res.success && res.data) {
         alert(`✨ ${res.data.message}\nتم حفظ نسخة أمان في: ${res.data.preRestoreBackup}`);
-        await onResetData();
+        if (onRefreshData) {
+          await onRefreshData();
+        }
         fetchBackups();
         fetchBackupStatus();
       } else {
@@ -309,7 +313,9 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       const res = await settingsRepository.restoreDriveBackup(fileId);
       if (res.success && res.data) {
         alert(`✨ ${res.data.message}\nتم حفظ نسخة أمان في: ${res.data.preRestoreBackup}`);
-        await onResetData();
+        if (onRefreshData) {
+          await onRefreshData();
+        }
         fetchBackups();
         fetchBackupStatus();
       } else {

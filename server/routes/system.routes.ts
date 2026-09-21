@@ -694,7 +694,7 @@ systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async 
       `);
     });
 
-    await seedCoreData();
+    await seedInitialData();
 
     await recordAuditLog(
       req.user!.id,
@@ -754,7 +754,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
           storage: storageStatus,
         },
         serverTime: new Date().toISOString(),
-        version: '1.0.0',
+        version: serverConfig.version,
         environment: process.env.NODE_ENV || 'development',
         databaseEngine: isPg ? 'PostgreSQL Central Pool' : 'Relational Engine with WAL',
         storagePaths: {

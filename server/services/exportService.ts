@@ -1,4 +1,5 @@
 import { db } from '../db/pool';
+import { serverConfig } from '../config';
 import { logger } from '../utils/logger';
 
 export const EXPORT_FORMAT_VERSION = '1.0.0';
@@ -123,7 +124,7 @@ export async function generateInstitutionalExport(
   const payload: InstitutionalExportPayload = {
     export_version: EXPORT_FORMAT_VERSION,
     application_name: 'MISHKAT',
-    application_version: '1.0.0',
+    application_version: serverConfig.version,
     exported_at: new Date().toISOString(),
     exported_by: exportedBy,
     description: 'نسخة تصدير بيانات المؤسسة المفتوحة لترحيل البيانات أو أرشفتها المستقلة (غير مشفرة وخالية من الأسرار)',

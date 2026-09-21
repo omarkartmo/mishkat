@@ -287,6 +287,7 @@ describe('MISHKAT Commercial Distribution & Support Architecture Suite', () => {
         stagingDir: path.join(serverConfig.dirs.temp, 'mock_staged'),
         rollbackSnapshotDir: path.join(serverConfig.dirs.temp, 'mock_rollback'),
         preUpdateBackupPath: path.join(serverConfig.dirs.temp, 'mock_backup.json'),
+        pgDataDir: path.join(serverConfig.dirs.temp, 'mock_pgdata'),
       });
 
       expect(fs.existsSync(scriptPath)).toBe(true);

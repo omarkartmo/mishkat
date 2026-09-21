@@ -1273,6 +1273,7 @@ export default function App() {
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
           onCloseMobile={() => setIsMobileMenuOpen(false)}
+          appVersion={typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'}
         />
       </div>
 
@@ -1594,6 +1595,7 @@ export default function App() {
               onResetData={handleResetData}
               onCreateBackup={handleCreateBackup}
               onExportInstitutionalData={handleExportInstitutionalData}
+              onRefreshData={refreshAllState}
             />
           )}
 

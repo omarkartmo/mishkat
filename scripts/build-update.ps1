@@ -54,6 +54,14 @@ if (Test-Path $MigrationsSrc) {
     Copy-Item -Recurse -Force $MigrationsSrc $MigrationsStaging
 }
 
+# Copy public assets
+$PublicSrc = Join-Path $ProjectRoot "public"
+if (Test-Path $PublicSrc) {
+    $PublicStaging = Join-Path $StagingDir "public"
+    New-Item -ItemType Directory -Path $PublicStaging -Force | Out-Null
+    Copy-Item -Recurse -Force (Join-Path $PublicSrc "*") $PublicStaging
+}
+
 # Copy package files for dependency resolution
 Copy-Item (Join-Path $ProjectRoot "package.json") $StagingDir
 Copy-Item (Join-Path $ProjectRoot "package-lock.json") $StagingDir

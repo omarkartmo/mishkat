@@ -71,6 +71,18 @@ export const serverConfig = {
   port,
   host: '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
+  version: (() => {
+    try {
+      const pkgPath = path.join(process.cwd(), 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (pkg.version) return pkg.version;
+      }
+    } catch {
+      // fallback
+    }
+    return process.env.npm_package_version || '1.0.0';
+  })(),
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   databaseUrl: process.env.DATABASE_URL || '',
