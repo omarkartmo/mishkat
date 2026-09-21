@@ -401,9 +401,14 @@ exit /b 0
 
         try {
           if (process.platform === 'win32') {
-            execSync(`powershell.exe -NoProfile -NonInteractive -Command "Expand-Archive -LiteralPath '${packageZipPath}' -DestinationPath '${stagingDir}' -Force"`, {
-              timeout: 300000,
-            });
+            try {
+              execSync(`tar -xf "${packageZipPath}" -C "${stagingDir}"`, { timeout: 60000 });
+            } catch (tarErr: any) {
+              console.warn('tar extraction failed, falling back to PowerShell Expand-Archive:', tarErr.message);
+              execSync(`powershell.exe -NoProfile -NonInteractive -Command "Expand-Archive -LiteralPath '${packageZipPath}' -DestinationPath '${stagingDir}' -Force"`, {
+                timeout: 300000,
+              });
+            }
           } else {
             execSync(`unzip -o -q "${packageZipPath}" -d "${stagingDir}"`, { timeout: 300000 });
           }
