@@ -397,8 +397,14 @@ exit /b 0
           const stagedMigrations = path.join(stagingDir, 'server', 'db', 'migrations');
           // WE NO LONGER COPY IN-PLACE HERE.
 
+          // We mark as completed from the perspective of this Node process.
+          // The actual health check is done by the detached script.
+          this.updateStatus.state = 'completed';
+          this.updateStatus.progressPercent = 100;
+          this.updateStatus.message = '✅ تم استخراج التحديث وبدأت عملية التثبيت في الخلفية. سيتم إعادة تشغيل النظام الآن.';
+
           // Spawn the detached updater script
-          const { spawn } = require('child_process');
+          const { spawn, execSync } = require('child_process');
           const batPath = this.generateDetachedUpdateScript({
             stagingDir,
             rollbackSnapshotDir,
@@ -409,25 +415,32 @@ exit /b 0
           this.updateStatus.progressPercent = 75;
           this.updateStatus.message = 'الخطوة 5: إطلاق معالج التحديث المنفصل وإعادة تشغيل الخدمة...';
 
-          const subprocess = spawn('cmd.exe', ['/c', batPath], {
-            detached: true,
-            stdio: 'ignore',
-            windowsHide: true
-          });
-          subprocess.unref();
+          if (process.platform === 'win32') {
+            // Escaping NSSM process tree using WMI so the script isn't killed when Node.js exits
+            try {
+              execSync(`powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command "Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList 'cmd.exe /c \\"\\"${batPath}\\"\\"' "`);
+            } catch (err: any) {
+              console.error('WMI spawn failed, falling back to normal detached spawn:', err);
+              const subprocess = spawn('cmd.exe', ['/c', batPath], {
+                detached: true,
+                stdio: 'ignore',
+                windowsHide: true
+              });
+              subprocess.unref();
+            }
+          } else {
+            const subprocess = spawn('/bin/sh', [batPath], {
+              detached: true,
+              stdio: 'ignore'
+            });
+            subprocess.unref();
+          }
 
-          // We mark as completed from the perspective of this Node process.
-          // The actual health check is done by the detached script.
-          this.updateStatus.state = 'completed';
-          this.updateStatus.progressPercent = 100;
-          this.updateStatus.message = '✅ تم استخراج التحديث وبدأت عملية التثبيت في الخلفية. سيتم إعادة تشغيل النظام الآن.';
-          
-          // Gracefully exit the current process to release file locks.
-          // In a real service, net stop will kill us anyway, but this ensures file locks are released for testing too.
+          // Gracefully exit the current process to allow the detached updater to replace files.
           setTimeout(() => {
             console.log('Exiting process to allow detached updater to replace files...');
             process.exit(0);
-          }, 1000);
+          }, 1500);
 
           return { success: true, message: this.updateStatus.message };
 
