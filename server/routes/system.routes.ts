@@ -6,7 +6,7 @@ import { serverConfig } from '../config';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
-import { seedInitialData, seedCoreData } from '../db/seed';
+import { seedCoreData } from '../db/seed';
 
 import {
   createDatabaseBackup,
@@ -694,7 +694,7 @@ systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async 
       `);
     });
 
-    await seedInitialData();
+    await seedCoreData();
 
     await recordAuditLog(
       req.user!.id,
