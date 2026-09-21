@@ -16,7 +16,8 @@
     "test": "vitest run --fileParallelism=false",
     "test:e2e": "playwright test",
     "release:build": "powershell ./scripts/build-update.ps1",
-    "support:hub": "node tools/developer-support-hub/index.cjs"
+    "support:hub": "node tools/developer-support-hub/index.cjs",
+    "support:server": "node tools/support-server/index.cjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

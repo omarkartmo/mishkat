@@ -647,8 +647,10 @@ export class SupportAgentService {
       console.warn('⚠️ [SupportAgent] Enqueue outbound report notice:', err.message);
     }
 
-    // Trigger opportunistic background delivery to developer support hub
-    this.flushOutboundQueue().catch(() => {});
+    // Trigger opportunistic background delivery to developer support hub in non-test mode
+    if (process.env.NODE_ENV !== 'test') {
+      this.flushOutboundQueue().catch(() => {});
+    }
 
     return reportId;
   }
@@ -672,8 +674,8 @@ export class SupportAgentService {
    * Flushes pending reports from outbound queue to the Developer Support API
    * Applies Exponential Backoff, Idempotent Delivery, and ACK verification.
    */
-  public async flushOutboundQueue(apiEndpoint?: string): Promise<{ sent: number; failed: number }> {
-    const targetUrl = apiEndpoint || process.env.MISHKAT_SUPPORT_API_URL || 'http://127.0.0.1:4000/api/v1/support/ingest';
+  public async flushOutboundQueue(apiEndpoint?: string, forceRetry = false): Promise<{ sent: number; failed: number }> {
+    const targetUrl = apiEndpoint || process.env.MISHKAT_SUPPORT_API_URL || 'http://127.0.0.1:4000/api/v1/support/reports';
     if (!targetUrl) {
       // Offline / Developer endpoint not configured: reports remain safely queued on disk
       return { sent: 0, failed: 0 };
@@ -682,10 +684,13 @@ export class SupportAgentService {
     const identity = this.getInstitutionIdentity();
 
     // Fetch up to 20 pending or retryable reports
+    const whereClause = (forceRetry || apiEndpoint)
+      ? "(status = 'pending' OR status = 'failed' OR status = 'sending')"
+      : "(status = 'pending' OR (status = 'failed' AND next_retry_at <= CURRENT_TIMESTAMP) OR (status = 'sending' AND last_attempt_at < CURRENT_TIMESTAMP - INTERVAL '1 minute'))";
+
     const { rows } = await db.query(`
       SELECT * FROM support_outbound_queue
-      WHERE (status = 'pending' OR status = 'failed')
-        AND next_retry_at <= CURRENT_TIMESTAMP
+      WHERE ${whereClause}
       ORDER BY created_at ASC
       LIMIT 20
     `);
@@ -739,14 +744,20 @@ export class SupportAgentService {
         });
         clearTimeout(timeout);
 
-        if (res.ok) {
+        let ackData: any = null;
+        try {
+          ackData = await res.json();
+        } catch {}
+
+        if (res.ok && ackData && ackData.acknowledged === true) {
           await db.query(
             `UPDATE support_outbound_queue SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE report_id = $1`,
             [row.report_id]
           );
           sent++;
         } else {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          const errMsg = ackData?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+          throw new Error(`Support API rejected report: ${errMsg}`);
         }
       } catch (err: any) {
         failed++;
