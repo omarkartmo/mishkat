@@ -431,7 +431,7 @@ exit /b 0
           this.updateStatus.message = '✅ تم استخراج التحديث وبدأت عملية التثبيت في الخلفية. سيتم إعادة تشغيل النظام الآن.';
 
           // Spawn the detached updater script
-          const { spawn, execSync } = require('child_process');
+          const { spawn } = require('child_process');
           const batPath = this.generateDetachedUpdateScript({
             stagingDir,
             rollbackSnapshotDir,
