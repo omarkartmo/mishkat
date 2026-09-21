@@ -29,7 +29,7 @@ if '%errorlevel%' NEQ '0' (
 :--------------------------------------
 
 echo ========================================================
-echo   Updating Mishkat Service with Full v1.1.1 Suite
+echo   Updating Mishkat Service with Full v1.1.4 Suite
 echo ========================================================
 
 echo [1/4] Stopping MishkatLibraryService...
@@ -49,6 +49,6 @@ echo [4/4] Starting MishkatLibraryService...
 net start MishkatLibraryService
 
 echo ========================================================
-echo   Done! Mishkat Central Server is now updated to v1.1.1.
+echo   Done! Mishkat Central Server is now updated to v1.1.4.
 echo ========================================================
 timeout /t 5

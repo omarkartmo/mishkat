@@ -183,6 +183,50 @@ supportRouter.post('/flush-queue', authenticateToken, requireRole('admin'), asyn
   }
 });
 
+// POST /api/v1/support/report-problem (Admin direct problem report with screenshot)
+supportRouter.post('/report-problem', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { problemDescription, screen, screenshot, diagnosticInfo } = req.body;
+    if (!problemDescription || !problemDescription.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'problemDescription is required' },
+      });
+    }
+
+    const reportId = await supportAgentService.enqueueOutboundReport({
+      sourceType: 'server',
+      clientDeviceId: 'SERVER-ADMIN',
+      userRole: 'admin',
+      component: screen || 'SystemSupportDashboard',
+      errorType: 'manual_report',
+      errorCode: 'ADMIN_REPORTED_PROBLEM',
+      severity: 'info',
+      message: problemDescription.trim(),
+      diagnosticContext: {
+        screen: screen || 'SystemSupportDashboard',
+        adminUser: (req as any).user?.name || (req as any).user?.username || 'admin',
+        adminId: (req as any).user?.id,
+        screenshot: screenshot || null,
+        ...(diagnosticInfo || {}),
+      },
+    });
+
+    // Opportunistically flush immediately to developer support hub
+    supportAgentService.flushOutboundQueue().catch(() => {});
+
+    return res.status(200).json({
+      success: true,
+      data: { reportId, acknowledged: true },
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to report problem', details: err.message },
+    });
+  }
+});
+
 // =========================================================================
 // 3. MISHKAT Updater Endpoints (Admin Only)
 // =========================================================================

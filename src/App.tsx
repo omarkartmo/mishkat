@@ -142,6 +142,10 @@ export default function App() {
     telemetryService.init({ appVersion: __APP_VERSION__ });
   }, []);
 
+  useEffect(() => {
+    telemetryService.setUserRole(currentUser?.role || 'guest');
+  }, [currentUser?.role]);
+
   // Load server-authoritative categories
   const loadCategories = async () => {
     setIsCategoriesLoading(true);

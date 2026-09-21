@@ -22,6 +22,9 @@ import {
   X,
   Send,
   Inbox,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { telemetryService } from '../../services/telemetry/telemetryService';
@@ -73,6 +76,8 @@ interface HealthData {
 
 interface AggregatedError {
   signature: string;
+  sourceType?: 'student' | 'server';
+  category?: 'automatic' | 'manual';
   eventType: string;
   errorCode: string;
   severity: 'critical' | 'warning' | 'info';
@@ -116,10 +121,14 @@ export const SystemSupportDashboard: React.FC = () => {
   // Modal states for Reporting a Problem
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [problemDescription, setProblemDescription] = useState('');
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [isCompressingImage, setIsCompressingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [expandedSignature, setExpandedSignature] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'errors' | 'clients' | 'updater'>('overview');
+  const [errorSourceFilter, setErrorSourceFilter] = useState<'all' | 'student' | 'server'>('all');
+  const [errorCategoryFilter, setErrorCategoryFilter] = useState<'all' | 'automatic' | 'manual'>('all');
 
   // Updater state
   const [updateStatus, setUpdateStatus] = useState<any>(null);
@@ -235,26 +244,90 @@ export const SystemSupportDashboard: React.FC = () => {
     }
   };
 
-  const handleReportSubmit = (e: React.FormEvent) => {
+  // Helper to compress and convert image file to base64 jpeg
+  const processImageFile = (file: File | Blob) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    setIsCompressingImage(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_DIM = 1280;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.7);
+          setScreenshot(compressed);
+        }
+        setIsCompressingImage(false);
+      };
+      img.onerror = () => setIsCompressingImage(false);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => setIsCompressingImage(false);
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          processImageFile(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!problemDescription.trim()) return;
 
     setIsSubmitting(true);
     try {
-      telemetryService.reportManualProblem('SystemSupportDashboard', problemDescription.trim());
-      setSubmitSuccess(true);
-      // Opportunistically trigger queue flush after a short delay for ingestion
-      setTimeout(() => {
-        handleFlushQueue();
-      }, 1200);
+      const res = await apiClient.post<any>('/support/report-problem', {
+        problemDescription: problemDescription.trim(),
+        screen: 'SystemSupportDashboard',
+        screenshot: screenshot || null,
+      });
 
-      setTimeout(() => {
-        setIsReportModalOpen(false);
-        setProblemDescription('');
-        setSubmitSuccess(false);
+      if (res.success) {
+        setSubmitSuccess(true);
+        setTimeout(() => {
+          handleFlushQueue();
+          fetchDashboardData();
+        }, 800);
+
+        setTimeout(() => {
+          setIsReportModalOpen(false);
+          setProblemDescription('');
+          setScreenshot(null);
+          setSubmitSuccess(false);
+          setIsSubmitting(false);
+        }, 1500);
+      } else {
+        alert(res.error?.message || 'فشل إرسال البلاغ');
         setIsSubmitting(false);
-      }, 1500);
-    } catch {
+      }
+    } catch (err: any) {
+      alert(err.message || 'تعذر إرسال البلاغ');
       setIsSubmitting(false);
     }
   };
@@ -308,16 +381,6 @@ export const SystemSupportDashboard: React.FC = () => {
           >
             <HelpCircle className="w-3.5 h-3.5" />
             <span>إبلاغ عن مشكلة</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleManualRefresh}
-            disabled={isRefreshing}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-colors"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>تحديث البيانات</span>
           </button>
         </div>
       </div>
@@ -534,111 +597,306 @@ export const SystemSupportDashboard: React.FC = () => {
       )}
 
       {/* Sub-Tab 2: Aggregated Errors */}
-      {activeSubTab === 'errors' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>
-              يتم تجميع الأخطاء المتطابقة تلقائياً من جميع أجهزة الطلاب لمنع التكرار وتسهيل المعالجة.
-            </span>
-            <span>عدد الأنماط: {aggregatedErrors.length}</span>
-          </div>
+      {activeSubTab === 'errors' && (() => {
+        const studentErrors = aggregatedErrors.filter((e) => e.sourceType !== 'server');
+        const serverErrors = aggregatedErrors.filter((e) => e.sourceType === 'server');
 
-          {aggregatedErrors.length === 0 ? (
-            <div className="p-8 text-center bg-slate-900/30 border border-slate-800 rounded-2xl text-slate-400">
-              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
-              <div className="font-bold text-slate-200">لا توجد أخطاء مسجلة اليوم</div>
-              <div className="text-xs text-slate-500">جميع أجهزة الطلاب والخدمات تعمل بدون مشاكل أو أعطال معلقة.</div>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {aggregatedErrors.map((err) => {
-                const isExpanded = expandedSignature === err.signature;
-                return (
+        const studentAutoErrors = studentErrors.filter((e) => e.category !== 'manual');
+        const studentManualErrors = studentErrors.filter((e) => e.category === 'manual');
+
+        const serverAutoErrors = serverErrors.filter((e) => e.category !== 'manual');
+        const serverManualErrors = serverErrors.filter((e) => e.category === 'manual');
+
+        const applyCategoryFilter = (list: AggregatedError[]) => {
+          if (errorCategoryFilter === 'automatic') return list.filter((e) => e.category !== 'manual');
+          if (errorCategoryFilter === 'manual') return list.filter((e) => e.category === 'manual');
+          return list;
+        };
+
+        const visibleStudentErrors = applyCategoryFilter(studentErrors);
+        const visibleServerErrors = applyCategoryFilter(serverErrors);
+
+        const renderErrorCard = (err: AggregatedError) => {
+          const isExpanded = expandedSignature === err.signature;
+          const isServer = err.sourceType === 'server';
+          const isManual = err.category === 'manual';
+
+          return (
+            <div
+              key={`${err.sourceType || 'student'}-${err.signature}`}
+              className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl space-y-3 transition-all hover:border-slate-700"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
                   <div
-                    key={err.signature}
-                    className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl space-y-3 transition-all hover:border-slate-700"
+                    className={`p-2 rounded-xl mt-0.5 ${
+                      err.severity === 'critical'
+                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`p-2 rounded-xl mt-0.5 ${
-                            err.severity === 'critical'
-                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          }`}
-                        >
-                          <AlertTriangle className="w-4 h-4" />
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sm text-slate-100">{err.signature}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
+                          err.severity === 'critical'
+                            ? 'bg-rose-500/20 text-rose-300'
+                            : 'bg-amber-500/20 text-amber-300'
+                        }`}
+                      >
+                        {err.severity}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 ${
+                          isManual
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        }`}
+                      >
+                        {isManual ? '📝 بلاغ يدوي' : '⚡ تلقائي'}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          isServer
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                        }`}
+                      >
+                        {isServer ? '🏢 الخادم والأدمن' : '💻 جهاز طالب'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 line-clamp-2">{err.sampleMessage}</p>
+                  </div>
+                </div>
+
+                {/* Occurrences & Affected Badge */}
+                <div className="flex items-center gap-3 shrink-0 text-left">
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-indigo-400">{err.occurrenceCount} تكرار</div>
+                    <div className="text-[11px] text-slate-400">
+                      {isServer ? 'خادم المؤسسة' : `على ${err.affectedClientsCount} جهاز طالب`}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSignature(isExpanded ? null : err.signature)}
+                    className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Metadata summary bar */}
+              <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-2 border-t border-slate-800/80 flex-wrap">
+                <div>أول رصد: <span className="text-slate-300">{new Date(err.firstSeenAt).toLocaleTimeString()}</span></div>
+                <div>آخر رصد: <span className="text-slate-300">{new Date(err.lastSeenAt).toLocaleTimeString()}</span></div>
+                <div>إصدار التطبيق: <span className="font-mono text-slate-300">{err.affectedAppVersions.join(', ')}</span></div>
+                {err.recentRoute && <div>المسار / المكون: <span className="font-mono text-slate-300">{err.recentRoute}</span></div>}
+              </div>
+
+              {/* Expandable details */}
+              {isExpanded && (
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2 animate-fade-in">
+                  <div className="font-semibold text-slate-300">
+                    {isServer ? 'المعرف المصدر:' : 'معرفات الأجهزة المتأثرة (Client IDs):'}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 font-mono text-[10px]">
+                    {err.affectedClientIds.map((cid) => (
+                      <span key={cid} className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                        {cid}
+                      </span>
+                    ))}
+                  </div>
+
+                  {err.sampleStackTrace && (
+                    <div className="pt-2">
+                      <div className="font-semibold text-slate-300 mb-1">أثر الشيفرة بعد التنقية (Sanitized Stack Trace):</div>
+                      <pre className="p-2.5 bg-slate-900 rounded-lg text-[10px] text-slate-300 font-mono overflow-x-auto max-h-40">
+                        {err.sampleStackTrace}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        return (
+          <div className="space-y-6">
+            {/* Top Control Bar: Source & Category Filters */}
+            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-slate-400">تصفية المصدر:</span>
+                <button
+                  type="button"
+                  onClick={() => setErrorSourceFilter('all')}
+                  className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                    errorSourceFilter === 'all'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  كافة المصادر ({aggregatedErrors.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setErrorSourceFilter('student')}
+                  className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    errorSourceFilter === 'student'
+                      ? 'bg-sky-600 text-white'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  <Laptop className="w-3.5 h-3.5" />
+                  <span>أجهزة الطلاب ({studentErrors.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setErrorSourceFilter('server')}
+                  className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    errorSourceFilter === 'server'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  <Server className="w-3.5 h-3.5" />
+                  <span>الخادم والأدمن ({serverErrors.length})</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-slate-400">النوع:</span>
+                <button
+                  type="button"
+                  onClick={() => setErrorCategoryFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                    errorCategoryFilter === 'all'
+                      ? 'bg-slate-700 text-white'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  الكل
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setErrorCategoryFilter('automatic')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                    errorCategoryFilter === 'automatic'
+                      ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>⚡ تلقائي</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setErrorCategoryFilter('manual')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                    errorCategoryFilter === 'manual'
+                      ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>📝 يدوي</span>
+                </button>
+              </div>
+            </div>
+
+            {aggregatedErrors.length === 0 ? (
+              <div className="p-8 text-center bg-slate-900/30 border border-slate-800 rounded-2xl text-slate-400">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
+                <div className="font-bold text-slate-200">لا توجد أخطاء مسجلة اليوم</div>
+                <div className="text-xs text-slate-500">جميع أجهزة الطلاب والخدمات تعمل بدون مشاكل أو أعطال معلقة.</div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* SECTION 1: STUDENT STATIONS */}
+                {(errorSourceFilter === 'all' || errorSourceFilter === 'student') && (
+                  <div className="p-5 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                          <Laptop className="w-4 h-4" />
                         </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-sm text-slate-100">{err.signature}</span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
-                                err.severity === 'critical'
-                                  ? 'bg-rose-500/20 text-rose-300'
-                                  : 'bg-amber-500/20 text-amber-300'
-                              }`}
-                            >
-                              {err.severity}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-300 line-clamp-2">{err.sampleMessage}</p>
+                        <div>
+                          <h3 className="font-bold text-sm text-slate-100">أخطاء أجهزة الطلاب (Student Stations)</h3>
+                          <p className="text-[11px] text-slate-400">أخطاء التشغيل والقراءة والبلاغات المجمعة من حواسيب الطلاب</p>
                         </div>
                       </div>
 
-                      {/* Occurrences & Clients Badge */}
-                      <div className="flex items-center gap-3 shrink-0 text-left">
-                        <div className="text-right">
-                          <div className="text-sm font-bold text-indigo-400">{err.occurrenceCount} تكرار</div>
-                          <div className="text-[11px] text-slate-400">على {err.affectedClientsCount} جهاز طالب</div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setExpandedSignature(isExpanded ? null : err.signature)}
-                          className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
-                        >
-                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                          ⚡ تلقائي: {studentAutoErrors.length}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
+                          📝 يدوي: {studentManualErrors.length}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono font-bold">
+                          المجموع: {visibleStudentErrors.length}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Metadata summary bar */}
-                    <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-2 border-t border-slate-800/80">
-                      <div>أول رصد: <span className="text-slate-300">{new Date(err.firstSeenAt).toLocaleTimeString()}</span></div>
-                      <div>آخر رصد: <span className="text-slate-300">{new Date(err.lastSeenAt).toLocaleTimeString()}</span></div>
-                      <div>إصدار التطبيق: <span className="font-mono text-slate-300">{err.affectedAppVersions.join(', ')}</span></div>
-                      {err.recentRoute && <div>المسار: <span className="font-mono text-slate-300">{err.recentRoute}</span></div>}
-                    </div>
-
-                    {/* Expandable details */}
-                    {isExpanded && (
-                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2 animate-fade-in">
-                        <div className="font-semibold text-slate-300">معرفات الأجهزة المتأثرة (Client IDs):</div>
-                        <div className="flex flex-wrap gap-1.5 font-mono text-[10px]">
-                          {err.affectedClientIds.map((cid) => (
-                            <span key={cid} className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                              {cid}
-                            </span>
-                          ))}
-                        </div>
-
-                        {err.sampleStackTrace && (
-                          <div className="pt-2">
-                            <div className="font-semibold text-slate-300 mb-1">أثر الشيفرة بعد التنقية (Sanitized Stack Trace):</div>
-                            <pre className="p-2.5 bg-slate-900 rounded-lg text-[10px] text-slate-300 font-mono overflow-x-auto max-h-40">
-                              {err.sampleStackTrace}
-                            </pre>
-                          </div>
-                        )}
+                    {visibleStudentErrors.length === 0 ? (
+                      <div className="p-6 text-center text-slate-500 text-xs bg-slate-950/40 rounded-xl border border-slate-800/60">
+                        لا توجد أخطاء مطابقة من أجهزة الطلاب في هذا التصنيف.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {visibleStudentErrors.map(renderErrorCard)}
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                )}
+
+                {/* SECTION 2: SERVER & ADMIN */}
+                {(errorSourceFilter === 'all' || errorSourceFilter === 'server') && (
+                  <div className="p-5 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                          <Server className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-slate-100">أخطاء خادم المؤسسة وحساب الأدمن (Server & Admin)</h3>
+                          <p className="text-[11px] text-slate-400">أخطاء خدمات السيرفر المركزي وبلاغات الدعم الفني الصادرة من لوحة الإدارة</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                          ⚡ تلقائي: {serverAutoErrors.length}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
+                          📝 يدوي: {serverManualErrors.length}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono font-bold">
+                          المجموع: {visibleServerErrors.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    {visibleServerErrors.length === 0 ? (
+                      <div className="p-6 text-center text-slate-500 text-xs bg-slate-950/40 rounded-xl border border-slate-800/60">
+                        لا توجد أخطاء مطابقة من خادم المؤسسة أو حساب الأدمن في هذا التصنيف.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {visibleServerErrors.map(renderErrorCard)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Sub-Tab 3: Connected Student Stations */}
       {activeSubTab === 'clients' && (
@@ -800,7 +1058,7 @@ export const SystemSupportDashboard: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleReportSubmit} className="space-y-3">
+              <form onSubmit={handleReportSubmit} onPaste={handlePaste} className="space-y-3">
                 <div className="text-xs text-slate-400">
                   سيتم إرسال وصف المشكلة ومعلومات الشاشة الحالية فقط دون أي بيانات خاصة.
                 </div>
@@ -817,6 +1075,71 @@ export const SystemSupportDashboard: React.FC = () => {
                     placeholder="مثال: تعذر تحميل الصفحة رقم 5 في الكتاب أو بطء في عرض الفهرس..."
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
                   />
+                </div>
+
+                {/* Screenshot Attachment */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-purple-400" />
+                      <span>إرفاق لقطة شاشة / صورة (اختياري)</span>
+                    </label>
+                    <span className="text-[10px] text-slate-500">أو الصق مباشرة بالضغط على Ctrl+V</span>
+                  </div>
+
+                  {screenshot ? (
+                    <div className="relative border border-purple-500/40 rounded-xl p-2 bg-purple-950/20 flex items-center gap-3">
+                      <img
+                        src={screenshot}
+                        alt="Screenshot Preview"
+                        className="w-16 h-12 object-cover rounded-lg border border-slate-700 bg-slate-900"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-slate-200 font-medium truncate flex items-center gap-1">
+                          <ImageIcon className="w-3 h-3 text-emerald-400 shrink-0" />
+                          <span>تم إرفاق لقطة الشاشة بنجاح</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">ستُعرض في لوحة تحكم المطور للمساعدة في معالجة المشكلة</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setScreenshot(null)}
+                        className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                        title="حذف الصورة"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="file"
+                        id="admin-screenshot-file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) processImageFile(file);
+                        }}
+                      />
+                      <label
+                        htmlFor="admin-screenshot-file"
+                        className="border border-dashed border-slate-700 hover:border-purple-500/60 rounded-xl p-2.5 flex items-center justify-center gap-2 text-xs text-slate-400 hover:text-purple-300 hover:bg-slate-950 cursor-pointer transition-all"
+                      >
+                        {isCompressingImage ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                            <span>جاري معالجة الصورة...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
+                            <span>انقر لاختيار صورة من جهازك، أو الصق من الحافظة (Ctrl+V)</span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">

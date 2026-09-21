@@ -1,7 +1,7 @@
 ; ==============================================================================
 ; MISHKAT Central School Library Management System
 ; Unified Commercial Windows Installer (NSIS 3.x)
-; Supports: Server Role, Student Role, or Combined (Server + Student)
+; Supports: Server Role or Student Role (Zero Customer Dependencies)
 ; Zero Customer Dependencies: Bundles Portable Node Runtime & Embedded DB
 ; Strict Data Preservation: Never deletes LibraryData during Upgrade or Repair
 ; ==============================================================================
@@ -23,14 +23,15 @@ BrandingText "MISHKAT Commercial Distribution v1.0.0"
 
 ; --- Interface Settings ---
 !define MUI_ABORTWARNING
+!define MUI_ICON "..\src-tauri\icons\icon.ico"
+!define MUI_UNICON "..\src-tauri\icons\icon.ico"
 
 ; --- Variables ---
 Var Dialog
 Var RadioServer
 Var RadioStudent
-Var RadioCombined
 Var CheckRemoteSupport
-Var SelectedRole ; "SERVER", "STUDENT", "COMBINED"
+Var SelectedRole ; "SERVER", "STUDENT"
 Var RemoteSupportEnabled ; "1" or "0"
 Var IsUpgrade ; "1" or "0"
 
@@ -70,20 +71,15 @@ Function PageRoleSelection
   ${NSD_CreateRadioButton} 10u 46u 90% 14u "MISHKAT Student (تطبيق الطالب للقراءة والمطالعة الآمنة)"
   Pop $RadioStudent
 
-  ${NSD_CreateRadioButton} 10u 64u 90% 14u "Server + Student (خادم وطالب معًا على نفس الحاسوب)"
-  Pop $RadioCombined
-
-  ; Default to Server + Student or Server
+  ; Default to Server or Student
   ${If} $SelectedRole == "STUDENT"
     ${NSD_Check} $RadioStudent
-  ${ElseIf} $SelectedRole == "COMBINED"
-    ${NSD_Check} $RadioCombined
   ${Else}
     ${NSD_Check} $RadioServer
   ${EndIf}
 
-  ; Optional Remote Support Checkbox (Server only)
-  ${NSD_CreateCheckBox} 15u 86u 85% 14u "تفعيل الدعم الفني عن بُعد للمؤسسة (Enable Remote Support - اختياري)"
+  ; Optional Remote Support Checkbox (Tailscale)
+  ${NSD_CreateCheckBox} 15u 68u 85% 14u "تفعيل الدعم الفني عن بُعد للمؤسسة عبر Tailscale (Remote Support - اختياري)"
   Pop $CheckRemoteSupport
 
   ${If} $RemoteSupportEnabled == "1"
@@ -96,15 +92,12 @@ FunctionEnd
 Function PageRoleSelectionLeave
   ${NSD_GetState} $RadioServer $0
   ${NSD_GetState} $RadioStudent $1
-  ${NSD_GetState} $RadioCombined $2
   ${NSD_GetState} $CheckRemoteSupport $3
 
   ${If} $0 == ${BST_CHECKED}
     StrCpy $SelectedRole "SERVER"
-  ${ElseIf} $1 == ${BST_CHECKED}
-    StrCpy $SelectedRole "STUDENT"
   ${Else}
-    StrCpy $SelectedRole "COMBINED"
+    StrCpy $SelectedRole "STUDENT"
   ${EndIf}
 
   ${If} $3 == ${BST_CHECKED}
@@ -154,9 +147,8 @@ Section "MISHKAT Core Installation" SecCore
     CreateDirectory "$INSTDIR\LibraryData\secrets"
   ${EndUnless}
 
-  ; 2. Install Server Components if Role is SERVER or COMBINED
+  ; 2. Install Server Components if Role is SERVER
   ${If} $SelectedRole == "SERVER"
-  ${OrIf} $SelectedRole == "COMBINED"
     DetailPrint "تثبيت خادم MISHKAT الإنتاجي والخدمات الملحقة..."
 
     ; Stop existing Windows Service if running before updating binaries
@@ -180,6 +172,7 @@ Section "MISHKAT Core Installation" SecCore
     ; Copy root package and configuration
     SetOutPath "$INSTDIR"
     File "..\package.json"
+    File "..\src-tauri\icons\icon.ico"
 
     ; Copy required production server runtime dependencies
     SetOutPath "$INSTDIR\node_modules"
@@ -254,29 +247,33 @@ Section "MISHKAT Core Installation" SecCore
     DetailPrint "بدء تشغيل خدمة المكتبة المركزية..."
     nsExec::Exec 'net start MishkatLibraryService'
 
-    ; Server Shortcuts
+    ; Server Shortcuts with Mishkat Icon
     CreateDirectory "$SMPROGRAMS\MISHKAT"
-    CreateShortCut "$SMPROGRAMS\MISHKAT\إدارة نظام المشكاة المركزي.lnk" "http://localhost:3000"
-    CreateShortCut "$DESKTOP\MISHKAT Server Administration.lnk" "http://localhost:3000"
+    CreateShortCut "$SMPROGRAMS\MISHKAT\إدارة نظام المشكاة المركزي.lnk" "http://localhost:3000" "" "$INSTDIR\icon.ico" 0
+    CreateShortCut "$DESKTOP\MISHKAT Server Administration.lnk" "http://localhost:3000" "" "$INSTDIR\icon.ico" 0
+
+    ${If} $RemoteSupportEnabled == "1"
+      WriteRegStr HKLM "Software\MISHKAT" "TailscaleRemoteSupport" "1"
+      DetailPrint "تم تفعيل خيار الدعم الفني عن بُعد عبر Tailscale."
+    ${EndIf}
   ${EndIf}
 
-  ; 3. Install Student Components if Role is STUDENT or COMBINED
+  ; 3. Install Student Components if Role is STUDENT
   ${If} $SelectedRole == "STUDENT"
-  ${OrIf} $SelectedRole == "COMBINED"
     DetailPrint "تثبيت تطبيق الطالب المكتبي (MISHKAT Student)..."
 
     SetOutPath "$INSTDIR"
     File /nonfatal "..\src-tauri\target\release\mishkat-student.exe"
-    File /nonfatal "..\src-tauri\icons\icon.ico"
+    File "..\src-tauri\icons\icon.ico"
 
-    ; Student Shortcuts
+    ; Student Shortcuts with Mishkat Icon
     CreateDirectory "$SMPROGRAMS\MISHKAT"
     ${If} ${FileExists} "$INSTDIR\mishkat-student.exe"
       CreateShortCut "$SMPROGRAMS\MISHKAT\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe" "" "$INSTDIR\icon.ico" 0
       CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "$INSTDIR\mishkat-student.exe" "" "$INSTDIR\icon.ico" 0
     ${Else}
       ; Fallback shortcut to web kiosk if desktop binary built separately
-      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "http://localhost:3000"
+      CreateShortCut "$DESKTOP\MISHKAT Student.lnk" "http://localhost:3000" "" "$INSTDIR\icon.ico" 0
     ${EndIf}
   ${EndIf}
 
@@ -314,6 +311,7 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\server"
   RMDir /r "$INSTDIR\public"
   RMDir /r "$INSTDIR\node_modules"
+  Delete "$INSTDIR\icon.ico"
   Delete "$INSTDIR\mishkat-student.exe"
   Delete "$INSTDIR\uninstall.exe"
   Delete "$INSTDIR\package.json"

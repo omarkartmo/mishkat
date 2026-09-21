@@ -28,8 +28,11 @@ export interface ClientTelemetryEventInput {
   timestamp?: string;
 }
 
+// Line 31:
 export interface AggregatedErrorItem {
   signature: string;
+  sourceType: 'student' | 'server';
+  category: 'automatic' | 'manual';
   eventType: string;
   errorCode: string;
   severity: 'critical' | 'warning' | 'info';
@@ -133,6 +136,13 @@ export class SupportAgentService {
         sanitized[key] = '[REDACTED]';
         continue;
       }
+      if (key.toLowerCase() === 'screenshot') {
+        if (typeof value === 'string' && (value.startsWith('data:image/') || value.startsWith('http'))) {
+          // Allow base64 screenshot data URL (up to 3MB)
+          sanitized[key] = value.slice(0, 3 * 1024 * 1024);
+          continue;
+        }
+      }
       if (typeof value === 'string') {
         sanitized[key] = this.sanitizeText(value);
       } else if (typeof value === 'number' || typeof value === 'boolean') {
@@ -152,10 +162,24 @@ export class SupportAgentService {
     const cleanClientId = (client.clientId || '').trim().slice(0, 100);
     if (!cleanClientId) return;
 
+    const cleanIp = (ipAddress || '').replace(/^::ffff:/, '').slice(0, 50);
     const machineName = this.sanitizeText(client.machineName || 'Unknown Machine').slice(0, 150);
+
+    // Filter out Admin, Server, or Loopback connections so only genuine Student Stations are recorded
+    if (
+      cleanClientId.toLowerCase().includes('admin') ||
+      cleanClientId.toLowerCase().includes('server') ||
+      machineName.toLowerCase().includes('server') ||
+      machineName.toLowerCase().includes('admin') ||
+      cleanIp === '127.0.0.1' ||
+      cleanIp === '::1' ||
+      cleanIp === 'localhost'
+    ) {
+      return;
+    }
+
     const appVersion = (client.appVersion || '1.0.0').slice(0, 50);
     const osVersion = (client.osVersion || os.type()).slice(0, 100);
-    const cleanIp = (ipAddress || '').replace(/^::ffff:/, '').slice(0, 50);
 
     await db.query(
       `INSERT INTO connected_clients (client_id, machine_name, app_version, os_version, ip_address, last_seen_at)
@@ -218,8 +242,16 @@ export class SupportAgentService {
         ]
       );
 
-      // If event is critical, a crash, or a manual user/student report, forward to developer outbound queue
-      if (eventType === 'manual_report' || eventType === 'crash' || severity === 'critical') {
+      // Forward to developer outbound queue if warning, critical, crash, render error, timeout, or manual report
+      if (
+        severity === 'critical' ||
+        severity === 'warning' ||
+        eventType.includes('error') ||
+        eventType.includes('crash') ||
+        eventType.includes('render') ||
+        eventType.includes('timeout') ||
+        eventType === 'manual_report'
+      ) {
         this.enqueueOutboundReport({
           sourceType: 'client',
           clientDeviceId: clientId,
@@ -436,6 +468,11 @@ export class SupportAgentService {
         WHERE created_at >= DATE_TRUNC('day', CURRENT_TIMESTAMP)
         GROUP BY client_id
       ) e ON c.client_id = e.client_id
+      WHERE c.client_id NOT ILIKE '%admin%'
+        AND c.client_id NOT ILIKE '%server%'
+        AND c.machine_name NOT ILIKE '%server%'
+        AND c.machine_name NOT ILIKE '%admin%'
+        AND c.ip_address NOT IN ('127.0.0.1', '::1', 'localhost', '')
       ORDER BY c.last_seen_at DESC
     `);
 
@@ -470,8 +507,10 @@ export class SupportAgentService {
    * Groups recurring errors by event_type + error_code into unified signatures
    */
   public async getAggregatedErrors(limit = 50): Promise<AggregatedErrorItem[]> {
-    const { rows } = await db.query(`
+    const studentEvents = await db.query(`
       SELECT 
+        'student' as source_type,
+        CASE WHEN event_type = 'manual_report' THEN 'manual' ELSE 'automatic' END as category,
         event_type,
         error_code,
         MAX(severity) as max_severity,
@@ -486,11 +525,44 @@ export class SupportAgentService {
         (ARRAY_AGG(route ORDER BY created_at DESC) FILTER (WHERE route IS NOT NULL AND route != ''))[1] as recent_route
       FROM client_telemetry_events
       GROUP BY event_type, error_code
-      ORDER BY occurrence_count DESC, last_seen_at DESC
-      LIMIT $1
-    `, [limit]);
+    `);
 
-    return rows.map((r) => {
+    let serverEvents: any = { rows: [] };
+    try {
+      serverEvents = await db.query(`
+        SELECT
+          'server' as source_type,
+          CASE WHEN user_role = 'admin' OR error_type = 'manual_report' THEN 'manual' ELSE 'automatic' END as category,
+          error_type as event_type,
+          error_code,
+          MAX(severity) as max_severity,
+          COUNT(*)::int as occurrence_count,
+          1 as affected_clients_count,
+          ARRAY['SERVER-ADMIN'] as affected_client_ids,
+          ARRAY_AGG(DISTINCT app_version) as affected_app_versions,
+          MIN(created_at) as first_seen_at,
+          MAX(created_at) as last_seen_at,
+          (ARRAY_AGG(sanitized_message ORDER BY created_at DESC))[1] as sample_message,
+          (ARRAY_AGG(sanitized_stack_trace ORDER BY created_at DESC) FILTER (WHERE sanitized_stack_trace IS NOT NULL))[1] as sample_stack,
+          (ARRAY_AGG(component ORDER BY created_at DESC) FILTER (WHERE component IS NOT NULL AND component != ''))[1] as recent_route
+        FROM support_outbound_queue
+        WHERE source_type = 'server'
+        GROUP BY error_type, error_code, user_role
+      `);
+    } catch {
+      // Table may not exist in early tests
+    }
+
+    const combinedRows = [...studentEvents.rows, ...serverEvents.rows];
+    combinedRows.sort((a, b) => {
+      const countDiff = Number(b.occurrence_count) - Number(a.occurrence_count);
+      if (countDiff !== 0) return countDiff;
+      return new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime();
+    });
+
+    const sliced = combinedRows.slice(0, limit);
+
+    return sliced.map((r) => {
       const eventType = r.event_type || 'error';
       const errorCode = r.error_code || 'UNKNOWN';
       const signature = `${errorCode} (${eventType})`;
@@ -502,6 +574,8 @@ export class SupportAgentService {
 
       return {
         signature,
+        sourceType: (r.source_type === 'server' ? 'server' : 'student') as 'student' | 'server',
+        category: (r.category === 'manual' ? 'manual' : 'automatic') as 'automatic' | 'manual',
         eventType,
         errorCode,
         severity,
@@ -658,10 +732,27 @@ export class SupportAgentService {
   private outboundFlushTimer: any = null;
 
   /**
+   * Purges any accidental admin/server/loopback records from connected_clients
+   */
+  public async purgeServerAndAdminFromConnectedClients(): Promise<void> {
+    try {
+      await db.query(`
+        DELETE FROM connected_clients
+        WHERE client_id ILIKE '%admin%'
+           OR client_id ILIKE '%server%'
+           OR machine_name ILIKE '%server%'
+           OR machine_name ILIKE '%admin%'
+           OR ip_address IN ('127.0.0.1', '::1', 'localhost', '')
+      `);
+    } catch {}
+  }
+
+  /**
    * Starts periodic background worker to retry delivery of queued support reports
    */
   public startOutboundQueueWorker(intervalMs: number = 60000): void {
     if (this.outboundFlushTimer) return;
+    this.purgeServerAndAdminFromConnectedClients().catch(() => {});
     this.outboundFlushTimer = setInterval(() => {
       this.flushOutboundQueue().catch(() => {});
     }, intervalMs);

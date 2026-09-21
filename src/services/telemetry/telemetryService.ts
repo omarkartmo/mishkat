@@ -18,6 +18,7 @@ class TelemetryService {
   private serverBaseUrl: string = '';
   private isInitialized = false;
   private heartbeatInterval: any = null;
+  private userRole: string = 'guest';
 
   private constructor() {
     this.clientId = this.getOrCreateClientId();
@@ -44,6 +45,24 @@ class TelemetryService {
     return this.clientId;
   }
 
+  public setUserRole(role: string): void {
+    this.userRole = role;
+    if (role === 'student') {
+      if (!this.heartbeatInterval && typeof window !== 'undefined') {
+        this.sendHeartbeat();
+        this.heartbeatInterval = setInterval(() => {
+          this.sendHeartbeat();
+        }, 3 * 60 * 1000);
+      }
+    } else {
+      // Non-student (e.g. Admin or Server operator) - prevent registering as connected student station
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
+    }
+  }
+
   public init(config?: Partial<TelemetryConfig>): void {
     if (this.isInitialized) return;
     this.isInitialized = true;
@@ -68,15 +87,13 @@ class TelemetryService {
         });
       });
 
-      // 3. Heartbeat every 3 minutes
-      this.sendHeartbeat();
-      this.heartbeatInterval = setInterval(() => {
-        this.sendHeartbeat();
-      }, 3 * 60 * 1000);
+      // Heartbeat is strictly managed via setUserRole('student') to prevent admin/server pollution
     }
   }
 
   private sendHeartbeat(): void {
+    if (this.userRole !== 'student') return;
+
     const payload = {
       clientId: this.clientId,
       machineName: (typeof navigator !== 'undefined' && navigator.userAgent) ? 'Student Station' : 'Unknown',
@@ -157,12 +174,12 @@ class TelemetryService {
   /**
    * Manual problem report from student ("Report a problem")
    */
-  public reportManualProblem(screen: string, userNote: string): void {
+  public reportManualProblem(screen: string, userNote: string, metadata?: Record<string, any>): void {
     this.reportError(
       'manual_report',
       'USER_REPORTED_PROBLEM',
       userNote || 'Student submitted feedback',
-      { screen },
+      { screen, ...(metadata || {}) },
       'info'
     );
   }
