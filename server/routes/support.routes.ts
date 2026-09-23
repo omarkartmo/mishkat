@@ -165,7 +165,8 @@ supportRouter.get('/outbound-queue', authenticateToken, requireRole('admin'), as
 supportRouter.post('/flush-queue', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const endpoint = req.body?.endpoint;
-    const result = await supportAgentService.flushOutboundQueue(endpoint);
+    // Always force retry when explicitly invoked by admin from dashboard
+    const result = await supportAgentService.flushOutboundQueue(endpoint, true);
     const summary = await supportAgentService.getOutboundQueueSummary();
     return res.status(200).json({
       success: true,
@@ -179,6 +180,67 @@ supportRouter.post('/flush-queue', authenticateToken, requireRole('admin'), asyn
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to flush outbound queue', details: err.message },
+    });
+  }
+});
+
+// GET /api/v1/support/endpoint
+supportRouter.get('/endpoint', authenticateToken, requireRole('admin'), async (_req: Request, res: Response) => {
+  try {
+    const url = await supportAgentService.getSupportApiUrl();
+    const identity = supportAgentService.getInstitutionIdentity();
+    return res.status(200).json({
+      success: true,
+      data: {
+        supportApiUrl: url,
+        institutionId: identity.institutionId,
+        installationId: identity.installationId,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to get support endpoint configuration', details: err.message },
+    });
+  }
+});
+
+// POST /api/v1/support/endpoint
+supportRouter.post('/endpoint', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { supportApiUrl } = req.body;
+    if (!supportApiUrl || typeof supportApiUrl !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'supportApiUrl is required' },
+      });
+    }
+    const result = await supportAgentService.setSupportApiUrl(supportApiUrl);
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to set support endpoint', details: err.message },
+    });
+  }
+});
+
+// POST /api/v1/support/test-connection
+supportRouter.post('/test-connection', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const endpoint = req.body?.endpoint;
+    const testResult = await supportAgentService.testSupportConnection(endpoint);
+    return res.status(200).json({
+      success: true,
+      data: testResult,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Test connection failed', details: err.message },
     });
   }
 });

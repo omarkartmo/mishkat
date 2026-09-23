@@ -114,10 +114,11 @@ export const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
       });
 
       const meta = extractMeta(selectedFile.name);
-      setTitle(meta.title);
-      setAuthor(meta.author);
+      setTitle(data.detectedTitle || meta.title);
+      setAuthor(data.detectedAuthor || meta.author);
       setFormat(data.format === 'epub' ? 'epub' : 'pdf');
-      setPages(Math.max(50, Math.round((data.fileSizeMb || 1) * 45)));
+      setPages(data.detectedPages || Math.max(1, Math.round((data.fileSizeMb || 1) * 45)));
+      if (data.detectedSummary) setSummary(data.detectedSummary);
       setStep('metadata');
     } catch (err: any) {
       setUploadError(err.message || 'تعذر الاتصال بالخادم المركزي.');
@@ -147,7 +148,7 @@ export const AddDigitalBookModal: React.FC<AddDigitalBookModalProps> = ({
         filePath: uploadedFile.filePath,
         fileHash: uploadedFile.fileHash,
         coverImage: uploadedFile.coverUrl || null,
-        pagesCount: Number(pages) || 200,
+        pagesCount: Number(pages) || 1,
         summary: summary.trim() || `كتاب رقمي مرفوع مباشرة: ${title.trim()}`,
         language: language.trim() || 'العربية',
         isbn: isbn.trim() || null,

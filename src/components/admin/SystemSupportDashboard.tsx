@@ -25,6 +25,9 @@ import {
   Camera,
   Image as ImageIcon,
   Trash2,
+  Globe,
+  Check,
+  Edit3,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { telemetryService } from '../../services/telemetry/telemetryService';
@@ -134,14 +137,23 @@ export const SystemSupportDashboard: React.FC = () => {
   const [updateStatus, setUpdateStatus] = useState<any>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
+  // Support Server Endpoint State
+  const [supportEndpoint, setSupportEndpoint] = useState<string>('http://127.0.0.1:4000');
+  const [endpointInput, setEndpointInput] = useState<string>('http://127.0.0.1:4000');
+  const [isEditingEndpoint, setIsEditingEndpoint] = useState(false);
+  const [isSavingEndpoint, setIsSavingEndpoint] = useState(false);
+  const [isTestingEndpoint, setIsTestingEndpoint] = useState(false);
+  const [testResult, setTestResult] = useState<{ reachable: boolean; latencyMs?: number; error?: string } | null>(null);
+
   const fetchDashboardData = async () => {
     try {
-      const [healthRes, errorsRes, clientsRes, updaterRes, queueRes] = await Promise.all([
+      const [healthRes, errorsRes, clientsRes, updaterRes, queueRes, endpointRes] = await Promise.all([
         apiClient.get<HealthData>('/support/health-summary'),
         apiClient.get<AggregatedError[]>('/support/aggregated-errors'),
         apiClient.get<{ clients: ClientStation[] }>('/support/clients'),
         apiClient.get<any>('/support/updater/status').catch(() => ({ success: false, data: null })),
         apiClient.get<OutboundQueueSummary>('/support/outbound-queue').catch(() => ({ success: false, data: null })),
+        apiClient.get<{ supportApiUrl: string }>('/support/endpoint').catch(() => ({ success: false, data: null })),
       ]);
 
       if (healthRes.success && healthRes.data) {
@@ -158,6 +170,10 @@ export const SystemSupportDashboard: React.FC = () => {
       }
       if (queueRes && queueRes.success && queueRes.data) {
         setOutboundQueue(queueRes.data);
+      }
+      if (endpointRes && endpointRes.success && endpointRes.data?.supportApiUrl) {
+        setSupportEndpoint(endpointRes.data.supportApiUrl);
+        setEndpointInput((prev) => (isEditingEndpoint ? prev : endpointRes.data.supportApiUrl));
       }
     } catch (err) {
       console.error('Failed to load support dashboard:', err);
@@ -223,11 +239,49 @@ export const SystemSupportDashboard: React.FC = () => {
   const [isFlushingQueue, setIsFlushingQueue] = useState(false);
   const [flushResult, setFlushResult] = useState<string | null>(null);
 
+  const handleTestConnection = async (targetUrl?: string) => {
+    setIsTestingEndpoint(true);
+    setTestResult(null);
+    try {
+      const urlToTest = targetUrl || (isEditingEndpoint ? endpointInput : supportEndpoint);
+      const res = await apiClient.post<any>('/support/test-connection', { endpoint: urlToTest });
+      if (res.success && res.data) {
+        setTestResult(res.data);
+      } else {
+        setTestResult({ reachable: false, error: res.error?.message || 'فشل الاتصال' });
+      }
+    } catch (err: any) {
+      setTestResult({ reachable: false, error: err.message || 'تعذر الاتصال بالسيرفر' });
+    } finally {
+      setIsTestingEndpoint(false);
+    }
+  };
+
+  const handleSaveEndpoint = async () => {
+    if (!endpointInput.trim()) return;
+    setIsSavingEndpoint(true);
+    try {
+      const res = await apiClient.post<any>('/support/endpoint', { supportApiUrl: endpointInput.trim() });
+      if (res.success) {
+        const savedUrl = res.data?.url || endpointInput.trim();
+        setSupportEndpoint(savedUrl);
+        setIsEditingEndpoint(false);
+        await handleTestConnection(savedUrl);
+      } else {
+        alert(res.error?.message || 'فشل حفظ العنوان');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء حفظ العنوان');
+    } finally {
+      setIsSavingEndpoint(false);
+    }
+  };
+
   const handleFlushQueue = async () => {
     setIsFlushingQueue(true);
     setFlushResult(null);
     try {
-      const res = await apiClient.post<any>('/support/flush-queue', {});
+      const res = await apiClient.post<any>('/support/flush-queue', { endpoint: supportEndpoint });
       if (res.success && res.data) {
         if (res.data.summary) {
           setOutboundQueue(res.data.summary);
@@ -564,6 +618,102 @@ export const SystemSupportDashboard: React.FC = () => {
                 }`}>{outboundQueue?.failedCount ?? '-'}</div>
                 <div className="text-xs text-slate-400">فشل الإرسال</div>
               </div>
+            </div>
+
+            {/* Developer Support Server Connection Bar */}
+            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                  <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>عنوان خادم المطور (Support Server URL):</span>
+                  {!isEditingEndpoint && (
+                    <span className="font-mono text-[11px] text-indigo-300 bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-800/40">
+                      {supportEndpoint}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {testResult && (
+                    <div className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border ${
+                      testResult.reachable
+                        ? 'text-emerald-400 bg-emerald-950/50 border-emerald-800/40'
+                        : 'text-rose-400 bg-rose-950/50 border-rose-800/40'
+                    }`}>
+                      {testResult.reachable ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span>متصل بنجاح ({testResult.latencyMs}ms)</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-3 h-3 text-rose-400" />
+                          <span title={testResult.error}>فشل الاتصال: {testResult.error ? testResult.error.slice(0, 45) : ''}...</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {!isEditingEndpoint ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleTestConnection()}
+                        disabled={isTestingEndpoint}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium cursor-pointer transition-colors disabled:opacity-50"
+                        title="اختبار الاتصال بسيرفر دعم المطور"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isTestingEndpoint ? 'animate-spin' : ''}`} />
+                        <span>{isTestingEndpoint ? 'جاري الفحص...' : 'اختبار الاتصال'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEndpointInput(supportEndpoint);
+                          setIsEditingEndpoint(true);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium cursor-pointer transition-colors"
+                        title="تغيير رابط أو IP سيرفر الدعم"
+                      >
+                        <Edit3 className="w-3 h-3 text-slate-400" />
+                        <span>تعديل</span>
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              {isEditingEndpoint && (
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/50">
+                  <input
+                    type="text"
+                    value={endpointInput}
+                    onChange={(e) => setEndpointInput(e.target.value)}
+                    placeholder="مثال: http://192.168.1.15:4000 أو http://127.0.0.1:4000"
+                    className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveEndpoint}
+                    disabled={isSavingEndpoint || !endpointInput.trim()}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isSavingEndpoint ? 'جاري الحفظ...' : 'حفظ واختبار'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEndpointInput(supportEndpoint);
+                      setIsEditingEndpoint(false);
+                    }}
+                    className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg text-xs cursor-pointer transition-colors"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Action Bar & Explanation note */}

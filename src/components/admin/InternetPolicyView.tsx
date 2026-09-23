@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Plus, Trash2, Globe, Wifi, WifiOff, AlertTriangle, ListPlus, CheckCircle2, ChevronDown, MonitorPlay, Layers } from 'lucide-react';
+import { Shield, Plus, Trash2, Globe, Wifi, WifiOff, AlertTriangle, ListPlus, CheckCircle2, ChevronDown, MonitorPlay, Layers, RefreshCw } from 'lucide-react';
 import { BlockedCategory, BlockedSite } from '../../types/library';
 
 type PolicyMode = 'OPEN' | 'RESTRICTED' | 'OFFLINE';
@@ -38,6 +38,12 @@ export const InternetPolicyView: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [filterCategoryId, setFilterCategoryId] = useState('ALL');
 
+  // Proxy sync & notifications
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+  const [localProxyConfigured, setLocalProxyConfigured] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -45,11 +51,12 @@ export const InternetPolicyView: React.FC = () => {
   const fetchData = async () => {
     try {
       const headers = { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` };
-      const [catsRes, sitesRes, modeRes, excludeRes] = await Promise.all([
+      const [catsRes, sitesRes, modeRes, excludeRes, statusRes] = await Promise.all([
         fetch('/api/v1/internet-policy/categories', { headers }),
         fetch('/api/v1/internet-policy/sites', { headers }),
         fetch('/api/v1/internet-policy/mode', { headers }),
-        fetch('/api/v1/internet-policy/exclude-server', { headers })
+        fetch('/api/v1/internet-policy/exclude-server', { headers }),
+        fetch('/api/v1/internet-policy/status', { headers }).catch(() => null)
       ]);
       if (catsRes.ok) setCategories(await catsRes.json());
       if (sitesRes.ok) setSites(await sitesRes.json());
@@ -61,10 +68,42 @@ export const InternetPolicyView: React.FC = () => {
         const excludeData = await excludeRes.json();
         setExcludeServer(excludeData.excludeServer ?? true);
       }
+      if (statusRes && statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (statusData.data) {
+          setLocalProxyConfigured(statusData.data.localProxyConfigured ?? false);
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncLocalProxy = async () => {
+    setIsSyncing(true);
+    setSyncStatusMsg(null);
+    try {
+      const headers = { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` };
+      const res = await fetch('/api/v1/internet-policy/sync-local-proxy', {
+        method: 'POST',
+        headers
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLocalProxyConfigured(data.configured);
+        setSyncStatusMsg(
+          data.configured
+            ? 'تم تفعيل الحظر على هذا الجهاز بنجاح (AutoConfigURL مفعل).'
+            : 'حاسوب الإدارة مستثنى من الحظر (الوصول مباشر لكافة المواقع).'
+        );
+      }
+    } catch {
+      setSyncStatusMsg('تعذر مزامنة إعدادات الويندوز');
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncStatusMsg(null), 4000);
     }
   };
 
@@ -79,6 +118,8 @@ export const InternetPolicyView: React.FC = () => {
         },
         body: JSON.stringify({ excludeServer: exclude })
       });
+      // Automatically synchronize local Windows proxy
+      syncLocalProxy();
     } catch (e) {
       console.error('Failed to update exclude server setting', e);
     }
@@ -99,6 +140,8 @@ export const InternetPolicyView: React.FC = () => {
       if (!res.ok) {
         setPolicyMode(prevMode);
         alert('فشل في تحديث السياسة');
+      } else {
+        syncLocalProxy();
       }
     } catch (e) {
       setPolicyMode(prevMode);
@@ -204,12 +247,14 @@ export const InternetPolicyView: React.FC = () => {
     }
   };
 
-  const deleteSite = async (id: string) => {
+  const deleteSite = async (id: string, domain?: string) => {
     try {
       await fetch(`/api/v1/internet-policy/sites/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` }
       });
+      setDeleteNotice(domain ? `✅ تم رفع الحظر فوراً عن "${domain}". يمكن للطلاب استخدامه الآن.` : '✅ تم حذف الموقع من قائمة الحظر.');
+      setTimeout(() => setDeleteNotice(null), 4000);
       fetchData();
     } catch (e) {
       console.error(e);
@@ -249,20 +294,47 @@ export const InternetPolicyView: React.FC = () => {
           </p>
         </div>
 
-        {/* EXCLUDE SERVER PC TOGGLE */}
-        <div className="flex items-center gap-2 bg-slate-900/30 border border-slate-800/80 px-3 py-1.5 rounded-lg transition-colors hover:border-slate-700 hover:bg-slate-900/60 mt-1">
-          <input 
-             type="checkbox" 
-             id="excludeServer" 
-             checked={excludeServer}
-             onChange={(e) => updateExcludeServer(e.target.checked)}
-             className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer" 
-          />
-          <label htmlFor="excludeServer" className="text-[11px] font-medium text-slate-300 cursor-pointer select-none">
-            استثناء الخادم (Server PC)
-          </label>
+        {/* EXCLUDE SERVER PC CONTROL */}
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+          <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 px-3.5 py-2 rounded-xl transition-all">
+            <input 
+               type="checkbox" 
+               id="excludeServer" 
+               checked={excludeServer}
+               onChange={(e) => updateExcludeServer(e.target.checked)}
+               className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer" 
+            />
+            <label htmlFor="excludeServer" className="text-xs font-semibold text-slate-200 cursor-pointer select-none">
+              استثناء حاسوب الإدارة (Server PC)
+            </label>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
+              excludeServer
+                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/40'
+                : 'bg-rose-950/60 text-rose-400 border-rose-800/40'
+            }`}>
+              {excludeServer ? 'مستثنى (تصفح حر)' : 'يُطبق الحظر كحواسيب الطلبة'}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={syncLocalProxy}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors disabled:opacity-50 cursor-pointer"
+            title="مزامنة وتطبيق إعدادات البروكسي على نظام ويندوز في هذا الجهاز فوراً"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>مزامنة إعدادات هذا الجهاز</span>
+          </button>
         </div>
       </div>
+
+      {syncStatusMsg && (
+        <div className="p-3 rounded-xl bg-indigo-950/60 border border-indigo-800/50 text-indigo-200 text-xs flex items-center gap-2 animate-fade-in">
+          <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span>{syncStatusMsg}</span>
+        </div>
+      )}
 
       {/* MASTER POLICY TOGGLE */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -512,6 +584,12 @@ export const InternetPolicyView: React.FC = () => {
               </div>
 
               {/* SITES TABLE */}
+              {deleteNotice && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-950/60 border border-emerald-800/50 text-emerald-200 text-xs flex items-center gap-2 animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{deleteNotice}</span>
+                </div>
+              )}
               <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50">
                 <table className="w-full text-xs text-right">
                   <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 text-[10px] uppercase tracking-wider">
@@ -532,9 +610,9 @@ export const InternetPolicyView: React.FC = () => {
                       <tr key={site.id} className="hover:bg-slate-800/40 transition-colors group">
                         <td className="px-4 py-2.5 text-center">
                           <button 
-                            onClick={() => deleteSite(site.id)}
+                            onClick={() => deleteSite(site.id, site.domain)}
                             className="w-4 h-4 rounded border bg-indigo-500 border-indigo-500 text-white flex items-center justify-center transition-colors mx-auto"
-                            title="نزع الاختيار لإزالة الحظر"
+                            title="نزع الاختيار لإلغاء الحظر فوراً"
                           >
                             <CheckCircle2 className="w-3 h-3" />
                           </button>
@@ -556,9 +634,9 @@ export const InternetPolicyView: React.FC = () => {
                         </td>
                         <td className="px-4 py-2.5 text-center">
                           <button
-                            onClick={() => deleteSite(site.id)}
+                            onClick={() => deleteSite(site.id, site.domain)}
                             className="text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 transition-all p-1 rounded opacity-0 group-hover:opacity-100 mx-auto"
-                            title="إزالة الحظر"
+                            title="إلغاء الحظر فوراً"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

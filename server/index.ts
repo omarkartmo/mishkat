@@ -7,7 +7,7 @@ import { serverConfig } from './config';
 import { db } from './db/pool';
 import { runMigrations } from './db/migrator';
 import { seedInitialData } from './db/seed';
-import { healCorruptedDigitalBooks } from './services/bookSanitizer';
+import { healCorruptedDigitalBooks, healDigitalBookPageCounts } from './services/bookSanitizer';
 
 // Import Route Handlers
 import authRoutes from './routes/auth.routes';
@@ -87,6 +87,12 @@ export async function createExpressApp() {
     app.use('/cmaps', express.static(cmapsLocalPath, { maxAge: '30d', immutable: true }));
   }
 
+  // Serve local Standard Fonts for 100% offline, zero-latency Arabic PDF rendering
+  const standardFontsLocalPath = path.join(process.cwd(), 'public', 'standard_fonts');
+  if (fs.existsSync(standardFontsLocalPath)) {
+    app.use('/standard_fonts', express.static(standardFontsLocalPath, { maxAge: '30d', immutable: true }));
+  }
+
   // NOTE: Private digital files and covers are NOT served via express.static.
   // All digital file access goes through the authenticated GET /api/v1/books/:id/file
   // and /api/v1/books/files/* routes which enforce JWT authentication and path traversal protection.
@@ -98,6 +104,7 @@ export async function createExpressApp() {
       await runMigrations();
       await seedInitialData();
       await healCorruptedDigitalBooks(db);
+      await healDigitalBookPageCounts(db);
     } else {
       console.log('ℹ️ [Database] Central Database is currently not connected. API will serve health checks and handle connection gracefully.');
     }

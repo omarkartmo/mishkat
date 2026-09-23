@@ -29,6 +29,8 @@ export const BACKUP_TABLES_ORDER = [
   'notifications',
   'system_settings',
   'staging_queue',
+  'blocked_categories',
+  'blocked_sites',
 ] as const;
 
 export type BackupTableName = typeof BACKUP_TABLES_ORDER[number];
@@ -127,6 +129,12 @@ export const TABLE_COLUMNS_ALLOWLIST: Record<BackupTableName, string[]> = {
     'file_size_mb', 'file_hash', 'title', 'author', 'category_id',
     'confidence', 'status', 'duplicate_reason', 'admin_notes',
     'queued_at', 'reviewed_at', 'reviewed_by',
+  ],
+  blocked_categories: [
+    'id', 'name', 'is_active', 'created_at',
+  ],
+  blocked_sites: [
+    'id', 'domain', 'category_id', 'is_active', 'added_by', 'created_at',
   ],
 };
 

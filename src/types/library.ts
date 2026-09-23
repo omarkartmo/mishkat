@@ -13,7 +13,8 @@ export type NavigationTab =
   | 'student_portal'
   | 'search_results'
   | 'settings'
-  | 'support';
+  | 'support'
+  | 'internet_policy';
 
 export interface User {
   id: string;
@@ -315,5 +316,22 @@ export interface AppNotification {
   targetTab: NavigationTab;
   targetEntityId?: string; // e.g. loanRequestId, bookId, etc.
   isRead: boolean;
+  createdAt: string;
+}
+
+export interface BlockedCategory {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface BlockedSite {
+  id: string;
+  domain: string;
+  categoryId: string | null;
+  categoryName?: string;
+  isActive: boolean;
+  addedBy: string;
   createdAt: string;
 }

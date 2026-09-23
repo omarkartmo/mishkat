@@ -86,6 +86,8 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const epubContainerRef = useRef<HTMLDivElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const viewerContainerRef = useRef<HTMLDivElement | null>(null);
   const renderTaskRef = useRef<any>(null);
   const currentBlobUrlRef = useRef<string | null>(null);
   const epubBookRef = useRef<Book | null>(null);
@@ -101,9 +103,41 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const renderedCanvasCacheRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
   const [showRenderSpinner, setShowRenderSpinner] = useState(false);
 
-  // Touch navigation refs for mobile
+  // Touch navigation and pinch zoom refs for mobile / tablet
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const touchDistanceRef = useRef<number | null>(null);
+
+  // Touchpad pinch-to-zoom & Ctrl+Wheel prevention of browser-level window zoom
+  useEffect(() => {
+    const modalEl = modalRef.current;
+    if (!modalEl) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Touchpad pinch-to-zoom on Windows Precision Touchpads / macOS and mouse Ctrl+Wheel
+      // trigger a WheelEvent with ctrlKey === true.
+      if (e.ctrlKey) {
+        // Prevent default browser-wide window zoom
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (isEpub) {
+          // In EPUB mode, touchpad pinch smoothly scales the reading font size
+          const fontDelta = e.deltaY < 0 ? 1 : -1;
+          setEpubFontSize((prev) => Math.min(32, Math.max(12, prev + fontDelta)));
+        } else {
+          // In PDF mode, touchpad pinch smoothly scales canvas zoom in sync with manual buttons
+          const zoomDelta = e.deltaY < 0 ? 0.08 : -0.08;
+          setScale((prev) => Math.min(2.5, Math.max(0.6, Number((prev + zoomDelta).toFixed(2)))));
+        }
+      }
+    };
+
+    modalEl.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      modalEl.removeEventListener('wheel', handleWheel);
+    };
+  }, [isEpub]);
 
   // Prevent mobile screen from sleeping while reading
   useEffect(() => {
@@ -249,6 +283,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           data: arrayBuffer,
           cMapUrl: '/cmaps/',
           cMapPacked: true,
+          standardFontDataUrl: '/standard_fonts/',
           enableXfa: false,
         });
 
@@ -398,6 +433,8 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       offscreen.height = viewport.height;
       const offCtx = offscreen.getContext('2d', { alpha: false });
       if (!offCtx) return;
+      // Force Left-to-Right context direction to prevent Arabic glyph inversion / overlapping
+      offCtx.direction = 'ltr';
 
       await page.render({
         canvasContext: offCtx,
@@ -463,6 +500,8 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       if (!canvas) return;
       const context = canvas.getContext('2d', { alpha: false });
       if (!context) return;
+      // Force Left-to-Right context direction to prevent Arabic glyph inversion / overlapping
+      context.direction = 'ltr';
 
       const viewport = page.getViewport({ scale });
       canvas.width = viewport.width;
@@ -513,15 +552,41 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     }
   }, [pdfDoc, scale, numPages, prefetchRenderPage]);
 
-  // Touch navigation handlers for phones (RTL horizontal swipe)
+  // Touch navigation handlers for phones (RTL horizontal swipe & 2-finger pinch zoom)
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       touchStartXRef.current = e.touches[0].clientX;
       touchStartYRef.current = e.touches[0].clientY;
+      touchDistanceRef.current = null;
+    } else if (e.touches.length === 2) {
+      touchDistanceRef.current = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchDistanceRef.current !== null) {
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const diff = currentDist - touchDistanceRef.current;
+      if (Math.abs(diff) > 15) {
+        const zoomDelta = diff > 0 ? 0.05 : -0.05;
+        setScale((prev) => Math.min(2.5, Math.max(0.6, Number((prev + zoomDelta).toFixed(2)))));
+        touchDistanceRef.current = currentDist;
+      }
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) {
+      touchDistanceRef.current = null;
+    }
     if (touchStartXRef.current === null || touchStartYRef.current === null) return;
     const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
     const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
@@ -617,6 +682,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
   return (
     <div
+      ref={modalRef}
       className={`fixed inset-0 z-[110] flex flex-col bg-slate-950 text-slate-100 ${
         isFullscreen ? '' : 'sm:p-3'
       }`}
@@ -911,7 +977,9 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
         {/* Central Presentation Canvas Area */}
         <div
+          ref={viewerContainerRef}
           onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           className="flex-1 overflow-auto flex flex-col items-center justify-start p-2 sm:p-6 bg-slate-950 select-text relative touch-pan-y"
         >
@@ -956,8 +1024,11 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           ) : (
             /* Real PDF.js HTML5 Canvas Renderer (Section 12) */
             <div
+              dir="ltr"
               className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white my-auto select-none shrink-0 transition-all duration-150"
               style={{
+                direction: 'ltr',
+                textAlign: 'left',
                 width: isMobile ? `${Math.round((window.innerWidth - 20) * scale)}px` : undefined,
                 maxWidth: isMobile ? 'none' : undefined,
               }}
@@ -970,8 +1041,11 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
               )}
               <canvas
                 ref={canvasRef}
+                dir="ltr"
                 className="block h-auto"
                 style={{
+                  direction: 'ltr',
+                  textAlign: 'left',
                   width: isMobile ? '100%' : undefined,
                   maxWidth: isMobile ? 'none' : '100%',
                 }}

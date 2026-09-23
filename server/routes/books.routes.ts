@@ -10,6 +10,7 @@ import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
 import { extractAuthorFromDocument, extractDocumentMetadata, isValidArabicSentence, normalizeArabicForSearch, stripDiacritics, synthesizeBookSummary } from '../utils/authorExtractor';
 import { isSystemDangerousPath, verifyFileMagicBytes, computeFileSha256 } from '../utils/pathSafety';
+import { healDigitalBookPageCounts, getPdfTruePageCount } from '../services/bookSanitizer';
 
 const router = Router();
 
@@ -297,6 +298,75 @@ export function classifyBook(
   const normFilename = normalizeArabicForSearch(filename || '');
   const normIntro = normalizeArabicForSearch(introText || '');
 
+  // 1. High-Precision Institutional & Academic Domain Overrides
+  if (
+    normIntro.includes('كليه العلوم الشرعيه') ||
+    normIntro.includes('الفقه واصوله') ||
+    normIntro.includes('دراسه فقهيه') ||
+    normTitle.includes('في الفقه الاسلامي') ||
+    normTitle.includes('يف الفقه اإلسالمي') ||
+    normTitle.includes('في الشريعه الاسلاميه') ||
+    normTitle.includes('احكامه يف الشريعه') ||
+    normTitle.includes('احكامه في الشريعه') ||
+    normTitle.includes('فقه الامامه') ||
+    normTitle.includes('بفقه الامامه') ||
+    normTitle.includes('جوهر النظام') ||
+    normTitle.includes('عقيده المسلم') ||
+    normTitle.includes('الايمان بالغيب') ||
+    normTitle.includes('خطوات للحج') ||
+    normTitle.includes('للحج المبرور') ||
+    normTitle.includes('اثار اللعان') ||
+    normTitle.includes('اثار الجهاد') ||
+    normTitle.includes('الامراض الوراثيه في الحياه الزوجيه') ||
+    normTitle.includes('الادمان المشروع') ||
+    normTitle.includes('عقد النكاح') ||
+    normTitle.includes('الجنايات بالسحر') ||
+    normTitle.includes('اختاذ الوطن') ||
+    normTitle.includes('اتخاذ الوطن') ||
+    normTitle.includes('ابتهالات الشيخ') ||
+    normTitle.includes('اراؤه الاصوليه')
+  ) {
+    const matched = categories.find((c) => c.id === 'cat-islamic');
+    return {
+      categoryId: matched?.id || 'cat-islamic',
+      categoryName: matched?.name || 'العلوم الشرعية والفكر الإسلامي',
+      confidence: 98,
+    };
+  }
+
+  if (
+    normTitle.includes('خلال العصر الحديث') ||
+    normTitle.includes('في الحركه الاصلاحيه') ||
+    normTitle.includes('تاريخ بعض علماء عمان') ||
+    normTitle.includes('الذاكره العمانيه') ||
+    normTitle.includes('ابن ماجد والبرتغال') ||
+    normIntro.includes('قسم التاريخ') ||
+    normIntro.includes('شعبه التاريخ') ||
+    normIntro.includes('كليه الاداب والعلوم الانسانيه')
+  ) {
+    const matched = categories.find((c) => c.id === 'cat-history');
+    return {
+      categoryId: matched?.id || 'cat-history',
+      categoryName: matched?.name || 'التاريخ والحضارة والآثار',
+      confidence: 98,
+    };
+  }
+
+  if (
+    normTitle.includes('حسان عمان') ||
+    normTitle.includes('اعلم العلماء واشعر الشعراء') ||
+    normTitle.includes('ابن النضر') ||
+    normTitle.includes('ديوان') ||
+    normTitle.includes('قصائد')
+  ) {
+    const matched = categories.find((c) => c.id === 'cat-arabic');
+    return {
+      categoryId: matched?.id || 'cat-arabic',
+      categoryName: matched?.name || 'اللغة العربية وآدابها',
+      confidence: 98,
+    };
+  }
+
   const rules: {
     catId: string;
     name: string;
@@ -314,7 +384,8 @@ export function classifyBook(
         'الجامع الكبير', 'بيان الشرع', 'المصنف', 'الضياء', 'قاموس الشريعه', 'النيل', 'منهج الطالبين', 'بلاغ الراغبين',
         'الراغبين', 'الشقصي', 'الرستاقي', 'قواعد الاسلام', 'قناطر الخيرات', 'معارج الامال', 'جوهر النظام', 'تلقين الصبيان',
         'بهجه الانوار', 'مدارج الكمال', 'الاديان', 'الايضاح', 'الوضع', 'هميان الزاد', 'تيسير التفسير', 'رياض الصالحين',
-        'الاربعون النوويه', 'نووي', 'استقامه'
+        'الاربعون النوويه', 'نووي', 'استقامه', 'جهاد', 'سبيل الله', 'لعان', 'نكاح', 'زواج', 'طلاق', 'جنايات',
+        'سحر', 'استيطان', 'وطن', 'ادمان', 'وراثيه', 'غيب', 'امامه', 'ابتهالات', 'دعاء', 'اذكار', 'اصوليا'
       ],
     },
     {
@@ -327,7 +398,7 @@ export function classifyBook(
         'نقد ادبي', 'نثر', 'مقامه', 'مقامات', 'روايه', 'قصه', 'حكايه', 'مسرحيه', 'نصوص ادبيه', 'حسان عمان',
         'حسان', 'رواحي', 'ابو مسلم', 'شوقي', 'حافظ', 'متنبي', 'معري', 'جاحظ', 'ابن جني', 'زمخشري', 'كشاف',
         'خليل بن احمد', 'فراهيدي', 'ابن دريد', 'جمهره', 'لسان العرب', 'تاج العروس', 'اساس البلاغه', 'قطر الندى',
-        'شذور الذهب', 'الكتاب لسيبويه', 'ديوان شعر', 'قصص'
+        'شذور الذهب', 'الكتاب لسيبويه', 'ديوان شعر', 'قصص', 'اشعر الشعراء', 'اعلم العلماء'
       ],
     },
     {
@@ -337,8 +408,10 @@ export function classifyBook(
         'تاريخ', 'حضاره', 'حضارات', 'عمان', 'اندلس', 'طبري', 'سيره', 'سيره نبويه', 'سير', 'فتوح', 'معركه',
         'غزوات', 'معارك', 'دوله', 'خلافه', 'يعاربه', 'نباهنه', 'بوسعيدي', 'اعيان', 'تراجم', 'وفيات', 'انساب',
         'سلاطين', 'ملوك', 'ائمه', 'وقائع', 'رحلات', 'ابن بطوطه', 'مسالك', 'ممالك', 'وثائق', 'جغرافيا تاريخيه',
-        'اثار', 'قلاع', 'حصون', 'عصر', 'عهد', 'تحفه الاعيان', 'كشف الغمه', 'سير الائمه', 'انساب العرب',
-        'فتوح البلدان', 'الكامل في التاريخ', 'البدايه والنهايه', 'مروج الذهب', 'مقدمه ابن خلدون', 'ابن خلدون'
+        'قلاع', 'حصون', 'عصر', 'عهد', 'تحفه الاعيان', 'كشف الغمه', 'سير الائمه', 'انساب العرب',
+        'فتوح البلدان', 'الكامل في التاريخ', 'البدايه والنهايه', 'مروج الذهب', 'مقدمه ابن خلدون', 'ابن خلدون',
+        'العصر الحديث', 'الحركه الاصلاحيه', 'ابو اليقظان', 'الجزائر', 'البرتغال', 'ابن ماجد', 'الذاكره العمانيه',
+        'ابن بور'
       ],
     },
     {
@@ -348,7 +421,7 @@ export function classifyBook(
         'علوم', 'فيزياء', 'كيمياء', 'احياء', 'فلك', 'طب', 'طبيعه', 'كون', 'بيئه', 'هندسه', 'تقنيه',
         'حاسوب', 'برمجه', 'ذكاء اصطناعي', 'رياضيات', 'جبر', 'حساب', 'فلكي', 'طبيه', 'صيدله', 'ادويه',
         'تشريح', 'كواكب', 'نجوم', 'شبكات', 'برمجيات', 'الكترونيات', 'طاقه', 'جيولوجيا', 'نبات', 'حيوان',
-        'تجارب', 'معادلات', 'مختبر', 'ذره', 'جينات', 'وراثه', 'معلوماتيه', 'امن سيبراني'
+        'تجارب', 'معادلات', 'مختبر', 'ذره', 'جينات', 'معلوماتيه', 'امن سيبراني'
       ],
     },
     {
@@ -381,22 +454,10 @@ export function classifyBook(
       const normalizedKw = normalizeArabicForSearch(kw);
       if (!normalizedKw) continue;
 
-      // 1. Title Zone: Highest weight (5x)
-      if (normTitle.includes(normalizedKw)) {
-        score += 50;
-      }
-      // 2. Author Zone: Strong weight (3x)
-      if (normAuthor.includes(normalizedKw)) {
-        score += 30;
-      }
-      // 3. Intro / Preface / Summary Zone: Content weight (2x)
-      if (normIntro.includes(normalizedKw)) {
-        score += 20;
-      }
-      // 4. Filename Zone: Basic weight (1x)
-      if (normFilename.includes(normalizedKw)) {
-        score += 10;
-      }
+      if (normTitle.includes(normalizedKw)) score += 50;
+      if (normAuthor.includes(normalizedKw)) score += 30;
+      if (normIntro.includes(normalizedKw)) score += 20;
+      if (normFilename.includes(normalizedKw)) score += 10;
     }
 
     if (score > bestScore) {
@@ -928,9 +989,19 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
         docIntroText = docMeta.introText;
         docSummary = docMeta.summary;
         docNumPages = docMeta.numPages || null;
+        if (!docNumPages && ext === 'pdf') {
+          try {
+            docNumPages = await getPdfTruePageCount(filePath);
+          } catch {}
+        }
       } catch {
         if (author === 'مؤلف غير محدد') {
           author = '';
+        }
+        if (ext === 'pdf') {
+          try {
+            docNumPages = await getPdfTruePageCount(filePath);
+          } catch {}
         }
       }
 
@@ -956,7 +1027,7 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
         status: isDuplicate ? 'duplicate' : confidence < 40 ? 'needs_review' : 'ready',
         isDuplicate,
         duplicateReason: isDuplicate ? 'الكتاب مستورد مسبقاً في المستودع الرقمي المركزي' : null,
-        pages: docNumPages || Math.max(1, Math.round(sizeMb * 45)),
+        pages: docNumPages || 1,
         summary: (docSummary && isValidArabicSentence(docSummary)) ? docSummary : synthesizeBookSummary(title, author, categoryName),
       });
     }
@@ -1605,9 +1676,22 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
     }
 
     let detectedMeta: any = null;
+    let detectedPages: number | null = null;
     try {
       detectedMeta = await extractDocumentMetadata(canonicalPath, ext as 'pdf' | 'epub');
-    } catch {}
+      detectedPages = detectedMeta?.numPages || null;
+      if (!detectedPages && ext === 'pdf') {
+        try {
+          detectedPages = await getPdfTruePageCount(canonicalPath);
+        } catch {}
+      }
+    } catch {
+      if (ext === 'pdf') {
+        try {
+          detectedPages = await getPdfTruePageCount(canonicalPath);
+        } catch {}
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -1626,7 +1710,7 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
         detectedTitle: detectedMeta?.title || null,
         detectedAuthor: detectedMeta?.author || '',
         detectedSummary: detectedMeta?.summary || null,
-        detectedPages: detectedMeta?.numPages || null,
+        detectedPages: detectedPages || null,
       },
     });
   } catch (err: any) {
@@ -2123,6 +2207,23 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'librarian'), asyn
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/books/sync-page-counts (Admin: Sync physical PDF page counts with DB)
+router.post('/sync-page-counts', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const updatedCount = await healDigitalBookPageCounts(db);
+    res.json({
+      success: true,
+      message: `تمت مزامنة وتحديث عدد الصفحات الفعلي لـ ${updatedCount} كتاب بنجاح.`,
+      data: { updatedCount }
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SYNC_FAILED', message: err.message }
+    });
   }
 });
 

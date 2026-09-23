@@ -123,6 +123,7 @@ function authenticateInstitution(req, res, next) {
 
   // Verify support key in constant time
   if (!verifyKey(cleanKey, institution.support_key_hash)) {
+    console.warn(`[Support Receiver] ⚠️ Unauthorized support key for institution ${cleanInstId}`);
     return res.status(401).json({
       acknowledged: false,
       error: { message: 'Unauthorized: Invalid X-Support-Key' },

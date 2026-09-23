@@ -762,14 +762,108 @@ export class SupportAgentService {
   }
 
   /**
+   * Retrieves the configured developer support server URL from system_settings or env
+   */
+  public async getSupportApiUrl(): Promise<string> {
+    if (process.env.MISHKAT_SUPPORT_API_URL) {
+      return process.env.MISHKAT_SUPPORT_API_URL;
+    }
+    try {
+      const { rows } = await db.query("SELECT value FROM system_settings WHERE key = 'support_api_url'");
+      if (rows.length > 0 && rows[0].value) {
+        const val = rows[0].value;
+        const clean = typeof val === 'string' ? val.replace(/"/g, '') : String(val);
+        if (clean.trim()) return clean.trim();
+      }
+    } catch {}
+    return 'http://127.0.0.1:4000';
+  }
+
+  /**
+   * Persists the developer support server URL into system_settings
+   */
+  public async setSupportApiUrl(url: string): Promise<{ success: boolean; url: string }> {
+    const cleanUrl = (url || '').trim().replace(/\/+$/, '');
+    await db.query(
+      `INSERT INTO system_settings (key, value) VALUES ('support_api_url', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(cleanUrl)]
+    );
+    return { success: true, url: cleanUrl };
+  }
+
+  /**
+   * Tests reachability and authentication with the Developer Support Hub
+   */
+  public async testSupportConnection(customUrl?: string): Promise<{
+    reachable: boolean;
+    endpoint: string;
+    latencyMs: number;
+    error?: string;
+  }> {
+    let endpoint = customUrl || (await this.getSupportApiUrl());
+    if (!endpoint) endpoint = 'http://127.0.0.1:4000';
+
+    const baseEndpoint = endpoint.replace(/\/api\/v1\/support\/.*$/, '').replace(/\/+$/, '');
+    const pingUrl = `${baseEndpoint}/api/v1/support/stats`;
+
+    const identity = this.getInstitutionIdentity();
+    const startTime = Date.now();
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+
+      const res = await fetch(pingUrl, {
+        method: 'GET',
+        headers: {
+          'X-Institution-Id': identity.institutionId,
+          'X-Installation-Id': identity.installationId,
+          'X-Support-Key': identity.supportSecretKey,
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const latencyMs = Date.now() - startTime;
+
+      if (res.ok) {
+        return { reachable: true, endpoint: baseEndpoint, latencyMs };
+      } else {
+        return {
+          reachable: false,
+          endpoint: baseEndpoint,
+          latencyMs,
+          error: `خادم المطور استجاب برمز الخطأ: HTTP ${res.status}`,
+        };
+      }
+    } catch (err: any) {
+      const latencyMs = Date.now() - startTime;
+      let errorMsg = err.message || 'تعذر الاتصال بخادم المطور';
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        errorMsg = 'انتهت مهلة الاتصال (Timeout) — تأكد من أن منفذ الخادم متاح';
+      } else if (err.message?.includes('ECONNREFUSED')) {
+        errorMsg = 'تم رفض الاتصال (ECONNREFUSED) — تأكد من تشغيل خادم المطور (npm run support:server)';
+      }
+      return { reachable: false, endpoint: baseEndpoint, latencyMs, error: errorMsg };
+    }
+  }
+
+  /**
    * Flushes pending reports from outbound queue to the Developer Support API
    * Applies Exponential Backoff, Idempotent Delivery, and ACK verification.
    */
   public async flushOutboundQueue(apiEndpoint?: string, forceRetry = false): Promise<{ sent: number; failed: number }> {
-    const targetUrl = apiEndpoint || process.env.MISHKAT_SUPPORT_API_URL || 'http://127.0.0.1:4000/api/v1/support/reports';
+    let targetUrl = apiEndpoint || process.env.MISHKAT_SUPPORT_API_URL;
     if (!targetUrl) {
-      // Offline / Developer endpoint not configured: reports remain safely queued on disk
-      return { sent: 0, failed: 0 };
+      targetUrl = await this.getSupportApiUrl();
+    }
+    if (!targetUrl) {
+      targetUrl = 'http://127.0.0.1:4000/api/v1/support/reports';
+    }
+
+    // Normalize endpoint URL: if user passed base URL like "http://localhost:4000", append standard path
+    if (!targetUrl.includes('/api/v1/support/')) {
+      targetUrl = targetUrl.replace(/\/+$/, '') + '/api/v1/support/reports';
     }
 
     const identity = this.getInstitutionIdentity();
@@ -852,6 +946,8 @@ export class SupportAgentService {
         }
       } catch (err: any) {
         failed++;
+        console.warn(`⚠️ [SupportAgent] Delivery to Developer Support Hub failed (${targetUrl}):`, err.message);
+
         // Calculate exponential backoff delay: 1m, 5m, 15m, 30m, 60m
         const attempts = Number(row.attempts_count) + 1;
         const delaysMinutes = [1, 5, 15, 30, 60];

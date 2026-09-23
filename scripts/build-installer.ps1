@@ -73,29 +73,11 @@ if (-not (Test-Path $NssmExe)) {
     Write-Host "  ✓ Portable NSSM ready: bin/nssm.exe" -ForegroundColor Green
 }
 
-# 3.2 Stage Minimal Server Runtime Dependencies in bin/node_modules/
-Write-Host "  -> Staging production server runtime dependencies..." -ForegroundColor DarkCyan
-$BinModulesDir = Join-Path $BinDir "node_modules"
-if (-not (Test-Path $BinModulesDir)) {
-    New-Item -ItemType Directory -Path $BinModulesDir | Out-Null
-}
-
-$RequiredModules = @(
-    "dotenv", "express", "cors", "jsonwebtoken", "bcryptjs",
-    "pg", "@electric-sql", "multer"
-)
-
-foreach ($mod in $RequiredModules) {
-    $Src = Join-Path $ProjectRoot "node_modules\$mod"
-    $Dest = Join-Path $BinModulesDir $mod
-    if (Test-Path $Src) {
-        if (-not (Test-Path (Split-Path $Dest -Parent))) {
-            New-Item -ItemType Directory -Path (Split-Path $Dest -Parent) -Force | Out-Null
-        }
-        Copy-Item $Src $Dest -Recurse -Force
-    }
-}
-Write-Host "  ✓ Production runtime dependencies staged in bin/node_modules" -ForegroundColor Green
+# 3.2 Ensure Complete Production Server Runtime Dependencies in bin/node_modules/
+Write-Host "  -> Ensuring complete production server runtime dependencies in bin..." -ForegroundColor DarkCyan
+npm --prefix $BinDir install --omit=dev --no-audit --no-fund
+npm --prefix $BinDir prune
+Write-Host "  ✓ Production runtime dependencies ready in bin/node_modules" -ForegroundColor Green
 
 # 4. Check for NSIS Compiler (makensis)
 Write-Host "[4/5] Checking for NSIS Compiler..." -ForegroundColor Yellow

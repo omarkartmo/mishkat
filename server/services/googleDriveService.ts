@@ -170,8 +170,9 @@ class GoogleDriveService {
    */
   private getGoogle(): any {
     try {
-      // Lazy load to prevent top-level require failures
-      const req = typeof __non_webpack_require__ !== 'undefined' ? __non_webpack_require__ : require;
+      const req = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
+        ? (globalThis as any).__non_webpack_require__
+        : require;
       const mod = req('googleapis');
       return mod.google || mod.default?.google || mod;
     } catch {

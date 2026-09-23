@@ -34,6 +34,10 @@ export interface SingleUploadResponse {
   fileHash: string;
   sha256: string;
   format: 'pdf' | 'epub';
+  detectedTitle?: string | null;
+  detectedAuthor?: string | null;
+  detectedSummary?: string | null;
+  detectedPages?: number | null;
 }
 
 export class BookRepository {

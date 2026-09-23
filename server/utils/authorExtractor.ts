@@ -1,12 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 
-// Known publisher / institutional / digitizer blacklist
+// Known publisher / institutional / scanner blacklist
 // Never treat an institutional, publisher, or scanner brand as an author name
 const INSTITUTION_BLACKLIST = [
   'المكتبة', 'مكتبة', 'دار', 'وزارة', 'مركز', 'شبكة', 'موقع', 'منتدى',
   'منتديات', 'وقف', 'أوقاف', 'جامعة', 'مؤسسة', 'جمعية', 'لجنة', 'مطبعة',
-  'مطابع', 'مطبوعات', 'تسجيلات', 'عمان', 'تراث', 'ثقافة', 'سلسلة', 'طبعة', 'الطبعة',
+  'مطابع', 'مطبوعات', 'تسجيلات', 'سلسلة', 'طبعة', 'الطبعة',
   'tesseract', 'ocrmypdf', 'pikepdf', 'adobe', 'acrobat', 'scan', 'calibre',
   'unknown', 'admin', 'user', 'microsoft', 'word', 'author'
 ];
@@ -41,15 +41,31 @@ export function normalizeArabicForSearch(text: string): string {
     .trim();
 }
 
-// Classical Heritage Books Catalog (Title Pattern -> Authoritative Standard Author)
-// Provides 100% precision across multi-volume series and classical Islamic & Omani encyclopedias
+// -------------------------------------------------------------
+// Authoritative Classical Heritage & Reference Catalog
+// -------------------------------------------------------------
 export const HERITAGE_BOOKS_CATALOG: Array<{ pattern: RegExp; author: string }> = [
-  // Renowned multi-volume encyclopedias and foundational heritage works
+  // Specific multi-volume or renowned classical works & studies
+  { pattern: /إتحاف\s+الأعيان\s+في\s+تاريخ\s+بعض\s+علماء\s+عمان/i, author: 'الشيخ سيف بن حمود البطاشي' },
+  { pattern: /إتحاف\s+الأئمة\s+بفقه\s+الإمامة(?:\s+في\s+الصلاة)?/i, author: 'الشيخ مسعود بن محمد المقبالي' },
+  { pattern: /إتحاف\s+الأنام\s+بشرح\s+جوهر\s+النظام/i, author: 'مصطفى بن محمد شريفي' },
+  { pattern: /ابتهالات\s+الشيخ\s+الهجاري/i, author: 'الشيخ ربيعة بن ماجد بن سليمان الكندي' },
+  { pattern: /ابن\s+النضر(?:\s+لغز\s+يبحث\s+عن\s+حل)?/i, author: 'سلطان بن مبارك بن محمد الشيباني' },
+  { pattern: /ابن\s+بور\s+في\s+الذاكرة\s+العمانية/i, author: 'سلطان بن مبارك بن محمد الشيباني' },
+  { pattern: /ابن\s+ماجد\s+والبرتغال/i, author: 'الدكتور عبد الهادي التازي' },
+  { pattern: /10\s+خطوات\s+للحج\s+المبرور|عشر\s+خطوات\s+للحج\s+المبرور/i, author: 'ماجد بن محمد بن سالم الكندي' },
+  { pattern: /أبو\s+مسلم\s+الرواحي.*حسان\s+عمان/i, author: 'د. محمد بن صالح ناصر' },
+  { pattern: /أبو\s+يعقوب\s+الوارجلاني\s+أصوليا/i, author: 'د. مصطفى بن صالح باجو' },
+  { pattern: /أبو\s+العباس\s+أحمد\s+بن\s+سعيد\s+الشماخي\s+وآراؤه\s+الأصولية/i, author: 'عيسى مصباح (أبو عبد الحميد)' },
+  { pattern: /أبو\s+بكر\s+بن\s+دريد\s+الأزدي.*أعلم\s+العلماء/i, author: 'د. هادي حسن حمودي' },
+  { pattern: /أبو\s+بكر\s+بن\s+دريد|ابن\s+دريد(?:\s+الأزدي)?/i, author: 'ابن دريد الأزدي' },
+  { pattern: /إباضية\s+جزيرة\s+جربة\s+خلال\s+العصر\s+الحديث/i, author: 'محمد المريمي' },
+
+  // Foundational classical encyclopedias
   { pattern: /منهج\s+الطالبين(?:\s+وبلاغ\s+الراغبين)?/i, author: 'خميس بن سعيد الشقصي الرستاقي' },
   { pattern: /كتاب\s+الوضع/i, author: 'أبو زكريا يحيى بن أبي بكر الجناوني' },
   { pattern: /كتاب\s+الإيضاح/i, author: 'أبو ساكن عامر بن علي الشماخي' },
   { pattern: /بدء\s+الإسلام\s+وشرائع\s+الدين|ابن\s+سلام/i, author: 'ابن سلام الإباضي' },
-  { pattern: /أبو\s+مسلم\s+الرواحي.*حسان\s+عمان/i, author: 'د. محمد بن صالح ناصر' },
   { pattern: /الجامع\s+الصغير/i, author: 'العلامة محمد بن يوسف إطفيش' },
   { pattern: /معالم\s+الفكر\s+التربوي\s+عند\s+الشيخ\s+أحمد/i, author: 'د. زايد بن سليمان الجهضمي' },
   { pattern: /قاموس\s+الشريعة/i, author: 'جميل بن خميس السعدي' },
@@ -59,7 +75,7 @@ export const HERITAGE_BOOKS_CATALOG: Array<{ pattern: RegExp; author: string }> 
   { pattern: /الأنساب/i, author: 'سلمة بن مسلم العوتبي' },
   { pattern: /الإبانة\s+في\s+اللغة/i, author: 'سلمة بن مسلم العوتبي' },
   { pattern: /تحفة\s+الأعيان\s+بسيرة\s+أهل\s+عمان/i, author: 'عبد الله بن حميد السالمي' },
-  { pattern: /جوهر\s+النظام/i, author: 'عبد الله بن حميد السالمي' },
+  { pattern: /(?<!شرح\s+|بشرح\s+)جوهر\s+النظام/i, author: 'عبد الله بن حميد السالمي' },
   { pattern: /معارج\s+الآمال/i, author: 'عبد الله بن حميد السالمي' },
   { pattern: /مشارق\s+أنوار\s+العقول/i, author: 'عبد الله بن حميد السالمي' },
   { pattern: /النيل\s+وشفاء\s+العليل|شرح\s+النيل/i, author: 'محمد بن يوسف أطفيش' },
@@ -82,119 +98,202 @@ export const HERITAGE_BOOKS_CATALOG: Array<{ pattern: RegExp; author: string }> 
   { pattern: /سنن\s+ابن\s+ماجه/i, author: 'محمد بن ماجه القزويني' },
 ];
 
+// Common Arabic Given Names & Nisbas
+const ARABIC_NAME_TOKENS = new Set([
+  'محمد', 'أحمد', 'احمد', 'محمود', 'علي', 'سالم', 'سعيد', 'خالد', 'عمر', 'عثمان',
+  'يحيى', 'يحي', 'إبراهيم', 'ابراهيم', 'صالح', 'صلاح', 'يوسف', 'سليمان', 'حمد', 'سيف',
+  'ناصر', 'ربيعة', 'ربيع', 'مصطفى', 'عمار', 'حسان', 'شيماء', 'سعاد', 'هلال', 'رضا',
+  'مسعود', 'سلطان', 'خميس', 'قاسم', 'طالب', 'فرج', 'تيسير', 'مهنى', 'عيد', 'جمعة',
+  'جميل', 'زايد', 'خلفان', 'راشد', 'حمود', 'سرحان', 'عبدالعزيز', 'عبدالرحمن', 'عبدالله',
+  'عبدالرحيم', 'عبدالكريم', 'عبدالحميد', 'عبدالقادر', 'حوحو', 'الراشدي', 'الهنائي',
+  'الهادي', 'الرواحي', 'اللمكي', 'الزيدية', 'الدغيشية', 'البوسعيدي', 'الجابري',
+  'الشيباني', 'الكندي', 'المقبالي', 'البطاشي', 'الخليلي', 'الجهضمي', 'السالمي',
+  'الشقصي', 'العوتبي', 'السعدي', 'الوارجلاني', 'الشماخي', 'باجو',
+  'شريفي', 'أطفيش', 'إطفيش', 'النووي', 'البخاري', 'مسلم', 'عيسى', 'معمر', 'باديس',
+  'القيرواني', 'دغيشي', 'زبيدي', 'المريمي', 'التازي', 'هادي', 'حمودي', 'مصباح'
+]);
+
+// Non-name words that disqualify or delimit an author candidate
+const INVALID_NAME_WORDS = new Set([
+  'ليس', 'لها', 'له', 'أن', 'ان', 'تسافر', 'محرم', 'يوجد', 'فلا', 'يجب', 'شكر',
+  'تقدير', 'عرفان', 'العام', 'التخصص', 'المناقش', 'المشرف', 'الجامعي', 'الدراسي',
+  'صفحة', 'باب', 'فصل', 'مقدمة', 'خاتمة', 'بحث', 'رسالة', 'أطروحة', 'مذكرة',
+  'كلية', 'جامعة', 'قسم', 'شعبة', 'تاريخ', 'سنة', 'سلطنة', 'عمان', 'وزارة',
+  'إشراف', 'اشراف', 'المشرف', 'مشرف', 'إعداد', 'اعداد', 'الطالب', 'الطالبة',
+  'الباحث', 'الباحثة', 'الأستاذ', 'الاستاذ', 'الدكتور', 'دكتور', 'الشيخ', 'الرقم',
+  'تخرج', 'استكمال', 'متطلبات', 'درجة', 'بكالوريوس', 'ماستر', 'ماجستير', 'دكتوراه',
+  'الذي', 'التي', 'الذين', 'حيث', 'وقد', 'وذلك', 'إلى', 'على', 'في', 'من', 'عن',
+  'جوز', 'امو', 'مل', 'دجوي', 'اهل', 'كسل', 'فسل', 'كثري', 'تعهد', 'إهداء', 'اهداء',
+  'البريمي', 'ريحم'
+]);
+
+const WORD_CORRECTION_MAP: Record<string, string> = {
+  'حممد': 'محمد',
+  'أمحد': 'أحمد',
+  'امحد': 'أحمد',
+  'صاحل': 'صالح',
+  'إمساعيل': 'إسماعيل',
+  'احلريب': 'الحربي',
+  'اهلادي': 'الهادي',
+  'اهلنائي': 'الهنائي',
+  'العماين': 'العماني',
+  'الساملي': 'السالمي',
+  'األغربي': 'الأغبري',
+  'األؼبري': 'الأغبري',
+  'إبراهم': 'إبراهيم',
+  'تيسري': 'تيسير',
+  'بني': 'بن',
+  'هالل': 'هلال',
+  'الراواحي': 'الرواحي',
+  'مجعة': 'جمعة',
+  'محدان': 'حمدان',
+  'محد': 'محمد',
+  'الشيباين': 'الشيباني',
+  'مخيس': 'خميس',
+  'مهين': 'مهنى',
+  'حى': 'يحيى',
+  'املشرف': 'المشرف',
+  'املناقش': 'المناقش',
+  'اجلامعي': 'الجامعي',
+  'احلقوق': 'الحقوق',
+  'حمفوظة': 'محفوظة',
+  'تأليص': 'تأليف',
+};
+
+// Normalizes and heals Arabic font corruptions, OCR merged tokens, and ligatures
+export function normalizeArabicNameString(text: string): string {
+  if (!text) return '';
+  let s = text
+    .normalize('NFKC')
+    .replace(/[\uF000-\uF8FF]/g, '') // Private Use characters / bullets like 
+    .replace(/[•*#~`_•|()[\]]/g, ' ')
+    .replace(/ٌ/g, 'ي')
+    .replace(/األ/g, 'الأ')
+    .replace(/سع\s+يد/g, 'سعيد')
+    .replace(/العزي\s+ز/g, 'العزيز')
+    .replace(/الر\s+حمن/g, 'الرحمن')
+    .replace(/عبد\s*هللا/g, 'عبد الله')
+    .replace(/عبدهللا/g, 'عبد الله')
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '') // tashkeel
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const words = s.split(' ');
+  const replaced = words.map((w, idx) => {
+    if (w === 'صالح' && words[idx + 1] === 'الدين') {
+      return 'صلاح';
+    }
+    return WORD_CORRECTION_MAP[w] || w;
+  });
+
+  return replaced.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+// Strict validator to ensure candidate string is authentic Arabic human name
+export function isValidArabicPersonName(name: string): boolean {
+  if (!name) return false;
+  let cleaned = name.replace(/[.*:؛\-_/\\()\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+  cleaned = cleaned
+    .replace(/^(?:د|أ)\s*[\/.]\s*/i, '')
+    .replace(/^(?:(?:الشيخ|الدكتور|الأستاذ|الباحث|الباحثة|الطالب|الطالبة|العلامة|الإمام|الفقيه|القاضي)\s+)+/gi, '')
+    .trim();
+  const words = cleaned.split(' ').filter((w) => w.length > 0);
+
+  if (words.length < 2 || words.length > 8) {
+    const singleAllowed = /^(?:أطفيش|إطفيش|السالمي|الشقصي|الكندي|الجهضمي|العوتبي|النووي|البخاري|مسلم)$/.test(cleaned);
+    if (!singleAllowed) return false;
+  }
+
+  for (const w of words) {
+    if (INVALID_NAME_WORDS.has(w)) return false;
+  }
+
+  let recognizedCount = 0;
+  for (const w of words) {
+    const bare = w.replace(/^(?:ال|و)/, '');
+    if (
+      ARABIC_NAME_TOKENS.has(w) ||
+      ARABIC_NAME_TOKENS.has(bare) ||
+      w === 'بن' || w === 'ابن' || w === 'بنت' || w === 'آل' || w === 'أبو' || w === 'أبي' ||
+      w === 'عبد' || w === 'الله' || w === 'الدين'
+    ) {
+      recognizedCount++;
+    }
+  }
+
+  return recognizedCount >= 1 && (recognizedCount / words.length) >= 0.35;
+}
+
 // Clean and normalize extracted author name
 export function cleanAuthorName(name: string): string | null {
   if (!name) return null;
 
-  let clean = stripDiacritics(name)
-    .replace(/[:؛,،\-_]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Normalize OCR reversed/merged prefixes e.g. "/و" or "و/" -> "د/ " ONLY if followed by legitimate name
-  clean = clean.replace(/^(?:[\/\\و]\s*)+(?=(?:محمد|أحمد|دكتور|صالح|جميل|سالم|علي))/i, 'د. ');
+  let res = normalizeArabicNameString(name);
 
   // Normalize academic prefixes: "د/" or "د /" -> "د. " and "أ/" or "أ /" -> "أ. "
-  clean = clean.replace(/^(?:د|أ)\s*[\/.]\s*/i, (match) => {
+  res = res.replace(/^(?:د|أ)\s*[\/.]\s*/i, (match) => {
     return match.toLowerCase().startsWith('د') ? 'د. ' : 'أ. ';
   });
 
-  // Normalize OCR letter merges / typos
-  clean = clean
-    .replace(/\bمحمرصالح\b/g, 'محمد صالح')
-    .replace(/\bحلاصرمحم\s+رصان\b/g, 'محمد صالح ناصر')
-    .replace(/\bاطفبقى\b/g, 'إطفيش')
-    .replace(/\bاطفيش\b/g, 'إطفيش');
+  // Truncate at boundary words
+  const boundaries = [
+    'إشراف', 'اشراف', 'المشرف', 'املشرف', 'مشرف', 'اسم المشرف', 'اسم املشرف',
+    'المناقش', 'املناقش', 'مناقش', 'اسم المناقش', 'اسم املناقش', 'لجنة المناقشة', 'رئيس اللجنة',
+    'العام الجامعي', 'العام اجلامعي', 'العام الدراسي', 'السنة الجامعية', 'السنة الدراسية',
+    'العام', 'السنة', 'الرقم الجامعي', 'الرقم اجلامعي', 'الرقم', 'التخصص', 'القسم', 'شعبة',
+    'بكلية', 'كلية', 'بجامعة', 'جامعة', 'بالمعهد', 'المعهد', 'بالمدرسة', 'المدرسة',
+    'بقسم', 'قسم', 'بشعبة', 'شعبة', 'في كلية', 'في جامعة', 'في قسم', 'في معهد',
+    'الفصل الدراسي', 'تاريخ المناقشة', 'الذي', 'التي', 'الذين', 'حيث',
+    'مقدم', 'ممدم', 'للدكتور', 'تحقيق', 'دراسة', 'طبعة', 'الطبعة', 'دار', 'مكتبة', 'مركز',
+    'المجلد', 'الجزء', 'حقوق', 'جميع الحقوق', 'رقم الإيداع', 'ردمك', 'isbn',
+    '20', '14', 'منذ', 'وهو', 'وهي'
+  ];
 
-  // Strip secondary/excessive praise adjectives while preserving primary title (العلامة, الشيخ, الإمام, الدكتور, الأستاذ)
-  clean = clean.replace(/^(?:المحقق|المدقق|المحتق|بقية\s+السلف|قطب\s+الأئمة|حجة\s+الإسلام|الفقيه)\s+/gi, '');
-  clean = clean.replace(/^(?:المحقق|المدقق|المحتق|بقية\s+السلف|قطب\s+الأئمة|حجة\s+الإسلام|الفقيه)\s+/gi, '');
-
-  // Remove common role prefixes if still attached at start
-  clean = clean.replace(/^(تأليف|المؤلف|تصنيف|المصنف|إعداد|بقلم|جمع وتأليف|جمع وترتيب|صنعه)\s*[:/؛\-]?\s*/i, '').trim();
-
-  // Filter out preface / introduction contributors (e.g. Mufti, presenter, taqriz)
-  if (/المفتي\s+العام|مفتي\s+عام|سماحة\s+المفتي/i.test(clean)) {
-    return null;
+  for (const b of boundaries) {
+    const regex = new RegExp(`(?:^|\\s)${b}(?:\\s|$)`, 'i');
+    const m = res.match(regex);
+    if (m && m.index !== undefined && m.index > 2) {
+      res = res.substring(0, m.index).trim();
+    }
   }
 
   // Stop at trailing eulogies or honorific blessings
   const eulogies = [
     'رحمه الله تعالى', 'رحمه الله', 'رضي الله عنه', 'رضي الله عنهم',
     'حفظه الله تعالى', 'حفظه الله', 'عفا الله عنه', 'نفعنا الله به',
-    'قدس سره', 'وفاته', 'توفي سنة', 'توفي عام', 'الابتاضى', 'الإباضي', 'الوهبي'
+    'قدس سره', 'وفاته', 'توفي سنة', 'توفي عام'
   ];
   for (const eulogy of eulogies) {
-    const idx = clean.indexOf(eulogy);
+    const idx = res.indexOf(eulogy);
     if (idx !== -1) {
-      clean = clean.substring(0, idx).trim();
+      res = res.substring(0, idx).trim();
     }
   }
 
-  // Stop at trailing publisher, edition, or catalog markers
-  const stopWords = [
-    'تحقيق', 'دراسة', 'تقديم', 'تخريج', 'طبعة', 'الطبعة', 'دار', 'مكتبة',
-    'مركز', 'المجلد', 'الجزء', 'حقوق', 'جميع الحقوق', 'رقم الإيداع', 'ردمك', 'isbn'
-  ];
+  // Remove common role prefixes if still attached at start
+  res = res.replace(/^(?:تأليف|المؤلف|تصنيف|المصنف|إعداد\s+الطالبة|إعداد\s+الطالب|إعداد\s+الباحث|إعداد\s+الباحثة|إعداد|الطالب|الطالبة|الباحث|الباحثة|بقلم|جمع وتأليف|جمع وترتيب|صنعه|اف\s+الأستاذ(?:\s+إشر)?|إشراف\s+الأستاذ|إشراف|ناقشها\s+الأستاذ|ناقشها\s+الطالب|ناقشها\s+الباحث|ناقشها\s+الدكتور|ناقشها|الأستاذ\s+الدكتور|الأستاذ|الاستاذ)\s*[:/؛\-]?\s*/gi, '').trim();
 
-  for (const stop of stopWords) {
-    const idx = clean.indexOf(stop);
-    if (idx !== -1) {
-      clean = clean.substring(0, idx).trim();
-    }
-  }
+  // Strip numbers (student IDs, years) from name
+  res = res.replace(/[\d\u0660-\u0669]+/g, ' ').replace(/\s+/g, ' ').trim();
+  res = res.replace(/[:؛,،\-_/\\.]/g, ' ').replace(/\s+/g, ' ').trim();
+  res = normalizeArabicNameString(res);
 
-  if (isBlacklistedAuthor(clean)) {
+  if (isBlacklistedAuthor(res)) {
     return null;
   }
 
-  // Author identity normalization for classical & academic authors
-  if (/^محمد\s+بن\s+يوسف\s+(?:إطفيش|أطفيش|اطفيش|اطفبقى)/i.test(clean)) {
+  // Specific scholar normalization
+  if (/^محمد\s+بن\s+يوسف\s+(?:إطفيش|أطفيش|اطفيش)/i.test(res)) {
     return 'العلامة محمد بن يوسف إطفيش';
   }
-  if (/^محمد\s+(?:بن\s+)?صالح\s+ناصر/i.test(clean)) {
+  if (/^محمد\s+(?:بن\s+)?صالح\s+ناصر/i.test(res)) {
     return 'د. محمد بن صالح ناصر';
   }
 
-  // Strict validation: Reject gibberish words, OCR noise, and non-author phrases
-  const rawWords = clean.split(/\s+/).filter((w) => w.length > 0);
-  
-  // Reject long merged gibberish tokens (e.g. "عمينبتيميربعلنسعرر")
-  if (rawWords.some((w) => w.length > 12)) {
-    return null;
+  if (isValidArabicPersonName(res)) {
+    return res;
   }
 
-  // Reject reversed words or non-author noise tokens
-  const gibberishTokens = [
-    'هللاو', 'قفوملا', 'هقفلا', 'فينصت', 'ملقب', 'ةعبط', 'عمى', 'تمير', 'سعر', 'سمر', 'ممين', 'مين',
-    'عمينبتيميربعلنسعرر', 'والله الموفق', 'تم بحمد الله', 'بالله التوفيق'
-  ];
-  if (gibberishTokens.some((tok) => clean.includes(tok))) {
-    return null;
-  }
-
-  // Author name must consist of at least 2 words (e.g. "محمد بن صالح" or "الشيخ أحمد")
-  // Or 1 word ONLY if it is an established single classical scholar nisba
-  if (rawWords.length < 2) {
-    const isSingleScholar = /^(?:أطفيش|إطفيش|السالمي|الشقصي|الكندي|الجهضمي|العوتبي|البخاري|مسلم|النووي|الشافعي)$/.test(clean);
-    if (!isSingleScholar) {
-      return null;
-    }
-  }
-
-  // Reject invalid "د." prefixes not followed by a real name
-  if (clean.startsWith('د. ')) {
-    const afterDoc = clean.slice(3).trim();
-    const docWords = afterDoc.split(/\s+/).filter((w) => w.length > 0);
-    if (docWords.length < 2) {
-      return null;
-    }
-  }
-
-  // Author names in Arabic typically range between 5 and 50 characters
-  if (clean.length >= 5 && clean.length <= 50) {
-    return clean;
-  }
   return null;
 }
 
@@ -203,67 +302,58 @@ export function reverseString(s: string): string {
   return s.split('').reverse().join('');
 }
 
-// Reverse each word's characters individually (handles reversed OCR character streams)
+// Reverse each word's characters individually
 export function reverseWords(s: string): string {
   return s.split(/\s+/).map((w) => reverseString(w)).join(' ');
 }
 
 /**
- * Extracts author from normalized text stream (forward pattern, reverse pattern, honorifics)
+ * Extracts author from normalized text stream
  */
 export function extractAuthorFromText(rawText: string): string | null {
   if (!rawText) return null;
 
-  // Test both with rawText and with diacritics stripped
-  const cleanedText = stripDiacritics(rawText)
-    .replace(/[\u200B-\u200F\uFEFF]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const cleanedText = normalizeArabicNameString(rawText);
 
-  // 1. Direct matching of doctor author name
-  if (/محمرصالح\s+ناصر|حلاصرمحم\s+رصان|محمد\s+بن\s+صالح\s+ناصر|محمد\s+صالح\s+ناصر/i.test(cleanedText)) {
+  // 1. Direct scholar matches
+  if (/محمد\s+بن\s+صالح\s+ناصر|محمد\s+صالح\s+ناصر/i.test(cleanedText)) {
     return 'د. محمد بن صالح ناصر';
   }
 
-  // 2. Academic Pattern with prefixes like "د/" or "د." or "أ/" or "أ." or "دكتور"
-  const academicPattern = /(?:تأليف|المؤلف|تصنيف|المصنف|بقلم|إعداد)?\s*[:/؛\-]?\s*(?:د|أ|دكتور|أستاذ)\s*[\/.]\s*([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){1,4})/;
-  const mAcad = cleanedText.match(academicPattern);
-  if (mAcad && mAcad[1]) {
-    const candidate = cleanAuthorName(`د. ${mAcad[1]}`);
-    if (candidate) return candidate;
-  }
+  // 2. Primary Academic Researcher / Student Patterns
+  const studentPatterns = [
+    /(?:إعداد\s+الطالبة|إعداد\s+الطالب|إعداد\s+الباحثة|إعداد\s+الباحث|اسم\s+الطالبة|اسم\s+الطالب|اسم\s+الباحثة|اسم\s+الباحث|الطالبة|الطالب|الباحثة|الباحث)\s*[:/؛\-]?\s*([^\n\r]+?)(?=(?:إشراف|المشرف|اسم\s+المشرف|المناقش|اسم\s+المناقش|العام|السنة|الرقم|التخصص|القسم|مقدم|ممدم|$))/i,
+    /(?:مذكرة\s+مكملة\s+لنيل\s+شهادة\s+الماستر|بحث\s+تخرج|رسالة\s+ماجستير|أطروحة\s+دكتوراه)[\s\S]*?(?:إعداد\s+الطالبة|إعداد\s+الطالب|إعداد)\s*[:/؛\-]?\s*([^\n\r]+?)(?=(?:إشراف|المشرف|الرقم|العام|$))/i,
+    /(?:إعداد)\s*[:/؛\-]?\s*([^\n\r]+?)(?=(?:إشراف|المشرف|الرقم|الرقم\s+الجامعي|العام|$))/i,
+  ];
 
-  // 3. Pattern: Honorific immediately preceding reverse label: "(الشيخ ... | الدكتور ... | د/ ...) : تأليف / تصنيف"
-  const revHonPattern = /(?:^|[.\n\r،؛])\s*(?:.*?\s+)?((?:الشيخ|شيخ|الدكتور|دكتور|د\s*[\/.]|الأستاذ|أستاذ|أ\s*[\/.]|الإمام|إمام|العلامة|علامة|القاضي)\s+[\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){1,5})\s*:\s*(?:تأليف|المؤلف|تصنيف|المصنف|إعداد|بقلم)/;
-  const mRevHon = cleanedText.match(revHonPattern);
-  if (mRevHon && mRevHon[1]) {
-    const candidate = cleanAuthorName(mRevHon[1]);
-    if (candidate) return candidate;
-  }
-
-  // 4. Reverse name pattern: Requires genuine Arabic name markers (contains "بن" or "ابن" or "أبو")
-  const revNamePattern = /((?:[\u0600-\u06FF]{2,}\s+)*(?:بن|ابن|أبو)\s+[\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){1,3})\s*:\s*(?:تأليف|المؤلف|تصنيف|المصنف|إعداد|بقلم)/;
-  const mRevName = cleanedText.match(revNamePattern);
-  if (mRevName && mRevName[1]) {
-    const candidate = cleanAuthorName(mRevName[1]);
-    if (candidate) return candidate;
-  }
-
-  // 5. Chained Classical Epithet Pattern: "تصنيف / تأليف (الإمام المحقق ...)* [اسم المؤلف]"
-  const chainedPattern = /(?:تصنيف|تأليف|المصنف|المؤلف|بقلم)\s*[:/؛\-]?\s*(?:(?:الامام|الإمام|المحقق|المدقق|المحتق|بقية\s+السلف|قطب\s+الأئمة|قطب\s+الائمة|حجة\s+الإسلام|حجة\s+الاسلام|الفقيه)\s+)*((?:(?:العلامة|الشيخ|الدكتور|الأستاذ|الإمام)\s+)?[\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){1,6})/i;
-  const mChained = cleanedText.match(chainedPattern);
-  if (mChained && mChained[1]) {
-    if (!/المفتي\s+العام|مفتي\s+عام/i.test(cleanedText)) {
-      const candidate = cleanAuthorName(mChained[1]);
-      if (candidate) return candidate;
+  for (const pat of studentPatterns) {
+    const m = cleanedText.match(pat);
+    if (m && m[1]) {
+      const cand = cleanAuthorName(m[1]);
+      if (cand) return cand;
     }
   }
 
-  // 6. Pattern: Honorific markers like "للإمام / للشيخ العلامة / للقاضي / للدكتور [Name]"
-  const honorificPattern = /(?:للعلامة|للإمام|للقاضي|للشيخ\s+العلامة|للشيخ|للدكتور|لدكتور)\s+([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){1,5})/;
-  const mHon = cleanedText.match(honorificPattern);
-  if (mHon && mHon[1]) {
-    const candidate = cleanAuthorName(mHon[1]);
+  // 3. Classical Pattern: "تأليف / تصنيف / بقلم [اسم المؤلف]"
+  const classicalPatterns = [
+    /(?:تصنيف|تأليف|المصنف|المؤلف|بقلم|صنعه|أدعية\s+الشيخ)\s*[:/؛\-]?\s*([^\n\r]+?)(?=(?:تحقيق|دراسة|طبعة|دار|مكتبة|العام|$))/i,
+    /(?:للعلامة|للشيخ\s+العلامة|للشيخ|للإمام|للدكتور)\s+([^\n\r]+?)(?=(?:تحقيق|طبعة|دار|$))/i
+  ];
+
+  for (const pat of classicalPatterns) {
+    const m = cleanedText.match(pat);
+    if (m && m[1]) {
+      const cand = cleanAuthorName(m[1]);
+      if (cand) return cand;
+    }
+  }
+
+  // 4. Reverse title page layout: "[Author Name] : تأليف / تصنيف"
+  const revHonPattern = /(?:^|[.\n\r،؛])\s*(?:.*?\s+)?((?:الشيخ|شيخ|الدكتور|دكتور|الأستاذ|أستاذ|الإمام|إمام|العلامة|علامة|القاضي)\s+[\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){1,5})\s*:\s*(?:تأليف|المؤلف|تصنيف|المصنف|إعداد|بقلم)/;
+  const mRevHon = cleanedText.match(revHonPattern);
+  if (mRevHon && mRevHon[1]) {
+    const candidate = cleanAuthorName(mRevHon[1]);
     if (candidate) return candidate;
   }
 
@@ -271,17 +361,71 @@ export function extractAuthorFromText(rawText: string): string | null {
 }
 
 /**
- * Extracts author from distinct line items (handles multi-line title pages: line 1 "تأليف" / "تصنيف", line 2 "[Author Name]")
+ * Extracts author from distinct line items (handles multi-line title pages)
  */
 export function extractAuthorFromLines(lines: string[]): string | null {
   if (!lines || lines.length === 0) return null;
 
-  const roleMarkers = ['تأليف', 'المؤلف', 'تصنيف', 'المصنف', 'إعداد', 'بقلم', 'صنعه', 'جمع وترتيب', 'جمع وتأليف'];
-  
+  // 1. Primary Academic Researcher / Student Patterns: Check item-by-item first
   for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i].trim();
-    const line = stripDiacritics(rawLine).replace(/\s+/g, ' ');
+    const normItem = normalizeArabicNameString(lines[i]);
+    if (/^(?:إعداد|إعداد\s+الطالب|إعداد\s+الطالبة|إعداد\s+الباحث|إعداد\s+الباحثة|اسم\s+الطالب|اسم\s+الباحث|الطالب|الباحث)\s*[:/؛\-]?$/i.test(normItem)) {
+      const parts: string[] = [];
+      for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+        const rawNext = lines[j];
+        const normNext = normalizeArabicNameString(rawNext);
+        if (/(?:الرقم|الرقم\s+الجامعي|اجلامعي|العام|السنة|التخصص|القسم)/i.test(normNext)) break;
+        if (/(?:إشراف|المشرف|املشرف|مشرف)/i.test(normNext)) break;
+        if (/^[\d\s\-_–—]+$/.test(rawNext)) break;
+        if (/^[*#:؛.،•|]+$/.test(rawNext.trim())) continue;
+        if (/(?:اف\s+الأستاذ|إشر)/i.test(normNext)) continue;
 
+        parts.push(rawNext);
+      }
+
+      if (parts.length > 0) {
+        // 1. Check if first part is a complete valid name (e.g. "ناصر ربيعة" before supervisor "رضا حوحو")
+        const firstSingle = cleanAuthorName(parts[0]);
+        if (
+          firstSingle &&
+          isValidArabicPersonName(firstSingle) &&
+          firstSingle.split(' ').length >= 2 &&
+          !firstSingle.endsWith('بن') &&
+          !firstSingle.endsWith('بنت') &&
+          !/(?:^|\s)(?:سع|العزي|الر)(?:\s|$)/.test(firstSingle)
+        ) {
+          return firstSingle;
+        }
+
+        // 2. Heal broken multi-part syllables (e.g. "سع" + "يد", "عمر بن عبد العزي" + "ز")
+        const joined = parts.join(' ');
+        const healedCand = cleanAuthorName(joined);
+        if (healedCand && isValidArabicPersonName(healedCand) && !/(?:^|\s)(?:سع|العزي|الر)(?:\s|$)/.test(healedCand)) {
+          return healedCand;
+        }
+
+        for (const p of parts) {
+          const single = cleanAuthorName(p);
+          if (single && isValidArabicPersonName(single) && single.split(' ').length >= 2) {
+            return single;
+          }
+        }
+      }
+    }
+
+    const inlineMatch = normItem.match(/^(?:إعداد\s+الطالب|إعداد\s+الطالبة|إعداد|اسم\s+الطالب|اسم\s+الباحث|الطالب|الباحث)\s*[:/؛\-]\s*(.+)$/i);
+    if (inlineMatch && inlineMatch[1]) {
+      const cand = cleanAuthorName(inlineMatch[1]);
+      if (cand && isValidArabicPersonName(cand)) {
+        return cand;
+      }
+    }
+  }
+
+  // 2. Classical Role Markers
+  const roleMarkers = ['تأليف', 'المؤلف', 'تصنيف', 'المصنف', 'إعداد', 'بقلم', 'صنعه', 'جمع وترتيب', 'جمع وتأليف'];
+  for (let i = 0; i < lines.length; i++) {
+    const line = normalizeArabicNameString(lines[i]);
     for (const marker of roleMarkers) {
       if (
         line === marker ||
@@ -292,17 +436,14 @@ export function extractAuthorFromLines(lines: string[]): string | null {
         line.startsWith(`${marker}:`) ||
         line.startsWith(`${marker} :`)
       ) {
-        // If the author is on the same line after the marker: e.g. "تأليف: د. محمد بن صالح ناصر"
         const inlineRemainder = line.replace(new RegExp(`^${marker}\\s*[:/؛\\-]?\\s*`), '').trim();
         if (inlineRemainder.length >= 3 && !isBlacklistedAuthor(inlineRemainder)) {
           const cleaned = cleanAuthorName(inlineRemainder);
           if (cleaned) return cleaned;
         }
 
-        // Examine subsequent non-empty lines (up to 4 lines ahead)
         for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-          const nextRaw = lines[j].trim();
-          const next = stripDiacritics(nextRaw);
+          const next = normalizeArabicNameString(lines[j]);
           if (
             next.length >= 3 &&
             !isBlacklistedAuthor(next) &&
@@ -316,6 +457,7 @@ export function extractAuthorFromLines(lines: string[]): string | null {
       }
     }
   }
+
   return null;
 }
 
@@ -416,49 +558,35 @@ export function isValidArabicSentence(text: string): boolean {
   const clean = normalizeArabicUnicode(text);
   if (clean.length < 35) return false;
 
-  // Check character composition
   const arabicLetters = clean.match(/[\u0600-\u06FF]/g) || [];
   const latinLetters = clean.match(/[a-zA-Z]/g) || [];
   const digits = clean.match(/[0-9\u0660-\u0669]/g) || [];
   const nonSpaceLength = clean.replace(/\s+/g, '').length;
 
   if (nonSpaceLength === 0) return false;
-
-  // Arabic letters must dominate (> 75% of non-space characters)
   if (arabicLetters.length / nonSpaceLength < 0.75) return false;
-
-  // Foreign noise must be low
   if (latinLetters.length / nonSpaceLength > 0.10) return false;
   if (digits.length / nonSpaceLength > 0.15) return false;
 
-  // Words breakdown
   const words = clean.split(/\s+/).filter((w) => w.length > 0);
   if (words.length < 6) return false;
 
-  // Reject text with words starting with Taa Marbuta (ة) - this indicates character-reversed OCR
   const taaMarbutaStartCount = words.filter((w) => w.startsWith('ة')).length;
   if (taaMarbutaStartCount > 0) return false;
 
-  // Reject text with multiple words ending in 'ال' (reversed definite article e.g. باتكلا, ةبتكملا)
   const reversedAlCount = words.filter((w) => w.length >= 4 && w.endsWith('ال')).length;
   if (reversedAlCount >= 2) return false;
 
-  // Reject text where average word length is abnormal (disjointed single letters or merged strings)
   const totalWordChars = words.reduce((acc, w) => acc + w.length, 0);
   const avgWordLen = totalWordChars / words.length;
   if (avgWordLen < 2.5 || avgWordLen > 9.0) return false;
 
-  // Reject if too many isolated 1-letter words (excluding valid prepositions 'و')
   const singleLetters = words.filter((w) => w.length === 1 && w !== 'و').length;
   if (singleLetters / words.length > 0.15) return false;
 
-  // Reject words with repeated single consonants >= 3 times (e.g. "رررر", "سسسس")
   if (words.some((w) => /(.)\1\1/.test(w))) return false;
-
-  // Reject very long merged nonsense tokens
   if (words.some((w) => w.length > 14)) return false;
 
-  // Check for genuine vocabulary matches
   let recognizedCount = 0;
   for (const w of words) {
     const bare = w.replace(/^(?:ال|و|ف|ب|ل|ك)/, '');
@@ -467,13 +595,11 @@ export function isValidArabicSentence(text: string): boolean {
     }
   }
 
-  // At least 2 recognized genuine functional/domain Arabic words required
   return recognizedCount >= 2;
 }
 
 /**
- * High-Fidelity Synthesizer: Produces an eloquent, contextually accurate academic summary
- * based on verified Book Title, Author, and Academic Domain.
+ * High-Fidelity Synthesizer: Produces an eloquent academic summary
  */
 export function synthesizeBookSummary(title: string, author?: string | null, categoryName?: string | null): string {
   const cleanTitle = (title || 'الكتاب').trim();
@@ -504,14 +630,12 @@ export function synthesizeBookSummary(title: string, author?: string | null, cat
 
 /**
  * Extracts introductory / domain description excerpt from the document
- * Strictly enforces that ONLY authentic, coherent Arabic prose is returned.
  */
 export function extractIntroductionExcerpt(allText: string): { introExcerpt: string | null; introFull: string } {
   if (!allText) return { introExcerpt: null, introFull: '' };
 
   const normalized = normalizeArabicUnicode(allText);
 
-  // Search for preface / introduction markers
   const introMatch = normalized.match(/(?:المقدمة|مقدمة الكتاب|تقديم|تمهيد|فاتحة الكتاب|أما بعد)([\s\S]{80,500})/i);
   if (introMatch && introMatch[1]) {
     const candidate = introMatch[1].trim();
@@ -524,7 +648,6 @@ export function extractIntroductionExcerpt(allText: string): { introExcerpt: str
     }
   }
 
-  // Check general snippet ONLY if it is strictly valid, coherent Arabic prose
   const cleanSnippet = normalized.slice(0, 250).trim();
   if (cleanSnippet.length > 50 && isValidArabicSentence(cleanSnippet)) {
     return {
@@ -545,7 +668,6 @@ export function extractIntroductionExcerpt(allText: string): { introExcerpt: str
 export function extractAuthorFromFolderOrFile(name: string): string | null {
   if (!name) return null;
 
-  // 1. Explicit pattern: "العنوان - اسم المؤلف"
   if (name.includes(' - ')) {
     const parts = name.split(' - ');
     if (parts.length >= 2) {
@@ -557,14 +679,12 @@ export function extractAuthorFromFolderOrFile(name: string): string | null {
     }
   }
 
-  // 2. Explicit pattern: "(تأليف فلان)" or "(بقلم فلان)" or "(إعداد فلان)" or "(تصنيف فلان)"
   const authorInParen = name.match(/\((?:تأليف|المؤلف|تصنيف|المصنف|بقلم|إعداد|للشيخ|للإمام|للدكتور)\s*([^\)]+)\)/i);
   if (authorInParen && authorInParen[1]) {
     const cleaned = cleanAuthorName(authorInParen[1]);
     if (cleaned) return cleaned;
   }
 
-  // 3. Brackets pattern: "[تأليف فلان]" or "[إعداد فلان]"
   const bracketMatch = name.match(/\[(?:تأليف|المؤلف|تصنيف|المصنف|إعداد|بقلم)\s*([^\]]+)\]/i);
   if (bracketMatch && bracketMatch[1]) {
     const candidate = bracketMatch[1].trim();
@@ -584,14 +704,15 @@ export interface ExtractedDocumentMetadata {
   summary: string | null;
   numPages?: number | null;
   pageFound: number | null;
-  method: 'heritage_catalog' | 'folder_heuristics' | 'page_1' | 'page_2' | 'page_3' | 'page_4' | 'page_5' | 'page_6' | 'page_7' | 'page_8' | 'epub_creator' | 'pdf_metadata' | null;
+  method: 'heritage_catalog' | 'folder_heuristics' | 'page_1' | 'page_2' | 'page_3' | 'page_4' | 'intro_signature' | 'epub_creator' | 'pdf_metadata' | null;
 }
 
 /**
  * Inspects a PDF document strictly page-by-page:
- * - Page 1 -> if not found -> Page 2 -> ... -> Page 8.
- * - Extracts and verifies title and introductory excerpt from pages 1-8.
- * - If author is NOT found on any of pages 1-8, returns null (leaving author empty).
+ * - Pages 1-3 for Title and Author
+ * - Skips Dedications and Acknowledgments
+ * - Prioritizes Academic Researcher / Student over Supervisor
+ * - Checks introduction signature at pages 4-8 as fallback
  */
 async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMetadata> {
   let author: string | null = null;
@@ -607,10 +728,10 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
     numPages = doc.numPages;
 
-    const maxPagesToCheck = Math.min(8, doc.numPages);
+    const maxTitlePages = Math.min(3, doc.numPages);
 
-    // Sequential Inspection: Pages 1 through 8
-    for (let pageNum = 1; pageNum <= maxPagesToCheck; pageNum++) {
+    // 1. Inspect Title Pages (Pages 1 through 3)
+    for (let pageNum = 1; pageNum <= maxTitlePages; pageNum++) {
       try {
         const page = await doc.getPage(pageNum);
         const textContent = await page.getTextContent();
@@ -620,39 +741,35 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
         const pageStr = rawItems.join(' ').trim();
 
         if (pageStr.length > 0) {
-          // Append raw forward page text only; avoid polluting the document excerpt buffer with reversed words
           combinedPagesText += ` ${pageStr}`;
-          const decodedStr = reverseWords(pageStr);
 
-          // If author not found yet, inspect this page strictly
-          if (!author) {
-            // Attempt 1: Standard forward text stream on this page (most reliable)
-            let cand = extractAuthorFromText(pageStr);
+          // Check if page is dedication or acknowledgments: skip author extraction on such pages
+          const isDedicationOrAck = /(?:الإهداء|اهداء|شكر\s+وتقدير|شكر\s+وعرفان)/i.test(pageStr) &&
+            !/(?:كلية|جامعة|بحث\s+تخرج|مذكرة|دراسة\s+فقهية|تأليف|المؤلف)/i.test(pageStr);
 
-            // Attempt 2: Multi-line inspection on natural lines (e.g. line 1: "تأليف", line 2: "الاسم")
-            if (!cand && rawItems.length > 1) {
-              cand = extractAuthorFromLines(rawItems);
+          if (!author && !isDedicationOrAck) {
+            let cand = extractAuthorFromLines(rawItems);
+            if (!cand) {
+              cand = extractAuthorFromText(pageStr);
             }
 
-            // Attempt 3: Reversed-word stream ONLY if reversed OCR marker keywords exist on page
-            const hasReversedMarkers = /(?:فينصت|ملقب|هقفلا|ةعبط|فيلأت|حلاصرمحم|ىقبفطا)/i.test(pageStr);
-            if (!cand && hasReversedMarkers) {
-              cand = extractAuthorFromText(decodedStr);
-              if (!cand && rawItems.length > 1) {
-                cand = extractAuthorFromLines(rawItems.map((s: string) => reverseWords(s)));
+            // Check reversed text stream ONLY if reversed markers exist
+            if (!cand && /(?:فينصت|ملقب|هقفلا|ةعبط|فيلأت|ريحم)/i.test(pageStr)) {
+              cand = extractAuthorFromLines(rawItems.map((s: string) => reverseWords(s)));
+              if (!cand) {
+                cand = extractAuthorFromText(reverseWords(pageStr));
               }
             }
 
-            if (cand && !isBlacklistedAuthor(cand)) {
+            if (cand && !isBlacklistedAuthor(cand) && isValidArabicPersonName(cand)) {
               author = cand;
               pageFound = pageNum;
               method = `page_${pageNum}` as any;
             }
           }
 
-          // Check for document title on pages 1-5
-          if (!title && rawItems.length >= 2 && pageNum <= 5) {
-            const candTitle = extractTitleFromPageText(pageStr, rawItems) || extractTitleFromPageText(decodedStr);
+          if (!title && rawItems.length >= 2 && pageNum <= 3) {
+            const candTitle = extractTitleFromPageText(pageStr, rawItems);
             if (candTitle && candTitle.split(' ').length >= 2 && !isInvalidBookTitle(candTitle)) {
               title = candTitle;
             }
@@ -661,14 +778,87 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
       } catch {}
     }
 
-    // Strict Fallback: Check PDF metadata info ONLY IF it is not an institutional/tool blacklist
+    // 2. Comprehensive Introduction, Thesis Defense, and Preface Scanner (Pages 4 through 12)
+    // Runs if author not found, or if author was found from uncertain/reversed text on pages 3-4
+    if (!author || method === 'page_3' || method === 'page_4') {
+      for (let pageNum = 4; pageNum <= Math.min(12, doc.numPages); pageNum++) {
+        try {
+          const page = await doc.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const rawItems = textContent.items
+            .map((item: any) => item.str || '')
+            .filter((s: string) => s.trim().length > 0);
+          const pageStr = rawItems.join(' ').trim();
+          combinedPagesText += ` ${pageStr}`;
+
+          const normalText = pageStr;
+          const revText = reverseWords(pageStr);
+
+          let foundIntroAuthor: string | null = null;
+
+          for (const text of [normalText, revText]) {
+            // Thesis defense / presentation declaration (e.g. "أطروحة الدكتوراه التي ناقشها الأستاذ محمد المريمي بكلية...")
+            const thesisPat = /(?:أطروحة|رسالة)\s+(?:الدكتوراه|الماجستير)?\s*التي\s+(?:ناقشها|أعدها|قدمها)\s+(?:الأستاذ|الباحث|الطالب|الدكتور)?\s*([^\n،.,؛:]{3,50})/i;
+            const mThesis = text.match(thesisPat);
+            if (mThesis && mThesis[1]) {
+              const cand = cleanAuthorName(mThesis[1]);
+              if (cand && isValidArabicPersonName(cand)) {
+                foundIntroAuthor = cand;
+                break;
+              }
+            }
+
+            // Preface author statement (e.g. "والمؤلف وهو ابن جزيرة جربة" or "والمؤلف هو فلان")
+            const authorIntroPat = /(?:والمؤلف|المؤلف)\s+(?:وهو|هو)\s+([^\n،.,؛:]{3,40})/i;
+            const mAuth = text.match(authorIntroPat);
+            if (mAuth && mAuth[1]) {
+              const cand = cleanAuthorName(mAuth[1]);
+              if (cand && isValidArabicPersonName(cand)) {
+                foundIntroAuthor = cand;
+                break;
+              }
+            }
+
+            // Introduction conclusion signature (e.g. "كتبه فلان ... كلية العلوم الشرعية")
+            const sigMatch = text.match(/([^\n\r.،؛]{3,40}?)\s*(?:كلية\s+العلوم\s+الشرعية|جامعة\s+[\u0600-\u06FF]+|كلية\s+[\u0600-\u06FF]+)/i);
+            if (sigMatch && sigMatch[1]) {
+              const cand = cleanAuthorName(sigMatch[1]);
+              if (cand && isValidArabicPersonName(cand)) {
+                foundIntroAuthor = cand;
+                break;
+              }
+            }
+
+            // Classical treatise author introduction
+            const classicalIntroPat = /(?:أما\s+بعد\s+فيقول|يقول\s+العبد\s+الفقير|قال\s+العبد\s+الضعيف|يقول\s+راجي\s+عفو\s+ربه)\s+([^\n،.,؛:]{3,40})/i;
+            const mClass = text.match(classicalIntroPat);
+            if (mClass && mClass[1]) {
+              const cand = cleanAuthorName(mClass[1]);
+              if (cand && isValidArabicPersonName(cand)) {
+                foundIntroAuthor = cand;
+                break;
+              }
+            }
+          }
+
+          if (foundIntroAuthor) {
+            author = foundIntroAuthor;
+            pageFound = pageNum;
+            method = 'intro_signature';
+            break;
+          }
+        } catch {}
+      }
+    }
+
+    // 3. Fallback: Check PDF metadata info ONLY IF it is not blacklisted
     if (!author) {
       try {
         const meta = await doc.getMetadata();
         const metaAuthor = (meta.info as any)?.Author;
         if (metaAuthor && typeof metaAuthor === 'string') {
           const clean = cleanAuthorName(metaAuthor);
-          if (clean && !isBlacklistedAuthor(clean)) {
+          if (clean && !isBlacklistedAuthor(clean) && isValidArabicPersonName(clean)) {
             author = clean;
             method = 'pdf_metadata';
           }
@@ -693,7 +883,7 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
       title: null,
       introText: null,
       summary: null,
-      numPages: null,
+      numPages: numPages || null,
       pageFound: null,
       method: null,
     };
@@ -701,7 +891,7 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
 }
 
 /**
- * Extracts metadata from an EPUB document via Dublin Core metadata (<dc:creator>, <dc:title>, <dc:description>)
+ * Extracts metadata from an EPUB document via Dublin Core metadata
  */
 async function inspectEpubDocument(filePath: string): Promise<ExtractedDocumentMetadata> {
   try {
@@ -755,15 +945,6 @@ async function inspectEpubDocument(filePath: string): Promise<ExtractedDocumentM
 
 /**
  * High-Precision Multi-Strategy Document Metadata Resolver
- *
- * Strategies in priority order:
- * 1. Classical Heritage & Reference Knowledge Base (authoritative exact title/author matching)
- * 2. Folder name heuristics (bracketed names, parenthesized authors, epithets)
- * 3. Strict Sequential Page Inspection: Page 1 -> Page 2 -> Page 3 -> Page 4
- * 4. EPUB Dublin Core metadata
- *
- * Strict Fallback:
- * If no author is found on any of the 4 pages, returns null (empty author). Never fabricates an author.
  */
 export async function extractDocumentMetadata(
   filePath: string,
@@ -772,8 +953,7 @@ export async function extractDocumentMetadata(
 ): Promise<ExtractedDocumentMetadata> {
   const searchTarget = `${context?.title || ''} ${context?.folderName || ''} ${path.basename(filePath)}`.trim();
 
-  // 1. Authoritative Strategy: Classical Heritage Books Catalog
-  // Provides 100% uniform author resolution across all multi-volume series (Parts 1..N)
+  // 1. Authoritative Strategy: Classical Heritage & Reference Catalog
   let catalogAuthor: string | null = null;
   for (const item of HERITAGE_BOOKS_CATALOG) {
     if (item.pattern.test(searchTarget)) {
@@ -782,7 +962,7 @@ export async function extractDocumentMetadata(
     }
   }
 
-  // 2. Document Content Strategy: Inspect actual document content (Pages 1-8)
+  // 2. Document Content Strategy: Inspect actual document content
   let docMeta: ExtractedDocumentMetadata;
   if (format === 'epub') {
     docMeta = await inspectEpubDocument(filePath);
@@ -790,7 +970,6 @@ export async function extractDocumentMetadata(
     docMeta = await inspectPdfDocument(filePath);
   }
 
-  // If authoritative heritage catalog matched, it guarantees 100% series uniformity!
   if (catalogAuthor) {
     return {
       author: catalogAuthor,
@@ -803,7 +982,6 @@ export async function extractDocumentMetadata(
     };
   }
 
-  // If document content has an authentic author on pages 1-8 that passed strict validation
   if (docMeta.author && !isBlacklistedAuthor(docMeta.author)) {
     return docMeta;
   }
@@ -817,9 +995,6 @@ export async function extractDocumentMetadata(
     }
   }
 
-  // 4. Strict Fallback:
-  // If author is NOT found in catalog, document pages, nor explicitly marked in folder,
-  // leave author strictly null / empty. Never guess or fabricate an author name!
   return {
     author: folderAuthor || null,
     title: docMeta.title,
@@ -832,7 +1007,7 @@ export async function extractDocumentMetadata(
 }
 
 /**
- * Backward compatibility wrapper for extractAuthorFromDocument
+ * Backward compatibility wrapper
  */
 export async function extractAuthorFromDocument(
   filePath: string,
@@ -848,11 +1023,11 @@ export async function extractAuthorFromDocument(
     page_2: 'pages_content',
     page_3: 'pages_content',
     page_4: 'pages_content',
+    intro_signature: 'pages_content',
     pdf_metadata: 'pages_content',
   };
   return {
     author: meta.author,
-    method: (meta.method ? methodMap[meta.method] || 'pages_content' : null),
+    method: meta.method ? methodMap[meta.method] || 'pages_content' : null,
   };
 }
-

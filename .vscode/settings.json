@@ -3,5 +3,15 @@
   "files.associations": {
     "*.css": "tailwindcss"
   },
-  "css.lint.unknownAtRules": "ignore"
+  "css.lint.unknownAtRules": "ignore",
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.agents/**": true,
+    "**/dist/**": true,
+    "**/LibraryData/**": true,
+    "**/test-results/**": true,
+    "**/playwright-report/**": true
+  }
 }
