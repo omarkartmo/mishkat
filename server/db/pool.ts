@@ -4,6 +4,8 @@ import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { PGlite } from '@electric-sql/pglite';
 import { serverConfig } from '../config';
 
+import { performSelfHealingRecovery } from '../services/dbRecoveryService';
+
 // Interface for Database abstraction
 export interface IDatabase {
   query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<{ rows: T[]; rowCount: number }>;
@@ -33,8 +35,44 @@ class PostgresDatabaseEngine implements IDatabase {
   private pgliteInstance: PGlite | null = null;
   private isConnected: boolean = false;
   private engineType: 'external_pg' | 'embedded_pg' | null = null;
+  private connectionPromise: Promise<void> | null = null;
+  private lastFailedAttemptTime: number = 0;
+  private readonly RETRY_COOLDOWN_MS: number = 5000;
+
+  public attachPgliteInstance(instance: PGlite): void {
+    this.pgliteInstance = instance;
+    this.isConnected = true;
+    this.engineType = 'embedded_pg';
+  }
 
   public async connect(): Promise<void> {
+    if (this.isConnected && (this.pgPool !== null || this.pgliteInstance !== null)) {
+      return;
+    }
+
+    // Coalesce concurrent in-flight connection attempts
+    if (this.connectionPromise) {
+      return this.connectionPromise;
+    }
+
+    // Protect against tight retry loops if recently failed
+    if (Date.now() - this.lastFailedAttemptTime < this.RETRY_COOLDOWN_MS) {
+      throw new DatabaseUnavailableError();
+    }
+
+    this.connectionPromise = this.internalConnect()
+      .catch((err) => {
+        this.lastFailedAttemptTime = Date.now();
+        throw err;
+      })
+      .finally(() => {
+        this.connectionPromise = null;
+      });
+
+    return this.connectionPromise;
+  }
+
+  private async internalConnect(): Promise<void> {
     const hasExternalUrl = Boolean(serverConfig.databaseUrl && serverConfig.databaseUrl.trim() !== '');
 
     if (hasExternalUrl) {
@@ -100,44 +138,36 @@ class PostgresDatabaseEngine implements IDatabase {
     } catch (pgliteErr: any) {
       console.error('❌ [Database] Embedded PostgreSQL engine failed to initialize:', pgliteErr.message);
 
-      // Fail closed by default to prevent catastrophic silent data loss and unauthorized database wipes
-      if (process.env.ALLOW_DB_AUTO_RECOVERY !== 'true') {
+      const isRecoveryDisabled = process.env.DISABLE_DB_AUTO_RECOVERY === 'true' || process.env.ALLOW_DB_AUTO_RECOVERY === 'false';
+      if (isRecoveryDisabled) {
         this.isConnected = false;
         this.engineType = null;
-        console.error('⛔ [Database] Automatic database discard/replacement is DISABLED to protect school records. Server startup aborted.');
+        console.error('⛔ [Database] Automatic database self-healing is DISABLED by configuration.');
         throw new DatabaseUnavailableError();
       }
 
-      console.warn('⚠️ [Database] ALLOW_DB_AUTO_RECOVERY is enabled: Attempting backup and clean database initialization...');
+      console.warn('🔄 [Database] Initiating automated self-healing recovery pipeline from backups...');
       try {
         if (this.pgliteInstance) {
           await this.pgliteInstance.close().catch(() => {});
           this.pgliteInstance = null;
         }
-        const corruptBackup = `${serverConfig.dirs.pgdata}_corrupt_${Date.now()}`;
-        let activeDir = serverConfig.dirs.pgdata;
-        if (fs.existsSync(serverConfig.dirs.pgdata)) {
-          try {
-            fs.renameSync(serverConfig.dirs.pgdata, corruptBackup);
-            console.log(`📦 [Database] Preserved corrupted storage at: ${corruptBackup}`);
-            fs.mkdirSync(serverConfig.dirs.pgdata, { recursive: true });
-          } catch (renameErr: any) {
-            console.warn(`⚠️ [Database] Could not rename locked storage directory (${renameErr.message}). Using fallback recovery directory.`);
-            activeDir = `${serverConfig.dirs.pgdata}_recovered_${Date.now()}`;
-            fs.mkdirSync(activeDir, { recursive: true });
-          }
-        } else {
-          fs.mkdirSync(activeDir, { recursive: true });
-        }
 
-        this.pgliteInstance = await initAndTestPgLite(activeDir);
-        this.isConnected = true;
-        this.engineType = 'embedded_pg';
-        console.log(`✅ [Database] Clean Embedded PostgreSQL Engine initialized successfully at: ${activeDir}`);
+        const recovered = await performSelfHealingRecovery(
+          this,
+          initAndTestPgLite,
+          (newDir: string) => {
+            serverConfig.dirs.pgdata = newDir;
+          }
+        );
+
+        if (!recovered) {
+          throw new Error('Self-healing recovery pipeline returned unsuccessful.');
+        }
       } catch (recoveryErr: any) {
         this.isConnected = false;
         this.engineType = null;
-        console.error('❌ [Database] Failed to recover embedded PostgreSQL engine:', recoveryErr.message);
+        console.error('❌ [Database] Failed to self-heal embedded PostgreSQL engine:', recoveryErr.message);
         throw new DatabaseUnavailableError();
       }
     }
@@ -228,11 +258,16 @@ class PostgresDatabaseEngine implements IDatabase {
 
   public async close(): Promise<void> {
     if (this.pgPool) {
-      await this.pgPool.end();
+      await this.pgPool.end().catch(() => {});
       this.pgPool = null;
     }
     if (this.pgliteInstance) {
-      await this.pgliteInstance.close();
+      try {
+        if (typeof (this.pgliteInstance as any).syncToFs === 'function') {
+          await (this.pgliteInstance as any).syncToFs();
+        }
+      } catch {}
+      await this.pgliteInstance.close().catch(() => {});
       this.pgliteInstance = null;
     }
     this.isConnected = false;

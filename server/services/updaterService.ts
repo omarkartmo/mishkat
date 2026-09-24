@@ -253,6 +253,7 @@ if exist "${options.stagingDir}\\public" xcopy /E /I /Y "${options.stagingDir}\\
 if exist "${options.stagingDir}\\server\\db\\migrations" xcopy /E /I /Y "${options.stagingDir}\\server\\db\\migrations" "${rootDir}\\server\\db\\migrations" >> "!LOGFILE!" 2>&1
 if exist "${options.stagingDir}\\package.json" copy /Y "${options.stagingDir}\\package.json" "${rootDir}\\" >> "!LOGFILE!" 2>&1
 if exist "${options.stagingDir}\\package-lock.json" copy /Y "${options.stagingDir}\\package-lock.json" "${rootDir}\\" >> "!LOGFILE!" 2>&1
+if exist "${options.stagingDir}\\node_modules" xcopy /E /I /Y "${options.stagingDir}\\node_modules" "${rootDir}\\node_modules" >> "!LOGFILE!" 2>&1
 
 echo [4/6] Starting MishkatLibraryService (automatically triggers startup migrations)... >> "!LOGFILE!"
 net start MishkatLibraryService >> "!LOGFILE!" 2>&1

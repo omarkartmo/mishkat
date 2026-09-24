@@ -120,33 +120,91 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
   }
 });
 
-// PUT /api/v1/users/admin/security (Admin updates their own password and security question)
+// PUT /api/v1/users/admin/security (Admin updates their initial registration info, password, and security question)
 // Registered BEFORE /:id to prevent any route interception or ambiguity
 router.put('/admin/security', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
-  const { currentPassword, newPassword, securityQuestion, securityAnswer } = req.body;
+  const {
+    currentPassword,
+    registrationNumber,
+    name,
+    username,
+    email,
+    phone,
+    newPassword,
+    securityQuestion,
+    securityAnswer,
+  } = req.body;
   const adminId = req.user!.id;
 
   try {
-    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [adminId]);
-    if (rows.length === 0) return res.status(404).json({ success: false });
+    const { rows } = await db.query('SELECT password_hash, registration_number, name FROM users WHERE id = $1', [adminId]);
+    if (rows.length === 0) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'حساب المشرف غير موجود.' } });
 
     const user = rows[0];
-    const isCurrentValid = await bcrypt.compare(currentPassword, user.password_hash);
+    const isCurrentValid = await bcrypt.compare(currentPassword || '', user.password_hash);
     
     if (!isCurrentValid) {
-      return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'كلمة المرور الحالية غير صحيحة.' } });
+      return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'كلمة المرور الحالية غير صحيحة للتأكيد.' } });
     }
 
     let updates: string[] = [];
     let params: any[] = [];
     let paramIndex = 1;
 
+    // 1. Initial Registration Number update with uniqueness check
+    if (registrationNumber && registrationNumber.trim()) {
+      const cleanReg = registrationNumber.trim();
+      const { rows: conflict } = await db.query(
+        'SELECT id FROM users WHERE (registration_number = $1 OR username = $1) AND id != $2',
+        [cleanReg, adminId]
+      );
+      if (conflict.length > 0) {
+        return res.status(409).json({ success: false, error: { code: 'CONFLICT', message: 'رقم القيد مستخدم بالفعل لحساب آخر.' } });
+      }
+      updates.push(`registration_number = $${paramIndex++}`);
+      params.push(cleanReg);
+    }
+
+    // 2. Full Name
+    if (name && name.trim()) {
+      updates.push(`name = $${paramIndex++}`);
+      params.push(name.trim());
+    }
+
+    // 3. Username with uniqueness check
+    if (username !== undefined) {
+      const cleanUsername = String(username).trim() || null;
+      if (cleanUsername) {
+        const { rows: uConflict } = await db.query(
+          'SELECT id FROM users WHERE (username = $1 OR registration_number = $1) AND id != $2',
+          [cleanUsername, adminId]
+        );
+        if (uConflict.length > 0) {
+          return res.status(409).json({ success: false, error: { code: 'CONFLICT', message: 'اسم المستخدم مستخدم بالفعل لحساب آخر.' } });
+        }
+      }
+      updates.push(`username = $${paramIndex++}`);
+      params.push(cleanUsername);
+    }
+
+    // 4. Email & Phone
+    if (email !== undefined) {
+      updates.push(`email = $${paramIndex++}`);
+      params.push(String(email).trim() || null);
+    }
+    if (phone !== undefined) {
+      updates.push(`phone = $${paramIndex++}`);
+      params.push(String(phone).trim() || null);
+    }
+
+    // 5. New Password
     if (newPassword) {
       updates.push(`password_hash = $${paramIndex++}`);
       params.push(await bcrypt.hash(newPassword, 10));
       updates.push('token_version = COALESCE(token_version, 1) + 1');
     }
 
+    // 6. Security Question & Answer
     if (securityQuestion && securityAnswer) {
       updates.push(`security_question = $${paramIndex++}`);
       params.push(securityQuestion.trim());
@@ -156,13 +214,133 @@ router.put('/admin/security', authenticateToken, requireRole('admin'), async (re
     }
 
     if (updates.length > 0) {
+      updates.push('updated_at = CURRENT_TIMESTAMP');
       params.push(adminId);
       const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
       await db.query(sql, params);
       await recordAuditLog(adminId, req.user!.name, 'admin', 'UPDATE_ADMIN_SECURITY', 'user', adminId, null, req);
     }
 
-    res.json({ success: true, data: { message: 'تم تحديث إعدادات الأمان بنجاح.' } });
+    const { rows: updatedRows } = await db.query(
+      'SELECT id, registration_number, name, username, email, phone, role_id, security_question FROM users WHERE id = $1',
+      [adminId]
+    );
+    const updated = updatedRows[0];
+
+    res.json({
+      success: true,
+      data: {
+        message: 'تم تحديث معلومات الحساب وإعدادات الأمان بنجاح.',
+        user: {
+          id: updated.id,
+          name: updated.name,
+          registrationNumber: updated.registration_number,
+          username: updated.username,
+          email: updated.email,
+          phone: updated.phone,
+          role: updated.role_id,
+          hasSecurityQuestion: Boolean(updated.security_question),
+        },
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// PUT /api/v1/users/my-security (Any user/student updates their security question and password)
+// Registered BEFORE /:id
+router.put('/my-security', authenticateToken, async (req: Request, res: Response) => {
+  const { currentPassword, newPassword, securityQuestion, securityAnswer, username } = req.body;
+  const userId = req.user!.id;
+
+  try {
+    const { rows } = await db.query('SELECT password_hash, role_id, security_question FROM users WHERE id = $1', [userId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'المستخدم غير موجود.' } });
+    }
+
+    const user = rows[0];
+
+    // Require current password for security verification
+    if (!currentPassword) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'يرجى إدخال كلمة المرور الحالية لتأكيد الإعدادات.' },
+      });
+    }
+
+    const isCurrentValid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isCurrentValid) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'كلمة المرور الحالية غير صحيحة.' },
+      });
+    }
+
+    let updates: string[] = [];
+    let params: any[] = [];
+    let paramIndex = 1;
+
+    // Optional username update
+    if (username !== undefined) {
+      const cleanUsername = String(username).trim() || null;
+      if (cleanUsername) {
+        const { rows: uConflict } = await db.query(
+          'SELECT id FROM users WHERE (username = $1 OR registration_number = $1) AND id != $2',
+          [cleanUsername, userId]
+        );
+        if (uConflict.length > 0) {
+          return res.status(409).json({ success: false, error: { code: 'CONFLICT', message: 'اسم المستخدم مستخدم بالفعل.' } });
+        }
+      }
+      updates.push(`username = $${paramIndex++}`);
+      params.push(cleanUsername);
+    }
+
+    // Optional password change
+    if (newPassword && newPassword.trim()) {
+      if (newPassword.trim().length < 4) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INPUT', message: 'يجب أن لا تقل كلمة المرور الجديدة عن 4 خانات.' },
+        });
+      }
+      updates.push(`password_hash = $${paramIndex++}`);
+      params.push(await bcrypt.hash(newPassword.trim(), 10));
+      updates.push('token_version = COALESCE(token_version, 1) + 1');
+    }
+
+    // Security question & answer setup
+    if (securityQuestion && securityAnswer) {
+      if (!securityQuestion.trim() || !securityAnswer.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INPUT', message: 'يرجى كتابة سؤال الأمان والإجابة عليه.' },
+        });
+      }
+      updates.push(`security_question = $${paramIndex++}`);
+      params.push(securityQuestion.trim());
+
+      updates.push(`security_answer_hash = $${paramIndex++}`);
+      params.push(await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10));
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = CURRENT_TIMESTAMP');
+      params.push(userId);
+      const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
+      await db.query(sql, params);
+      await recordAuditLog(userId, req.user!.name, user.role_id, 'UPDATE_MY_SECURITY', 'user', userId, null, req);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        message: 'تم تحديث إعدادات الأمان وسؤال الاسترداد بنجاح.',
+        hasSecurityQuestion: Boolean(securityQuestion || user.security_question),
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }

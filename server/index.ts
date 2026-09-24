@@ -265,4 +265,43 @@ export async function startServer() {
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGBREAK', () => shutdown('SIGBREAK'));
+
+  // Automatic Backend Error Detection: Uncaught Exceptions
+  process.on('uncaughtException', (err: any) => {
+    logger.error(`[Uncaught Exception] ${err?.message}`, { stack: err?.stack });
+    console.error('[Uncaught Exception]', err);
+    try {
+      supportAgentService.enqueueOutboundReport({
+        sourceType: 'server',
+        component: 'node_process',
+        errorType: 'uncaught_exception',
+        errorCode: err?.code || 'UNCAUGHT_EXCEPTION',
+        severity: 'critical',
+        message: err?.message || 'Uncaught process exception',
+        stackTrace: err?.stack,
+        diagnosticContext: { pid: process.pid, platform: process.platform },
+      }).catch(() => {});
+    } catch {}
+  });
+
+  // Automatic Backend Error Detection: Unhandled Promise Rejections
+  process.on('unhandledRejection', (reason: any) => {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    const stack = reason instanceof Error ? reason.stack : undefined;
+    logger.error(`[Unhandled Promise Rejection] ${message}`, { stack });
+    console.error('[Unhandled Promise Rejection]', reason);
+    try {
+      supportAgentService.enqueueOutboundReport({
+        sourceType: 'server',
+        component: 'node_process',
+        errorType: 'unhandled_rejection',
+        errorCode: 'UNHANDLED_PROMISE_REJECTION',
+        severity: 'critical',
+        message: message || 'Unhandled promise rejection',
+        stackTrace: stack,
+        diagnosticContext: { pid: process.pid, platform: process.platform },
+      }).catch(() => {});
+    } catch {}
+  });
 }

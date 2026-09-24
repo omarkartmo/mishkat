@@ -12,6 +12,7 @@ import {
   setRestoreTestFailureHook,
   validateBackupPayload,
   parseAndDecryptBackup,
+  BACKUP_TABLES_ORDER,
 } from '../server/services/backupService';
 import {
   encryptBackupPayload,
@@ -51,7 +52,7 @@ describe('MISHKAT: Hardened Backup, Restore & Data Export Security Suite', () =>
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.fileName).toBeDefined();
-      expect(res.body.data.tablesCount).toBe(16);
+      expect(res.body.data.tablesCount).toBe(BACKUP_TABLES_ORDER.length);
 
       createdBackupFileName = res.body.data.fileName;
       const backupPath = path.join(serverConfig.dirs.backups, createdBackupFileName);

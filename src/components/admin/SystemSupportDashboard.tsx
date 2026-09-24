@@ -138,8 +138,8 @@ export const SystemSupportDashboard: React.FC = () => {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
   // Support Server Endpoint State
-  const [supportEndpoint, setSupportEndpoint] = useState<string>('http://127.0.0.1:4000');
-  const [endpointInput, setEndpointInput] = useState<string>('http://127.0.0.1:4000');
+  const [supportEndpoint, setSupportEndpoint] = useState<string>('');
+  const [endpointInput, setEndpointInput] = useState<string>('');
   const [isEditingEndpoint, setIsEditingEndpoint] = useState(false);
   const [isSavingEndpoint, setIsSavingEndpoint] = useState(false);
   const [isTestingEndpoint, setIsTestingEndpoint] = useState(false);
@@ -689,7 +689,7 @@ export const SystemSupportDashboard: React.FC = () => {
                     type="text"
                     value={endpointInput}
                     onChange={(e) => setEndpointInput(e.target.value)}
-                    placeholder="مثال: http://192.168.1.15:4000 أو http://127.0.0.1:4000"
+                    placeholder="مثال: http://192.168.1.15:4000 أو https://support.mishkat.app"
                     className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
                     dir="ltr"
                   />

@@ -6,6 +6,7 @@ import { serverConfig } from '../config';
 import { authenticateToken } from '../middleware/auth';
 import { authRateLimiter } from '../middleware/rateLimiter';
 import { recordAuditLog } from '../middleware/audit';
+import { generateSecureStudentPassword } from '../utils/passwordGenerator';
 
 const router = Router();
 
@@ -177,21 +178,49 @@ router.get('/security-question', authRateLimiter(15), async (req: Request, res: 
   const { registrationNumber } = req.query;
   
   if (!registrationNumber) {
-    return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'رقم القيد مطلوب.' }});
+    return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'رقم القيد أو اسم المستخدم مطلوب.' } });
   }
 
   try {
+    const cleanIdentifier = String(registrationNumber).trim();
     const { rows } = await db.query(
-      `SELECT security_question FROM users WHERE (registration_number = $1 OR username = $1) AND role_id = 'admin' LIMIT 1`,
-      [String(registrationNumber).trim()]
+      `SELECT id, name, role_id, registration_number, security_question, security_answer_hash
+       FROM users
+       WHERE (registration_number = $1 OR username = $1)
+       LIMIT 1`,
+      [cleanIdentifier]
     );
 
-    if (rows.length === 0 || !rows[0].security_question) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'لا يوجد سؤال أمان مسجل لهذا الحساب، أو الحساب غير موجود.' } });
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'لم يتم العثور على أي حساب مسجل بهذا الرقم أو الاسم.' },
+      });
     }
 
-    res.json({ success: true, data: { question: rows[0].security_question }});
-  } catch (err) {
+    const u = rows[0];
+    if (!u.security_question || !u.security_answer_hash) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'NO_SECURITY_SETUP',
+          message: u.role_id === 'student'
+            ? 'لم يقم هذا الحساب بإعداد سؤال أمان مسبقاً. يرجى مراجعة أمين المكتبة لاستلام كلمة المرور أو طباعة بطاقة الحساب.'
+            : 'لم يتم إعداد سؤال الأمان مسبقاً لهذا الحساب.',
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        name: u.name,
+        role: u.role_id,
+        registrationNumber: u.registration_number,
+        question: u.security_question,
+      },
+    });
+  } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'خطأ في جلب سؤال الأمان.' } });
   }
 });
@@ -200,10 +229,10 @@ router.get('/security-question', authRateLimiter(15), async (req: Request, res: 
 router.post('/recover', authRateLimiter(5), async (req: Request, res: Response) => {
   const { registrationNumber, securityAnswer, newPassword } = req.body;
 
-  if (!registrationNumber || !securityAnswer || !newPassword) {
+  if (!registrationNumber || !securityAnswer) {
     return res.status(400).json({
       success: false,
-      error: { code: 'INVALID_INPUT', message: 'يرجى إدخال جميع البيانات المطلوبة.' },
+      error: { code: 'INVALID_INPUT', message: 'يرجى إدخال رقم القيد وإجابة سؤال الأمان.' },
     });
   }
 
@@ -211,34 +240,32 @@ router.post('/recover', authRateLimiter(5), async (req: Request, res: Response) 
 
   try {
     const { rows } = await db.query(
-      `SELECT id, role_id, security_answer_hash FROM users WHERE registration_number = $1 OR username = $1 LIMIT 1`,
+      `SELECT id, name, role_id, registration_number, security_answer_hash FROM users WHERE registration_number = $1 OR username = $1 LIMIT 1`,
       [cleanReg]
     );
 
     if (rows.length === 0) {
       return res.status(401).json({
         success: false,
-        error: { code: 'INVALID_CREDENTIALS', message: 'رقم القيد غير صحيح.' },
+        error: { code: 'INVALID_CREDENTIALS', message: 'رقم القيد أو اسم المستخدم غير صحيح.' },
       });
     }
 
     const user = rows[0];
-    if (user.role_id !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'استرجاع كلمة المرور متاح للمشرفين فقط بهذه الطريقة.' },
-      });
-    }
 
     if (!user.security_answer_hash) {
       return res.status(400).json({
         success: false,
-        error: { code: 'NO_SECURITY_SETUP', message: 'لم يتم إعداد سؤال الأمان مسبقاً لهذا الحساب.' },
+        error: {
+          code: 'NO_SECURITY_SETUP',
+          message: user.role_id === 'student'
+            ? 'لم يقم هذا الحساب بإعداد سؤال أمان مسبقاً. يرجى مراجعة أمين المكتبة.'
+            : 'لم يتم إعداد سؤال الأمان مسبقاً لهذا الحساب.',
+        },
       });
     }
 
     const isAnswerValid = await bcrypt.compare(securityAnswer.trim().toLowerCase(), user.security_answer_hash);
-    
     if (!isAnswerValid) {
       return res.status(401).json({
         success: false,
@@ -246,14 +273,52 @@ router.post('/recover', authRateLimiter(5), async (req: Request, res: Response) 
       });
     }
 
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
-    
-    await db.query('UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 1) + 1 WHERE id = $2', [newPasswordHash, user.id]);
-    await recordAuditLog(user.id, 'Admin', 'admin', 'PASSWORD_RECOVERED', 'user', user.id, null, req);
+    // Role-specific recovery flow:
+    if (user.role_id === 'student') {
+      const plainPassword = (newPassword && newPassword.trim().length >= 4)
+        ? newPassword.trim()
+        : generateSecureStudentPassword(8);
+
+      const passHash = await bcrypt.hash(plainPassword, 10);
+      await db.query(
+        'UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 1) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [passHash, user.id]
+      );
+      await recordAuditLog(user.id, user.name, 'student', 'PASSWORD_RECOVERED_STUDENT', 'user', user.id, null, req);
+
+      return res.json({
+        success: true,
+        data: {
+          role: 'student',
+          name: user.name,
+          registrationNumber: user.registration_number,
+          recoveredPassword: plainPassword,
+          message: 'تم التحقق من هويتك بنجاح واستعادة كلمة المرور الخاصة بك!',
+        },
+      });
+    }
+
+    // Admin / Librarian recovery flow
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'يرجى إدخال كلمة مرور جديدة لا تقل عن 6 أحرف.' },
+      });
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword.trim(), 10);
+    await db.query(
+      'UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 1) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newPasswordHash, user.id]
+    );
+    await recordAuditLog(user.id, user.name, user.role_id, 'PASSWORD_RECOVERED_ADMIN', 'user', user.id, null, req);
 
     res.json({
       success: true,
-      data: { message: 'تم تغيير كلمة المرور واسترجاع الحساب بنجاح، يمكنك الآن تسجيل الدخول.' },
+      data: {
+        role: user.role_id,
+        message: 'تم تغيير كلمة المرور واسترجاع الحساب بنجاح، يمكنك الآن تسجيل الدخول.',
+      },
     });
   } catch (err: any) {
     console.error('[Auth Error]', err);

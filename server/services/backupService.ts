@@ -201,6 +201,12 @@ export function validateBackupPayload(parsed: any): ValidationResult {
   if (!parsed.data.staging_queue) {
     parsed.data.staging_queue = [];
   }
+  if (!parsed.data.blocked_categories) {
+    parsed.data.blocked_categories = [];
+  }
+  if (!parsed.data.blocked_sites) {
+    parsed.data.blocked_sites = [];
+  }
 
   // 3. Verify all expected tables exist and are arrays
   for (const table of BACKUP_TABLES_ORDER) {

@@ -58,6 +58,19 @@ export async function seedCoreData(): Promise<void> {
       ON CONFLICT (key) DO NOTHING;
     `, [JSON.stringify(INITIAL_SYSTEM_CONFIG)]);
   }
+
+  // Categories: ensure core categories exist to protect foreign key relationships
+  const { rows: catRows } = await db.query('SELECT id FROM categories LIMIT 1');
+  if (catRows.length === 0) {
+    console.log('🌱 [Seeder] Seeding initial core categories...');
+    for (const cat of INITIAL_CATEGORIES) {
+      await db.query(`
+        INSERT INTO categories (id, name, name_en, description, color, icon_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO NOTHING;
+      `, [cat.id, cat.name, cat.nameEn || null, cat.description, cat.color, cat.iconName]);
+    }
+  }
 }
 
 export async function seedInitialData(): Promise<void> {

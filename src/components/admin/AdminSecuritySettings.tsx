@@ -1,10 +1,19 @@
-import React, { useState } from 'react';
-import { Shield, Key, Save, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Key, Save, CheckCircle2, User, Mail, Phone, Hash } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 
 export const AdminSecuritySettings: React.FC = () => {
-  const { logout } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
+
+  // Initial Registration Information
+  const [registrationNumber, setRegistrationNumber] = useState(user?.registrationNumber || '');
+  const [name, setName] = useState(user?.name || '');
+  const [username, setUsername] = useState(user?.username || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '');
+
+  // Password & Security Question
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [securityQuestion, setSecurityQuestion] = useState('');
@@ -14,15 +23,31 @@ export const AdminSecuritySettings: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Sync state when user context updates
+  useEffect(() => {
+    if (user) {
+      setRegistrationNumber(user.registrationNumber || '');
+      setName(user.name || '');
+      setUsername(user.username || '');
+      setEmail(user.email || '');
+      setPhone(user.phone || '');
+    }
+  }, [user]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword) {
-      setError('يجب إدخال كلمة المرور الحالية.');
+      setError('يجب إدخال كلمة المرور الحالية لتأكيد حفظ التعديلات.');
       return;
     }
 
-    if (!newPassword && (!securityQuestion || !securityAnswer)) {
-      setError('يجب إدخال كلمة مرور جديدة أو إعداد سؤال الأمان.');
+    if (!registrationNumber.trim()) {
+      setError('رقم القيد لا يمكن أن يكون فارغاً.');
+      return;
+    }
+
+    if (!name.trim()) {
+      setError('الاسم الكامل للمشرف مطلوب.');
       return;
     }
 
@@ -31,26 +56,32 @@ export const AdminSecuritySettings: React.FC = () => {
     setSuccess('');
 
     try {
-      const res = await apiClient.put<{ message: string }>('/users/admin/security', {
+      const res = await apiClient.put<{ message: string; user?: any }>('/users/admin/security', {
         currentPassword,
-        newPassword,
-        securityQuestion,
-        securityAnswer,
+        registrationNumber: registrationNumber.trim(),
+        name: name.trim(),
+        username: username.trim() || undefined,
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        newPassword: newPassword.trim() || undefined,
+        securityQuestion: securityQuestion.trim() || undefined,
+        securityAnswer: securityAnswer.trim() || undefined,
       });
 
       if (res.success) {
-        if (newPassword) {
-          setSuccess('تم تغيير كلمة المرور بنجاح! تم إنهاء الجلسة الحالية لأسباب أمنية. جارٍ تحويلك لصفحة تسجيل الدخول...');
+        if (newPassword.trim()) {
+          setSuccess('تم تحديث معلومات الحساب وكلمة المرور بنجاح! تم إنهاء الجلسة لأسباب أمنية. جارٍ تحويلك لصفحة تسجيل الدخول...');
           setCurrentPassword('');
           setNewPassword('');
           setTimeout(async () => {
             await logout();
           }, 2000);
         } else {
-          setSuccess('تم تحديث سؤال الأمان بنجاح.');
+          setSuccess(res.data?.message || 'تم تحديث معلومات التسجيل وإعدادات الحساب بنجاح.');
           setCurrentPassword('');
           setSecurityQuestion('');
           setSecurityAnswer('');
+          await refreshUser();
         }
       } else {
         setError(res.error?.message || 'حدث خطأ أثناء التحديث.');
@@ -63,14 +94,17 @@ export const AdminSecuritySettings: React.FC = () => {
   };
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
-      <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-3">
-        <Shield className="w-4 h-4 text-indigo-400" />
-        إعدادات أمان حساب المشرف
-      </h3>
-
-      <div className="text-slate-400 mb-4">
-        يمكنك هنا تغيير كلمة المرور الخاصة بحساب الإدارة، وإعداد "سؤال الأمان" لاستخدامه في حالة نسيان كلمة المرور.
+    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-6 text-xs" dir="rtl">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div>
+          <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+            <Shield className="w-4 h-4 text-indigo-400" />
+            <span>معلومات الحساب وإعدادات الأمان للمشرف</span>
+          </h3>
+          <p className="text-slate-400 mt-1 text-[11px] leading-relaxed">
+            يمكنك هنا تغيير معلومات التسجيل الأولية (رقم القيد، الاسم، اسم المستخدم) بالإضافة لتحديث كلمة المرور وسؤال الأمان.
+          </p>
+        </div>
       </div>
 
       {error && (
@@ -81,68 +115,165 @@ export const AdminSecuritySettings: React.FC = () => {
       
       {success && (
         <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4" />
-          {success}
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{success}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-1">
-          <label className="block text-slate-300 font-medium">كلمة المرور الحالية (مطلوبة) *</label>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
-            required
-          />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Section 1: Initial Registration Information */}
+        <div className="space-y-4 bg-slate-950/40 p-4 rounded-xl border border-slate-800/60">
+          <h4 className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5" />
+            <span>معلومات التسجيل والهوية الأساسية</span>
+          </h4>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-medium">
+                رقم القيد الأساسي (رمز الدخول) *
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={registrationNumber}
+                  onChange={(e) => setRegistrationNumber(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-8 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                  placeholder="ADM-001"
+                  required
+                />
+                <Hash className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              <p className="text-[10px] text-slate-500">يستخدم لتسجيل الدخول في الواجهة الرئيسية.</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-medium">
+                الاسم الكامل للمشرف *
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+                placeholder="أ. عمر بن حميد المعمري"
+                required
+              />
+              <p className="text-[10px] text-slate-500">الاسم المعروض في السجلات والتقارير الرسمية.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-medium">اسم مستخدم اختياري (Username)</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                placeholder="omar_admin"
+              />
+              <p className="text-[10px] text-slate-500">يتيح تسجيل الدخول باسم المستخدم بديلاً عن رقم القيد.</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-medium">البريد الإلكتروني</label>
+              <div className="relative">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-8 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  placeholder="admin@mishkat.edu"
+                />
+                <Mail className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-medium">رقم الهاتف</label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-8 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                  placeholder="968XXXXXXXX"
+                />
+                <Phone className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/50">
-          <div className="space-y-1">
+        {/* Section 2: Password & Security Recovery Question */}
+        <div className="space-y-4 bg-slate-950/40 p-4 rounded-xl border border-slate-800/60">
+          <h4 className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+            <Key className="w-3.5 h-3.5" />
+            <span>كلمة المرور وسؤال الأمان لاستعادة الحساب</span>
+          </h4>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-medium">سؤال الأمان المعتمد لاستعادة الحساب</label>
+              <input
+                type="text"
+                value={securityQuestion}
+                onChange={(e) => setSecurityQuestion(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+                placeholder="مثال: ما هو اسم معلمك الأول في المدرسة؟"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-medium">إجابة سؤال الأمان السرية</label>
+              <input
+                type="text"
+                value={securityAnswer}
+                onChange={(e) => setSecurityAnswer(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+                placeholder="الإجابة السرية (تحفظ مشفرة)"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1 pt-2 border-t border-slate-800/40">
             <label className="block text-slate-300 font-medium">كلمة المرور الجديدة (اختياري)</label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
-              placeholder="اتركه فارغاً إذا لم ترغب بتغييرها"
+              className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+              placeholder="اتركه فارغاً إذا كنت لا ترغب بتغيير كلمة المرور"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/50">
-          <div className="space-y-1">
-            <label className="block text-slate-300 font-medium">سؤال الأمان (اختياري)</label>
+        {/* Section 3: Verification & Save */}
+        <div className="bg-indigo-950/20 border border-indigo-500/20 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1 flex-1">
+            <label className="block text-amber-300 font-bold">
+              كلمة المرور الحالية (مطلوبة لتأكيد التغييرات) *
+            </label>
             <input
-              type="text"
-              value={securityQuestion}
-              onChange={(e) => setSecurityQuestion(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
-              placeholder="مثال: ما هو اسم معلمك الأول؟"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full max-w-sm bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-indigo-500"
+              placeholder="••••••••••••"
+              required
             />
           </div>
-          <div className="space-y-1">
-            <label className="block text-slate-300 font-medium">إجابة سؤال الأمان (اختياري)</label>
-            <input
-              type="text"
-              value={securityAnswer}
-              onChange={(e) => setSecurityAnswer(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
-              placeholder="الإجابة السرية"
-            />
-          </div>
-        </div>
 
-        <div className="flex justify-end pt-4">
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all shadow-lg shadow-indigo-600/20"
-          >
-            <Save className="w-4 h-4" />
-            <span>حفظ إعدادات الأمان</span>
-          </button>
+          <div className="flex justify-end pt-2 sm:pt-0">
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/30 cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              <span>{loading ? 'جارٍ الحفظ...' : 'حفظ تعديلات الحساب'}</span>
+            </button>
+          </div>
         </div>
       </form>
     </div>

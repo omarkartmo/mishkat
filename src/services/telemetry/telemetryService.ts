@@ -87,6 +87,26 @@ class TelemetryService {
         });
       });
 
+      // 3. Meaningful Console Errors Interception (captures WebView & application runtime errors)
+      const origConsoleError = console.error;
+      console.error = (...args: any[]) => {
+        origConsoleError.apply(console, args);
+        try {
+          const firstArg = args[0];
+          const msg = typeof firstArg === 'string' ? firstArg : (firstArg?.message || JSON.stringify(firstArg));
+          if (
+            msg &&
+            !msg.includes('Download the React DevTools') &&
+            !msg.includes('[ApiClient] Network request failed') &&
+            !msg.includes('Failed to load support dashboard')
+          ) {
+            this.reportError('console_error', 'CONSOLE_ERROR', msg, {
+              args: args.slice(1, 3).map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))),
+            }, 'warning');
+          }
+        } catch {}
+      };
+
       // Heartbeat is strictly managed via setUserRole('student') to prevent admin/server pollution
     }
   }

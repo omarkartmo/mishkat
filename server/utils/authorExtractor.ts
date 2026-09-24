@@ -206,6 +206,8 @@ export function isValidArabicPersonName(name: string): boolean {
 
   for (const w of words) {
     if (INVALID_NAME_WORDS.has(w)) return false;
+    if (!/^[\u0600-\u06FF]+$/.test(w)) return false;
+    if (w.length < 2 && w !== 'و') return false;
   }
 
   let recognizedCount = 0;
@@ -221,7 +223,7 @@ export function isValidArabicPersonName(name: string): boolean {
     }
   }
 
-  return recognizedCount >= 1 && (recognizedCount / words.length) >= 0.35;
+  return recognizedCount >= 1 && (recognizedCount / words.length) >= 0.25;
 }
 
 // Clean and normalize extracted author name
@@ -230,7 +232,10 @@ export function cleanAuthorName(name: string): string | null {
 
   let res = normalizeArabicNameString(name);
 
-  // Normalize academic prefixes: "د/" or "د /" -> "د. " and "أ/" or "أ /" -> "أ. "
+  // 1. Remove common role prefixes if attached at start
+  res = res.replace(/^(?:تأليف|المؤلف|تصنيف|المصنف|إعداد\s+الطالبة|إعداد\s+الطالب|إعداد\s+الباحث|إعداد\s+الباحثة|إعداد|الطالب|الطالبة|الباحث|الباحثة|بقلم|جمع وتأليف|جمع وترتيب|صنعه|اف\s+الأستاذ(?:\s+إشر)?|إشراف\s+الأستاذ|إشراف|ناقشها\s+الأستاذ|ناقشها\s+الطالب|ناقشها\s+الباحث|ناقشها\s+الدكتور|ناقشها|الأستاذ\s+الدكتور)\s*[:/؛\-]?\s*/gi, '').trim();
+
+  // 2. Normalize abbreviated academic prefixes: "د/" or "د /" -> "د. " and "أ/" or "أ /" -> "أ. "
   res = res.replace(/^(?:د|أ)\s*[\/.]\s*/i, (match) => {
     return match.toLowerCase().startsWith('د') ? 'د. ' : 'أ. ';
   });
@@ -270,9 +275,6 @@ export function cleanAuthorName(name: string): string | null {
     }
   }
 
-  // Remove common role prefixes if still attached at start
-  res = res.replace(/^(?:تأليف|المؤلف|تصنيف|المصنف|إعداد\s+الطالبة|إعداد\s+الطالب|إعداد\s+الباحث|إعداد\s+الباحثة|إعداد|الطالب|الطالبة|الباحث|الباحثة|بقلم|جمع وتأليف|جمع وترتيب|صنعه|اف\s+الأستاذ(?:\s+إشر)?|إشراف\s+الأستاذ|إشراف|ناقشها\s+الأستاذ|ناقشها\s+الطالب|ناقشها\s+الباحث|ناقشها\s+الدكتور|ناقشها|الأستاذ\s+الدكتور|الأستاذ|الاستاذ)\s*[:/؛\-]?\s*/gi, '').trim();
-
   // Strip numbers (student IDs, years) from name
   res = res.replace(/[\d\u0660-\u0669]+/g, ' ').replace(/\s+/g, ' ').trim();
   res = res.replace(/[:؛,،\-_/\\.]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -286,7 +288,7 @@ export function cleanAuthorName(name: string): string | null {
   if (/^محمد\s+بن\s+يوسف\s+(?:إطفيش|أطفيش|اطفيش)/i.test(res)) {
     return 'العلامة محمد بن يوسف إطفيش';
   }
-  if (/^محمد\s+(?:بن\s+)?صالح\s+ناصر/i.test(res)) {
+  if (/^(?:د\s+)?محمد\s+(?:بن\s+)?صالح\s+ناصر/i.test(res)) {
     return 'د. محمد بن صالح ناصر';
   }
 
@@ -953,21 +955,46 @@ export async function extractDocumentMetadata(
 ): Promise<ExtractedDocumentMetadata> {
   const searchTarget = `${context?.title || ''} ${context?.folderName || ''} ${path.basename(filePath)}`.trim();
 
-  // 1. Authoritative Strategy: Classical Heritage & Reference Catalog
+  // 1. Primary Strategy: Inspect actual document content (pages 1-4, title page, preface)
+  let docMeta: ExtractedDocumentMetadata;
+  if (format === 'epub') {
+    docMeta = await inspectEpubDocument(filePath);
+  } else {
+    docMeta = await inspectPdfDocument(filePath);
+  }
+
+  if (docMeta.author && !isBlacklistedAuthor(docMeta.author)) {
+    return docMeta;
+  }
+
+  // 2. Folder Heuristics Strategy: Check explicit patterns (e.g. "(تأليف فلان)")
+  let folderAuthor: string | null = null;
+  if (context?.folderName) {
+    const candidate = extractAuthorFromFolderOrFile(context.folderName);
+    if (candidate && !isBlacklistedAuthor(candidate)) {
+      folderAuthor = candidate;
+    }
+  }
+
+  if (folderAuthor) {
+    return {
+      author: folderAuthor,
+      title: docMeta.title,
+      introText: docMeta.introText,
+      summary: docMeta.summary,
+      numPages: docMeta.numPages,
+      pageFound: docMeta.pageFound,
+      method: 'folder_heuristics',
+    };
+  }
+
+  // 3. Fallback Strategy: Classical Heritage Catalog if document content has no author text
   let catalogAuthor: string | null = null;
   for (const item of HERITAGE_BOOKS_CATALOG) {
     if (item.pattern.test(searchTarget)) {
       catalogAuthor = item.author;
       break;
     }
-  }
-
-  // 2. Document Content Strategy: Inspect actual document content
-  let docMeta: ExtractedDocumentMetadata;
-  if (format === 'epub') {
-    docMeta = await inspectEpubDocument(filePath);
-  } else {
-    docMeta = await inspectPdfDocument(filePath);
   }
 
   if (catalogAuthor) {
@@ -982,27 +1009,14 @@ export async function extractDocumentMetadata(
     };
   }
 
-  if (docMeta.author && !isBlacklistedAuthor(docMeta.author)) {
-    return docMeta;
-  }
-
-  // 3. Folder Heuristics Strategy: Check explicit patterns (e.g. "(تأليف فلان)")
-  let folderAuthor: string | null = null;
-  if (context?.folderName) {
-    const candidate = extractAuthorFromFolderOrFile(context.folderName);
-    if (candidate && !isBlacklistedAuthor(candidate)) {
-      folderAuthor = candidate;
-    }
-  }
-
   return {
-    author: folderAuthor || null,
+    author: null,
     title: docMeta.title,
     introText: docMeta.introText,
     summary: docMeta.summary,
     numPages: docMeta.numPages,
     pageFound: docMeta.pageFound,
-    method: folderAuthor ? 'folder_heuristics' : docMeta.method,
+    method: docMeta.method,
   };
 }
 

@@ -776,7 +776,12 @@ export class SupportAgentService {
         if (clean.trim()) return clean.trim();
       }
     } catch {}
-    return 'http://127.0.0.1:4000';
+    // In development mode only, default to local port 4000
+    if (process.env.NODE_ENV !== 'production') {
+      return 'http://127.0.0.1:4000';
+    }
+    // In production, do not blindly connect to institution localhost; return empty until configured
+    return '';
   }
 
   /**
@@ -802,7 +807,14 @@ export class SupportAgentService {
     error?: string;
   }> {
     let endpoint = customUrl || (await this.getSupportApiUrl());
-    if (!endpoint) endpoint = 'http://127.0.0.1:4000';
+    if (!endpoint) {
+      return {
+        reachable: false,
+        endpoint: '',
+        latencyMs: 0,
+        error: 'لم يتم تكوين عنوان خادم الدعم الفني عن بُعد بعد. يرجى إدخال عنوان IP أو نطاق خادم المطور وحفظه.',
+      };
+    }
 
     const baseEndpoint = endpoint.replace(/\/api\/v1\/support\/.*$/, '').replace(/\/+$/, '');
     const pingUrl = `${baseEndpoint}/api/v1/support/stats`;
@@ -842,7 +854,7 @@ export class SupportAgentService {
       if (err.name === 'AbortError' || err.message?.includes('aborted')) {
         errorMsg = 'انتهت مهلة الاتصال (Timeout) — تأكد من أن منفذ الخادم متاح';
       } else if (err.message?.includes('ECONNREFUSED')) {
-        errorMsg = 'تم رفض الاتصال (ECONNREFUSED) — تأكد من تشغيل خادم المطور (npm run support:server)';
+        errorMsg = 'تم رفض الاتصال (ECONNREFUSED) — تأكد من تشغيل خادم المطور وصحة العنوان المدخل';
       }
       return { reachable: false, endpoint: baseEndpoint, latencyMs, error: errorMsg };
     }
@@ -858,7 +870,8 @@ export class SupportAgentService {
       targetUrl = await this.getSupportApiUrl();
     }
     if (!targetUrl) {
-      targetUrl = 'http://127.0.0.1:4000/api/v1/support/reports';
+      // In production without configured developer endpoint: keep reports safely buffered in local database queue
+      return { sent: 0, failed: 0 };
     }
 
     // Normalize endpoint URL: if user passed base URL like "http://localhost:4000", append standard path

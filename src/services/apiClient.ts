@@ -14,6 +14,7 @@ import {
   mockUsers,
   mockSettings,
 } from './demoMockData';
+import { telemetryService } from './telemetry/telemetryService';
 
 let demoFavorites: string[] = ['pb-1', 'db-2'];
 
@@ -168,6 +169,19 @@ class ApiClient {
           remainingSeconds: json?.error?.remainingSeconds,
         };
 
+        // Automatic Telemetry: Capture critical server-side failures (HTTP 500+)
+        if (response.status >= 500 && !endpoint.includes('/client-events')) {
+          try {
+            telemetryService.reportError(
+              'api_server_error',
+              errorData.code,
+              errorData.message,
+              { endpoint, status: response.status, method: options.method || 'GET' },
+              'critical'
+            );
+          } catch {}
+        }
+
         return {
           success: false,
           error: errorData,
@@ -177,6 +191,12 @@ class ApiClient {
       return json as ApiResponse<T>;
     } catch (err: any) {
       console.warn(`[ApiClient] Network request failed for ${endpoint}:`, err.message);
+      // Avoid reporting telemetry flush loops
+      if (!endpoint.includes('/client-events')) {
+        try {
+          telemetryService.reportNetworkTimeout(endpoint, err.message);
+        } catch {}
+      }
       return {
         success: false,
         error: {

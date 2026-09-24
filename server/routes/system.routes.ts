@@ -6,7 +6,8 @@ import { serverConfig } from '../config';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
-import { seedCoreData } from '../db/seed';
+import { seedCoreData, seedInitialData } from '../db/seed';
+import { resolveValidCategoryId } from './books.routes';
 
 import {
   createDatabaseBackup,
@@ -14,6 +15,7 @@ import {
   restoreDatabaseFromBackup,
   parseAndDecryptBackup,
   BackupData,
+  BACKUP_TABLES_ORDER,
 } from '../services/backupService';
 import { googleDriveService } from '../services/googleDriveService';
 import { backupScheduler } from '../services/backupScheduler';
@@ -85,7 +87,7 @@ backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req
       'system',
       cycle.fileName!,
       {
-        tablesCount: 16,
+        tablesCount: BACKUP_TABLES_ORDER.length,
         encrypted: false,
         cloudSuccess: cycle.cloudSuccess,
         cloudStatus: cycle.cloudStatus,
@@ -105,7 +107,7 @@ backupRouter.post('/create', authenticateToken, requireRole('admin'), async (req
         localSuccess: true,
         cloudSuccess: cycle.cloudSuccess,
         cloudStatus: cycle.cloudStatus,
-        tablesCount: 16,
+        tablesCount: BACKUP_TABLES_ORDER.length,
         backup: cycle.data,
       },
     });
@@ -423,15 +425,16 @@ backupRouter.get('/', authenticateToken, requireRole('admin'), async (req: Reque
         const stats = fs.statSync(fullPath);
         const isPreRestore = fileName.startsWith('mishkat_pre_restore_');
         let isEncrypted = true;
-        let tablesCount = 16;
+        let tablesCount: number = BACKUP_TABLES_ORDER.length;
         try {
           const content = fs.readFileSync(fullPath, 'utf8');
           const parsed = JSON.parse(content);
           if (parsed.format === 'mishkat_encrypted_backup') {
             isEncrypted = true;
-            tablesCount = parsed.meta?.tablesCount || 16;
+            tablesCount = parsed.meta?.tablesCount || BACKUP_TABLES_ORDER.length;
           } else if (parsed.meta && parsed.data) {
             isEncrypted = false;
+            tablesCount = Object.keys(parsed.data).length;
           }
         } catch {}
 
@@ -694,7 +697,7 @@ systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async 
       `);
     });
 
-    await seedCoreData();
+    await seedInitialData();
 
     await recordAuditLog(
       req.user!.id,
@@ -709,7 +712,7 @@ systemRouter.post('/reset-demo', authenticateToken, requireRole('admin'), async 
 
     res.json({
       success: true,
-      data: { message: 'تمت إعادة تعيين قاعدة البيانات المركزية بنجاح واستعادة نسخة النظام الأساسية.' },
+      data: { message: 'تمت إعادة تعيين قاعدة البيانات المركزية واسترجاع البيانات النموذجية بنجاح.' },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'RESET_FAILED', message: err.message } });
@@ -927,7 +930,7 @@ incomingRouter.post('/staging-queue/:id/import', authenticateToken, requireRole(
     // Insert book record
     const finalTitle = title || item.title || item.original_filename;
     const finalAuthor = author || item.author || 'مؤلف غير محدد';
-    const finalCategoryId = categoryId || item.category_id || null;
+    const finalCategoryId = await resolveValidCategoryId(db, categoryId || item.category_id);
     const fileSizeLabel = item.file_size_mb ? `${item.file_size_mb} MB` : null;
 
     await db.query(

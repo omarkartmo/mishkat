@@ -82,6 +82,31 @@ function isWithinDirectory(targetPath: string, parentDir: string): boolean {
   return !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
+/**
+ * Resolves a valid category ID against the database to prevent foreign key violations.
+ * If the candidate ID exists, it returns it.
+ * If not, it falls back to 'cat-general' if present, or the first existing category,
+ * or auto-creates 'cat-general' if the table was emptied.
+ */
+export async function resolveValidCategoryId(clientOrDb: any, candidateId?: string | null): Promise<string> {
+  if (candidateId) {
+    const { rows } = await clientOrDb.query('SELECT id FROM categories WHERE id = $1', [candidateId]);
+    if (rows.length > 0) return rows[0].id;
+  }
+  const { rows: generalRows } = await clientOrDb.query("SELECT id FROM categories WHERE id = 'cat-general'");
+  if (generalRows.length > 0) return generalRows[0].id;
+
+  const { rows: anyCat } = await clientOrDb.query('SELECT id FROM categories ORDER BY id LIMIT 1');
+  if (anyCat.length > 0) return anyCat[0].id;
+
+  await clientOrDb.query(`
+    INSERT INTO categories (id, name, description, color, icon_name)
+    VALUES ('cat-general', 'الثقافة العامة والتطوير الذاتي', 'الموسوعات، مهارات التفكير الناقد، القيادة، والإنتاجية', '#4f46e5', 'Compass')
+    ON CONFLICT (id) DO NOTHING
+  `);
+  return 'cat-general';
+}
+
 // Helper to resolve digital storage directories and configured root URL (Section 19)
 async function getDigitalStorageContext(): Promise<{
   allowedDirs: string[];
@@ -1183,6 +1208,7 @@ router.post('/bulk-import', authenticateToken, requireRole('admin', 'librarian')
 
           const finalFileUrl = `/api/v1/books/${bookId}/file`;
           const finalFileSizeStr = `${fileSizeMb.toFixed(1)} MB`;
+          const resolvedCategoryId = await resolveValidCategoryId(client, categoryId);
 
           // Insert canonical book record
           await client.query(`
@@ -1194,7 +1220,7 @@ router.post('/bulk-import', authenticateToken, requireRole('admin', 'librarian')
             bookId,
             title.trim(),
             (author || 'مؤلف غير محدد').trim(),
-            categoryId || 'cat-general',
+            resolvedCategoryId,
             format,
             finalFileSizeStr,
             finalFilePath,
@@ -1271,6 +1297,7 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
     }
 
     await db.transaction(async (client) => {
+      const resolvedCategoryId = await resolveValidCategoryId(client, book.categoryId);
       if (isPhysical) {
         await client.query(`
           INSERT INTO books (
@@ -1285,7 +1312,7 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
           book.publisher || null,
           book.publishYear || null,
           book.isbn || null,
-          book.categoryId || 'cat-general',
+          resolvedCategoryId,
           book.language || 'العربية',
           book.summary || '',
           book.pages || 0,
@@ -1327,7 +1354,7 @@ router.post('/', authenticateToken, requireRole('admin', 'librarian'), async (re
           id,
           book.title,
           book.author,
-          book.categoryId || 'cat-general',
+          resolvedCategoryId,
           book.format || 'pdf',
           book.fileSize || '1.5 MB',
           book.fileUrl || `/api/v1/books/${id}/file`,
@@ -1404,6 +1431,8 @@ router.post('/bulk-physical', authenticateToken, requireRole('admin', 'librarian
         const publisher = item.publisher || null;
         const isbn = item.isbn || null;
 
+        const resolvedCategoryId = await resolveValidCategoryId(client, categoryId);
+
         await client.query(`
           INSERT INTO books (
             id, type, title, author, publisher, publish_year, isbn, category_id,
@@ -1417,7 +1446,7 @@ router.post('/bulk-physical', authenticateToken, requireRole('admin', 'librarian
           publisher,
           publishYear,
           isbn,
-          categoryId,
+          resolvedCategoryId,
           language,
           summary,
           pagesCount,
@@ -1498,11 +1527,12 @@ router.put('/:id', authenticateToken, requireRole('admin', 'librarian'), async (
   const isPhysical = book.type === 'physical';
 
   try {
+    const resolvedCatId = book.categoryId ? await resolveValidCategoryId(db, book.categoryId) : undefined;
     if (isPhysical) {
       await db.query(`
         UPDATE books SET
           title = $1, author = $2, publisher = $3, publish_year = $4, isbn = $5,
-          category_id = $6, language = $7, summary = $8, pages_count = $9, tags = $10,
+          category_id = COALESCE($6, category_id), language = $7, summary = $8, pages_count = $9, tags = $10,
           cover_image = $11, cabinet = $12, shelf = $13, section = $14
         WHERE id = $15
       `, [
@@ -1511,7 +1541,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'librarian'), async (
         book.publisher || null,
         book.publishYear || null,
         book.isbn || null,
-        book.categoryId,
+        resolvedCatId || null,
         book.language,
         book.summary,
         book.pages || 0,
@@ -1525,13 +1555,13 @@ router.put('/:id', authenticateToken, requireRole('admin', 'librarian'), async (
     } else {
       await db.query(`
         UPDATE books SET
-          title = $1, author = $2, category_id = $3, format = $4, file_size = $5,
+          title = $1, author = $2, category_id = COALESCE($3, category_id), format = $4, file_size = $5,
           pages_count = $6, summary = $7, tags = $8, cover_image = $9, source_origin = $10
         WHERE id = $11
       `, [
         book.title,
         book.author,
-        book.categoryId,
+        resolvedCatId || null,
         book.format,
         book.fileSize,
         book.pagesCount || book.pages || 0,

@@ -21,6 +21,7 @@ export interface User {
   name: string;
   role: UserRole;
   registrationNumber: string; // e.g. STU-2026-001 or ADM-01
+  username?: string;
   grade?: string; // e.g. "الصف العاشر - أ"
   email?: string;
   phone?: string;

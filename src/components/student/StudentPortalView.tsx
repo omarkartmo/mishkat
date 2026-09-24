@@ -20,7 +20,9 @@ import {
   Bookmark,
   PlusCircle,
   MapPin,
+  Shield,
 } from 'lucide-react';
+import { StudentSecurityModal } from './StudentSecurityModal';
 import {
   User,
   LoanRecord,
@@ -61,6 +63,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   onOpenPhysicalBookmark,
 }) => {
   const [showAllLoansModal, setShowAllLoansModal] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
 
   // Student specific data
   const myLoans = (loans || []).filter((l) => l.studentId === currentUser?.id);
@@ -129,6 +132,26 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Student Security & Question Settings Button */}
+            <button
+              type="button"
+              onClick={() => setShowSecurityModal(true)}
+              className="bg-purple-950/80 hover:bg-purple-900/90 border border-purple-500/40 rounded-2xl p-3 text-xs text-purple-200 flex items-center gap-2.5 shadow-lg transition-all cursor-pointer group"
+              title="إعداد سؤال الأمان وكلمة المرور"
+            >
+              <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 group-hover:scale-105 transition-transform">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div className="text-right">
+                <div className="font-bold flex items-center gap-1.5">
+                  <span>أمان الحساب والاسترجاع</span>
+                </div>
+                <div className="text-[10px] text-purple-300/80">
+                  سؤال الاسترداد السري
+                </div>
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -667,6 +690,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Student Security & Question Settings Modal */}
+      <StudentSecurityModal
+        currentUser={currentUser}
+        isOpen={showSecurityModal}
+        onClose={() => setShowSecurityModal(false)}
+      />
     </div>
   );
 };

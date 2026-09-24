@@ -11,7 +11,7 @@ import {
   LogIn,
 } from 'lucide-react';
 import { User as LibraryUser, SystemConfig } from '../../types/library';
-import { AdminRecoveryModal } from './AdminRecoveryModal';
+import { AccountRecoveryModal } from './AccountRecoveryModal';
 
 interface LoginViewProps {
   config: SystemConfig;
@@ -239,9 +239,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, onLogin }) => {
       </footer>
 
       {showRecoveryModal && (
-        <AdminRecoveryModal
+        <AccountRecoveryModal
           onClose={() => setShowRecoveryModal(false)}
-          onRecovered={() => setShowRecoveryModal(false)}
+          onRecovered={(regNumber, newPass) => {
+            if (regNumber) setIdentifier(regNumber);
+            if (newPass) setPassword(newPass);
+            setShowRecoveryModal(false);
+          }}
         />
       )}
     </div>
