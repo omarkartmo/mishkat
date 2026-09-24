@@ -668,6 +668,23 @@ export class SupportAgentService {
   }
 
   /**
+   * Retrieves the human-readable institution / school name from system_settings (library_config)
+   */
+  public async getInstitutionName(): Promise<string> {
+    try {
+      const { rows } = await db.query("SELECT value FROM system_settings WHERE key = 'library_config' LIMIT 1");
+      if (rows.length > 0 && rows[0].value) {
+        const val = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value;
+        if (val) {
+          const name = (val.schoolName || val.libraryName || '').trim();
+          if (name) return name;
+        }
+      }
+    } catch {}
+    return process.env.MISHKAT_INSTITUTION_NAME || this.getInstitutionIdentity().institutionId;
+  }
+
+  /**
    * Enqueues an error or diagnostic report into the persistent outbound queue
    */
   public async enqueueOutboundReport(report: {
@@ -684,12 +701,14 @@ export class SupportAgentService {
     diagnosticContext?: Record<string, any>;
   }): Promise<string> {
     const identity = this.getInstitutionIdentity();
+    const institutionName = await this.getInstitutionName();
     const reportId = report.reportId || `rep_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const sourceType = report.sourceType || 'server';
     const severity = report.severity || 'warning';
     const sanitizedMsg = this.sanitizeText(report.message);
     const sanitizedStack = report.stackTrace ? this.sanitizeText(report.stackTrace).slice(0, 4000) : null;
-    const sanitizedContext = JSON.stringify(this.sanitizeMetadata(report.diagnosticContext));
+    const rawContext = { ...(report.diagnosticContext || {}), institutionName };
+    const sanitizedContext = JSON.stringify(this.sanitizeMetadata(rawContext));
 
     const appVersion = (process.env.npm_package_version || '1.0.0').slice(0, 50);
 
@@ -834,6 +853,8 @@ export class SupportAgentService {
           'X-Institution-Id': identity.institutionId,
           'X-Installation-Id': identity.installationId,
           'X-Support-Key': identity.supportSecretKey,
+          'ngrok-skip-browser-warning': 'true',
+          'User-Agent': 'MishkatSupportAgent/1.1',
         },
         signal: controller.signal,
       });
@@ -910,9 +931,16 @@ export class SupportAgentService {
       );
 
       try {
+        let diagObj: any = {};
+        try {
+          diagObj = typeof row.diagnostic_context === 'string' ? JSON.parse(row.diagnostic_context) : (row.diagnostic_context || {});
+        } catch {}
+        const institutionName = diagObj.institutionName || (await this.getInstitutionName());
+
         const payload = {
           reportId: row.report_id,
           institutionId: row.institution_id,
+          institutionName,
           installationId: row.installation_id,
           appVersion: row.app_version,
           sourceType: row.source_type,
@@ -936,8 +964,11 @@ export class SupportAgentService {
           headers: {
             'Content-Type': 'application/json',
             'X-Institution-Id': identity.institutionId,
+            'X-Institution-Name': encodeURIComponent(institutionName),
             'X-Installation-Id': identity.installationId,
             'X-Support-Key': identity.supportSecretKey,
+            'ngrok-skip-browser-warning': 'true',
+            'User-Agent': 'MishkatSupportAgent/1.1',
           },
           body: JSON.stringify(payload),
           signal: controller.signal,

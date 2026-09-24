@@ -65,6 +65,12 @@ db.exec(`
 try {
   db.exec('ALTER TABLE support_reports ADD COLUMN screenshot TEXT;');
 } catch (e) {}
+try {
+  db.exec('ALTER TABLE support_reports ADD COLUMN institution_name TEXT;');
+} catch (e) {}
+try {
+  db.exec('ALTER TABLE institutions ADD COLUMN institution_name TEXT;');
+} catch (e) {}
 
 // Constant-time Hash Comparison Helper
 function verifyKey(providedKey, expectedHash) {
@@ -85,6 +91,7 @@ function authenticateInstitution(req, res, next) {
   const institutionId = req.headers['x-institution-id'];
   const installationId = req.headers['x-installation-id'];
   const supportKey = req.headers['x-support-key'];
+  const rawInstName = req.headers['x-institution-name'];
 
   if (!institutionId || !installationId || !supportKey) {
     return res.status(401).json({
@@ -97,6 +104,15 @@ function authenticateInstitution(req, res, next) {
   const cleanInstallId = String(installationId).trim().slice(0, 100);
   const cleanKey = String(supportKey).trim().slice(0, 150);
 
+  let decodedName = '';
+  if (rawInstName) {
+    try {
+      decodedName = decodeURIComponent(String(rawInstName).trim());
+    } catch {
+      decodedName = String(rawInstName).trim();
+    }
+  }
+
   const selectInst = db.prepare('SELECT * FROM institutions WHERE institution_id = ?');
   const institution = selectInst.get(cleanInstId);
 
@@ -105,11 +121,11 @@ function authenticateInstitution(req, res, next) {
     const keyHash = crypto.createHash('sha256').update(cleanKey).digest('hex');
     const now = new Date().toISOString();
     db.prepare(`
-      INSERT INTO institutions (institution_id, installation_id, support_key_hash, app_version, first_seen_at, last_seen_at, reports_count, status)
-      VALUES (?, ?, ?, ?, ?, ?, 0, 'active')
-    `).run(cleanInstId, cleanInstallId, keyHash, req.body?.appVersion || '1.0.0', now, now);
+      INSERT INTO institutions (institution_id, installation_id, support_key_hash, app_version, first_seen_at, last_seen_at, reports_count, status, institution_name)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 'active', ?)
+    `).run(cleanInstId, cleanInstallId, keyHash, req.body?.appVersion || '1.0.0', now, now, decodedName || cleanInstId);
 
-    req.institutionContext = { institutionId: cleanInstId, installationId: cleanInstallId };
+    req.institutionContext = { institutionId: cleanInstId, installationId: cleanInstallId, institutionName: decodedName };
     return next();
   }
 
@@ -130,7 +146,7 @@ function authenticateInstitution(req, res, next) {
     });
   }
 
-  req.institutionContext = { institutionId: cleanInstId, installationId: cleanInstallId };
+  req.institutionContext = { institutionId: cleanInstId, installationId: cleanInstallId, institutionName: decodedName };
   next();
 }
 
@@ -146,6 +162,20 @@ function handleReportIngest(req, res) {
 
   const reportId = String(report.reportId).trim();
   const { institutionId, installationId } = req.institutionContext;
+
+  // Resolve human-readable institution name
+  let institutionName = (
+    report.institutionName ||
+    req.institutionContext?.institutionName ||
+    (report.diagnosticContext && typeof report.diagnosticContext === 'object' && report.diagnosticContext.institutionName) ||
+    ''
+  ).trim();
+  if (institutionName) {
+    try {
+      institutionName = decodeURIComponent(institutionName);
+    } catch {}
+  }
+  if (!institutionName) institutionName = institutionId;
 
   // 2. Idempotency Check: if reportId already exists in SQLite
   const existingReport = db.prepare('SELECT report_id FROM support_reports WHERE report_id = ?').get(reportId);
@@ -181,8 +211,8 @@ function handleReportIngest(req, res) {
       report_id, institution_id, installation_id, app_version,
       source_type, client_device_id, user_role, component,
       error_type, error_code, severity, sanitized_message,
-      sanitized_stack_trace, diagnostic_context, screenshot, client_timestamp, received_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      sanitized_stack_trace, diagnostic_context, screenshot, client_timestamp, received_at, institution_name
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     reportId,
     institutionId,
@@ -200,15 +230,17 @@ function handleReportIngest(req, res) {
     diagContext,
     screenshot,
     report.timestamp || now,
-    now
+    now,
+    institutionName
   );
 
   // Update institution stats
   db.prepare(`
     UPDATE institutions
-    SET last_seen_at = ?, app_version = ?, reports_count = reports_count + 1
+    SET last_seen_at = ?, app_version = ?, reports_count = reports_count + 1,
+        institution_name = COALESCE(?, institution_name)
     WHERE institution_id = ?
-  `).run(now, report.appVersion || '1.0.0', institutionId);
+  `).run(now, report.appVersion || '1.0.0', institutionName, institutionId);
 
   return res.status(200).json({
     acknowledged: true,
