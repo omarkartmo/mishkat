@@ -7,6 +7,8 @@ import { serverConfig } from '../config';
 import { listLocalBackups } from './backupService';
 import { googleDriveService } from './googleDriveService';
 
+export const OFFICIAL_SUPPORT_API_URL = 'https://calibrate-reply-aviation.ngrok-free.dev';
+
 export interface ClientRegistrationInput {
   clientId: string;
   machineName?: string;
@@ -780,8 +782,8 @@ export class SupportAgentService {
     if (process.env.NODE_ENV !== 'production') {
       return 'http://127.0.0.1:4000';
     }
-    // In production, do not blindly connect to institution localhost; return empty until configured
-    return '';
+    // In production, fallback to official Developer Support endpoint so institution admin needs zero configuration
+    return OFFICIAL_SUPPORT_API_URL;
   }
 
   /**
