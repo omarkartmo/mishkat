@@ -19,6 +19,7 @@ export class InternetPolicyService {
       .replace(/\/.*$/, '')
       .replace(/:\d+$/, '')
       .replace(/^\*\./, '')
+      .replace(/^www\./i, '')
       .trim();
   }
 
@@ -51,7 +52,7 @@ export class InternetPolicyService {
       const val = rows[0].value;
       return val === true || val === 'true';
     }
-    return true; // Default is true as requested
+    return false; // Default is false so policy is active on the server machine out of the box
   }
 
   async setExcludeServer(exclude: boolean) {
@@ -95,6 +96,7 @@ export class InternetPolicyService {
   async deleteCategory(id: string) {
     await db.query('DELETE FROM blocked_sites WHERE category_id = $1', [id]);
     await db.query('DELETE FROM blocked_categories WHERE id = $1', [id]);
+    this.syncLocalWindowsProxy().catch(() => {});
     return { success: true };
   }
 
@@ -127,6 +129,7 @@ export class InternetPolicyService {
        RETURNING *`,
       [id, cleanDomain, categoryId || null, addedBy || null]
     );
+    this.syncLocalWindowsProxy().catch(() => {});
     return rows[0];
   }
 
@@ -159,6 +162,7 @@ export class InternetPolicyService {
       values
     );
     
+    this.syncLocalWindowsProxy().catch(() => {});
     return { count: placeholders.length };
   }
 
@@ -168,11 +172,13 @@ export class InternetPolicyService {
       'UPDATE blocked_sites SET domain = $1, category_id = $2, is_active = $3 WHERE id = $4 RETURNING *',
       [cleanDomain, categoryId, isActive, id]
     );
+    this.syncLocalWindowsProxy().catch(() => {});
     return rows[0];
   }
 
   async deleteBlockedSite(id: string) {
     await db.query('DELETE FROM blocked_sites WHERE id = $1', [id]);
+    this.syncLocalWindowsProxy().catch(() => {});
     return { success: true };
   }
 
@@ -203,6 +209,7 @@ export class InternetPolicyService {
       if (excludeServer || mode === 'OPEN') {
         const clearScript = `
 Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -ErrorAction SilentlyContinue
+Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue
 try {
   $sig = @'
   [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
@@ -222,6 +229,7 @@ try {
         const pacUrl = 'http://127.0.0.1:3000/api/v1/internet-policy/proxy.pac';
         const setScript = `
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -Value '${pacUrl}' -Type String
+Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord
 try {
   $sig = @'
   [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]

@@ -60,7 +60,7 @@ router.get('/proxy.pac', async (req, res) => {
     // 1. ALWAYS allow localhost, local hostnames, and server LAN IPs directly
     // This guarantees that access to Mishkat Central Server (Port 3000) and local library assets is NEVER blocked
     pacContent += `  // Always allow access to Mishkat Central Server and local intranet\n`;
-    pacContent += `  if (shExpMatch(host, "127.0.0.1") || shExpMatch(host, "localhost") || shExpMatch(host, "*.local")) {\n`;
+    pacContent += `  if (shExpMatch(host, "127.0.0.1") || shExpMatch(host, "localhost") || shExpMatch(host, "*.local") || isPlainHostName(host)) {\n`;
     pacContent += `    return "DIRECT";\n`;
     pacContent += `  }\n`;
 
@@ -68,7 +68,8 @@ router.get('/proxy.pac', async (req, res) => {
       pacContent += `  if (shExpMatch(host, "${sIp}")) return "DIRECT";\n`;
     }
 
-    pacContent += `  if (isInNet(host, "192.168.0.0", "255.255.0.0") || isInNet(host, "10.0.0.0", "255.0.0.0") || isInNet(host, "172.16.0.0", "255.240.0.0")) {\n`;
+    // Direct access for common private IP ranges (instant string match, ZERO DNS lookups)
+    pacContent += `  if (shExpMatch(host, "10.*") || shExpMatch(host, "192.168.*") || shExpMatch(host, "172.1[6-9].*") || shExpMatch(host, "172.2[0-9].*") || shExpMatch(host, "172.3[0-1].*")) {\n`;
     pacContent += `    return "DIRECT";\n`;
     pacContent += `  }\n\n`;
 
@@ -78,7 +79,7 @@ router.get('/proxy.pac', async (req, res) => {
       pacContent += `  return "DIRECT";\n`;
     } else if (mode === 'OFFLINE') {
       pacContent += `  // Policy Mode: OFFLINE (blackhole all external web traffic; local library only)\n`;
-      pacContent += `  return "PROXY 127.0.0.1:9999; PROXY 127.0.0.1:9998";\n`;
+      pacContent += `  return "PROXY 127.0.0.1:9999";\n`;
     } else {
       // RESTRICTED mode: apply active blocklist
       pacContent += `  // Policy Mode: RESTRICTED (blocking academic distractions)\n`;
@@ -89,7 +90,7 @@ router.get('/proxy.pac', async (req, res) => {
         const cleanDomain = internetPolicyService.normalizeDomain(site.domain);
         if (!cleanDomain) continue;
         pacContent += `  if (host === "${cleanDomain}" || dnsDomainIs(host, ".${cleanDomain}") || shExpMatch(host, "*.${cleanDomain}")) {\n`;
-        pacContent += `    return "PROXY 127.0.0.1:9999; PROXY 127.0.0.1:9998";\n`;
+        pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
         pacContent += `  }\n`;
       }
       pacContent += `  return "DIRECT";\n`;

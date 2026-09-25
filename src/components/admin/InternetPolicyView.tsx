@@ -197,7 +197,8 @@ export const InternetPolicyView: React.FC = () => {
     if (!newSiteDomain.trim()) return;
     await handleAddSite(newSiteDomain, selectedCategoryId);
     setNewSiteDomain('');
-    fetchData();
+    await fetchData();
+    syncLocalProxy();
   };
 
   const submitBulk = async (e: React.FormEvent) => {
@@ -206,7 +207,8 @@ export const InternetPolicyView: React.FC = () => {
     if (domains.length === 0) return;
     await handleBulkAdd(domains, selectedCategoryId);
     setBulkDomains('');
-    fetchData();
+    await fetchData();
+    syncLocalProxy();
   };
 
   const togglePreset = async (preset: typeof PRESET_CATEGORIES[0]) => {
@@ -230,7 +232,8 @@ export const InternetPolicyView: React.FC = () => {
         const newCat = await res.json();
         catId = newCat.id;
         await handleBulkAdd(preset.domains, catId);
-        fetchData();
+        await fetchData();
+        syncLocalProxy();
       }
     }
   };
@@ -241,7 +244,8 @@ export const InternetPolicyView: React.FC = () => {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` }
       });
-      fetchData();
+      await fetchData();
+      syncLocalProxy();
     } catch (e) {
       console.error(e);
     }
@@ -255,7 +259,8 @@ export const InternetPolicyView: React.FC = () => {
       });
       setDeleteNotice(domain ? `✅ تم رفع الحظر فوراً عن "${domain}". يمكن للطلاب استخدامه الآن.` : '✅ تم حذف الموقع من قائمة الحظر.');
       setTimeout(() => setDeleteNotice(null), 4000);
-      fetchData();
+      await fetchData();
+      syncLocalProxy();
     } catch (e) {
       console.error(e);
     }
@@ -275,7 +280,8 @@ export const InternetPolicyView: React.FC = () => {
           isActive: !site.isActive
         })
       });
-      fetchData();
+      await fetchData();
+      syncLocalProxy();
     } catch (e) {
       console.error(e);
     }
