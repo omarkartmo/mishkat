@@ -763,12 +763,15 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
       let docIntroText: string | null = null;
       let docNumPages: number | null = null;
 
+      let detectedDocMeta: any = null;
+
       try {
         const docMeta = await extractDocumentMetadata(stagedFilePath, ext, { folderName, title });
-        if (docMeta.title && isRandomOrGenericFileName(title)) {
+        detectedDocMeta = docMeta;
+        if (docMeta.title && (isRandomOrGenericFileName(title) || docMeta.method === 'gemini_ocr')) {
           title = docMeta.title;
         }
-        if (docMeta.author && (!author || author === 'مؤلف غير محدد')) {
+        if (docMeta.author && (!author || author === 'مؤلف غير محدد' || docMeta.method === 'gemini_ocr')) {
           author = docMeta.author;
           authorDetectedFrom = 'document';
         } else if (author === 'مؤلف غير محدد') {
@@ -784,8 +787,21 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
         }
       }
 
-      // Automatic classification (Section 24) with Intro Text analysis
-      const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceName, categories, docIntroText);
+      // Automatic classification (Section 24) with Intro Text analysis or AI Vision mapping
+      let categoryId: string;
+      let categoryName: string;
+      let confidence: number;
+
+      if (detectedDocMeta?.aiCategory) {
+        categoryId = detectedDocMeta.aiCategory;
+        categoryName = detectedDocMeta.aiCategoryName || categories.find((c: any) => c.id === categoryId)?.name || 'العلوم الشرعية والفكر الإسلامي';
+        confidence = detectedDocMeta.aiConfidence || 95;
+      } else {
+        const classified = classifyBook(title, author, sourceName, categories, docIntroText);
+        categoryId = classified.categoryId;
+        categoryName = classified.categoryName;
+        confidence = classified.confidence;
+      }
 
       // Duplicate detection (Section 26)
       const { rows: dupHashRows } = await db.query('SELECT id, title FROM books WHERE file_hash = $1 LIMIT 1', [hash]);
@@ -813,7 +829,10 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
         isDuplicate,
         duplicateReason,
         pages: docNumPages || Math.max(1, Math.round(sizeMb * 45)),
-        summary: (docSummary && isValidArabicSentence(docSummary)) ? docSummary : synthesizeBookSummary(title, author, categoryName),
+        summary: (docSummary && isValidArabicSentence(docSummary)) ? docSummary : (docSummary || synthesizeBookSummary(title, author, categoryName)),
+        isScanned: Boolean(detectedDocMeta?.isScanned),
+        aiAssisted: detectedDocMeta?.method === 'gemini_ocr',
+        detectionMethod: detectedDocMeta?.method || null,
       });
     }
 
@@ -999,12 +1018,15 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
       let docIntroText: string | null = null;
       let docNumPages: number | null = null;
 
+      let detectedDocMeta: any = null;
+
       try {
         const docMeta = await extractDocumentMetadata(filePath, ext, { folderName, title });
-        if (docMeta.title && isRandomOrGenericFileName(title)) {
+        detectedDocMeta = docMeta;
+        if (docMeta.title && (isRandomOrGenericFileName(title) || docMeta.method === 'gemini_ocr')) {
           title = docMeta.title;
         }
-        if (docMeta.author && (!author || author === 'مؤلف غير محدد')) {
+        if (docMeta.author && (!author || author === 'مؤلف غير محدد' || docMeta.method === 'gemini_ocr')) {
           author = docMeta.author;
           authorDetectedFrom = 'document';
         } else if (author === 'مؤلف غير محدد') {
@@ -1030,7 +1052,20 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
         }
       }
 
-      const { categoryId, categoryName, confidence } = classifyBook(title, author, sourceNameForMeta, categories, docIntroText);
+      let categoryId: string;
+      let categoryName: string;
+      let confidence: number;
+
+      if (detectedDocMeta?.aiCategory) {
+        categoryId = detectedDocMeta.aiCategory;
+        categoryName = detectedDocMeta.aiCategoryName || categories.find((c: any) => c.id === categoryId)?.name || 'العلوم الشرعية والفكر الإسلامي';
+        confidence = detectedDocMeta.aiConfidence || 95;
+      } else {
+        const classified = classifyBook(title, author, sourceNameForMeta, categories, docIntroText);
+        categoryId = classified.categoryId;
+        categoryName = classified.categoryName;
+        confidence = classified.confidence;
+      }
 
       const isDuplicate = existingHashes.has(hash);
 
@@ -1053,7 +1088,10 @@ router.post('/bulk-scan', authenticateToken, requireRole('admin', 'librarian'), 
         isDuplicate,
         duplicateReason: isDuplicate ? 'الكتاب مستورد مسبقاً في المستودع الرقمي المركزي' : null,
         pages: docNumPages || 1,
-        summary: (docSummary && isValidArabicSentence(docSummary)) ? docSummary : synthesizeBookSummary(title, author, categoryName),
+        summary: (docSummary && isValidArabicSentence(docSummary)) ? docSummary : (docSummary || synthesizeBookSummary(title, author, categoryName)),
+        isScanned: Boolean(detectedDocMeta?.isScanned),
+        aiAssisted: detectedDocMeta?.method === 'gemini_ocr',
+        detectionMethod: detectedDocMeta?.method || null,
       });
     }
 
@@ -2254,6 +2292,37 @@ router.post('/sync-page-counts', authenticateToken, requireRole('admin'), async 
       success: false,
       error: { code: 'SYNC_FAILED', message: err.message }
     });
+  }
+});
+
+// POST /api/v1/books/ai-analyze-staged (Admin/Librarian: Trigger on-demand Gemini AI OCR analysis for any staged or digital book)
+router.post('/ai-analyze-staged', authenticateToken, requireRole('admin', 'librarian'), async (req: Request, res: Response) => {
+  try {
+    const { filePath, originalFileName } = req.body;
+    if (!filePath || typeof filePath !== 'string') {
+      return res.status(400).json({ success: false, error: { message: 'مسار الملف مطلوب للفحص بالذكاء الاصطناعي.' } });
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: { message: 'الملف غير موجود في خادم المكتبة.' } });
+    }
+
+    const { analyzeBookWithGemini } = await import('../services/bookAiService');
+    const result = await analyzeBookWithGemini(filePath, originalFileName || path.basename(filePath));
+
+    if (!result) {
+      return res.status(422).json({
+        success: false,
+        error: { message: 'تعذر استخراج بيانات الكتاب بالذكاء الاصطناعي. يرجى التأكد من مفتاح Google Gemini في الإعدادات.' }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { message: err.message || 'حدث خطأ أثناء فحص الكتاب بالذكاء الاصطناعي.' } });
   }
 });
 

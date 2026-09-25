@@ -7,11 +7,7 @@ type PolicyMode = 'OPEN' | 'RESTRICTED' | 'OFFLINE';
 const PRESET_CATEGORIES = [
   {
     name: 'التواصل الاجتماعي',
-    domains: ['facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com', 'snapchat.com', 'x.com', 'pinterest.com', 'reddit.com', 'discord.com']
-  },
-  {
-    name: 'منصات الفيديو واليوتيوب',
-    domains: ['youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'dailymotion.com', 'vimeo.com', 'twitch.tv']
+    domains: ['youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com', 'snapchat.com', 'x.com', 'pinterest.com', 'reddit.com', 'discord.com']
   },
   {
     name: 'الألعاب الترفيهية',
@@ -19,7 +15,7 @@ const PRESET_CATEGORIES = [
   },
   {
     name: 'البث والموسيقى',
-    domains: ['youtube.com', 'youtu.be', 'netflix.com', 'spotify.com', 'anghami.com', 'soundcloud.com', 'hulu.com', 'disneyplus.com', 'primevideo.com']
+    domains: ['netflix.com', 'spotify.com', 'anghami.com', 'soundcloud.com', 'hulu.com', 'disneyplus.com', 'primevideo.com']
   },
   {
     name: 'محتوى غير لائق',

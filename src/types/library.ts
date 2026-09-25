@@ -263,6 +263,8 @@ export interface SystemConfig {
   serverHost?: string;
   digitalBookRootUrl?: string;
   predefinedLoanReasons?: string[];
+  geminiApiKey?: string;
+  enableAiOcr?: boolean;
 }
 
 export type LoanRequestStatus = 'pending' | 'approved' | 'handed_over' | 'rejected' | 'cancelled';

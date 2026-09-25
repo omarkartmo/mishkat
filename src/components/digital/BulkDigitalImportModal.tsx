@@ -54,6 +54,9 @@ export interface StagedBookItem {
   duplicateReason?: string | null;
   pages?: number;
   summary?: string;
+  isScanned?: boolean;
+  aiAssisted?: boolean;
+  detectionMethod?: string | null;
 }
 
 export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
@@ -88,6 +91,37 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
+
+  const [analyzingBookId, setAnalyzingBookId] = useState<string | null>(null);
+
+  const handleAiAnalyzeSingleBook = async (book: StagedBookItem) => {
+    if (!book.stagedFilePath) return;
+    setAnalyzingBookId(book.tempId);
+    try {
+      const res = await bookRepository.analyzeBookWithAi(book.stagedFilePath, book.originalFileName);
+      if (res.success && res.data) {
+        const d = res.data;
+        handleUpdateBook(book.tempId, {
+          title: d.title || book.title,
+          author: d.author || book.author,
+          categoryId: d.categoryId || book.categoryId,
+          categoryName: d.categoryName || book.categoryName,
+          confidence: d.confidence || 95,
+          summary: d.summary || book.summary,
+          status: 'ready',
+          aiAssisted: true,
+          isScanned: d.isScanned,
+          authorDetectedFrom: 'document',
+        });
+      } else {
+        alert(`فشل الفحص بالذكاء الاصطناعي: ${res.error?.message || 'تأكد من إعداد مفتاح Gemini في الإعدادات.'}`);
+      }
+    } catch (err: any) {
+      alert(`خطأ: ${err.message || 'حدث خطأ أثناء فحص الكتاب.'}`);
+    } finally {
+      setAnalyzingBookId(null);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -660,14 +694,27 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                               onChange={(e) => handleUpdateBook(book.tempId, { author: e.target.value })}
                               className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-2 py-1 text-slate-300 outline-none disabled:opacity-50"
                             />
-                            {book.authorDetectedFrom === 'document' && (
+                            {book.aiAssisted ? (
+                              <div className="flex items-center gap-1 mt-1 text-[10px] text-purple-400 font-sans" title="تم التعرف البصري واستخراج البيانات بدقة عبر Gemini AI Vision">
+                                <Sparkles className="w-3 h-3 shrink-0 text-purple-400" />
+                                <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 font-bold">
+                                  فحص ذكي (Gemini)
+                                </span>
+                              </div>
+                            ) : book.isScanned ? (
+                              <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-400 font-sans" title="كتاب مصور / ممسوح ضوئياً - انقر زر الذكاء الاصطناعي لاستخراج بياناته">
+                                <span className="bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                  كتاب مصور
+                                </span>
+                              </div>
+                            ) : book.authorDetectedFrom === 'document' ? (
                               <div className="flex items-center gap-1 mt-1 text-[10px] text-sky-400 font-sans" title="تم استخراج اسم المؤلف تلقائياً بدقة من الصفحة الأولى/الثانية للكتاب">
                                 <BookOpen className="w-3 h-3 shrink-0 text-sky-400" />
                                 <span className="bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
                                   مستخرج من صفحة الكتاب
                                 </span>
                               </div>
-                            )}
+                            ) : null}
                           </td>
                           <td className="p-3">
                             <select
@@ -709,13 +756,32 @@ export const BulkDigitalImportModal: React.FC<BulkDigitalImportModalProps> = ({
                             )}
                           </td>
                           <td className="p-3 text-center">
-                            <button
-                              onClick={() => handleRemoveBook(book.tempId)}
-                              className="p-1 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-                              title="استبعاد من الاستيراد"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                disabled={analyzingBookId === book.tempId || book.isDuplicate}
+                                onClick={() => handleAiAnalyzeSingleBook(book)}
+                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                  book.aiAssisted
+                                    ? 'text-purple-400 bg-purple-500/10 hover:bg-purple-500/20'
+                                    : 'text-slate-400 hover:text-purple-300 hover:bg-purple-500/10'
+                                }`}
+                                title="فحص فوري بالذكاء الاصطناعي (Gemini Vision OCR)"
+                              >
+                                {analyzingBookId === book.tempId ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                                ) : (
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleRemoveBook(book.tempId)}
+                                className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                                title="استبعاد من الاستيراد"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

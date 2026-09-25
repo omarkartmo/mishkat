@@ -56,6 +56,28 @@ export class SettingsRepository {
   }
 
   /**
+   * Test Google Gemini AI connection (POST /api/v1/settings/test-gemini)
+   */
+  public async testGemini(apiKey?: string): Promise<{
+    success: boolean;
+    message: string;
+    model?: string;
+    error?: string;
+  }> {
+    const res = await apiClient.post<{ success: boolean; message: string; model?: string; error?: string }>(
+      '/settings/test-gemini',
+      { apiKey }
+    );
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return {
+      success: false,
+      message: res.error?.message || 'فشل الاتصال بمحرك الذكاء الاصطناعي.',
+    };
+  }
+
+  /**
    * Create and export server database backup (POST /api/v1/backups/create)
    */
   public async createBackup(): Promise<{

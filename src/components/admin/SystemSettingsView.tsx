@@ -27,6 +27,7 @@ import {
   AlertCircle,
   Database,
   Key,
+  Sparkles,
 } from 'lucide-react';
 import { SystemConfig } from '../../types/library';
 import { settingsRepository } from '../../services/settingsRepository';
@@ -63,6 +64,27 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   });
   const [newReasonInput, setNewReasonInput] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Gemini AI Vision & OCR State
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [testingGemini, setTestingGemini] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string; model?: string } | null>(null);
+
+  const handleTestGeminiKey = async () => {
+    setTestingGemini(true);
+    setGeminiTestResult(null);
+    try {
+      const res = await settingsRepository.testGemini(form.geminiApiKey?.trim());
+      setGeminiTestResult(res);
+    } catch (err: any) {
+      setGeminiTestResult({
+        success: false,
+        message: err.message || 'حدث خطأ أثناء فحص مفتاح الذكاء الاصطناعي.',
+      });
+    } finally {
+      setTestingGemini(false);
+    }
+  };
 
   // Backup & Restore State
   const [backups, setBackups] = useState<Array<{ fileName: string; type: 'manual' | 'pre_restore'; isEncrypted?: boolean; sizeFormatted: string; createdAt: string }>>([]);
@@ -661,6 +683,136 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               <span>القيمة المحفوظة حالياً:</span>
               <span className="text-emerald-400 font-bold">{config.digitalBookRootUrl || 'LibraryData/books/digital'}</span>
             </div>
+          </div>
+        </div>
+
+        {/* Gemini AI Multimodal Vision & OCR Configuration Card */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span>الذكاء الاصطناعي والتعرف الضوئي على الكتب (Gemini AI Vision & OCR)</span>
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                فحص الكتب الرقمية والممسوحة ضوئياً (صور) لاستخراج العنوان، المؤلف، التصنيف، والملخص تلقائياً بدقة بالغة (عربي / فرنسي / إنجليزي)
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+                Google AI Studio (مجاني 100%)
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-slate-950 border border-purple-500/20 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+              <div className="space-y-1 text-slate-300 leading-relaxed">
+                <p>
+                  <strong>حل مشكلة الكتب الممسوحة ضوئياً (صور بدون طبقة نص):</strong> تتيح هذه الخاصية لنظام مشكاة إرسال أول 3 صفحات من الكتاب إلى نموذج <span className="text-purple-300 font-mono font-semibold">Gemini 2.5 Flash</span> للتعرف البصري الفوري وتحديد عنوان الكتاب واسم المؤلف الحقيقي بدقة (مع استبعاد أسماء المشرفين والمؤسسات) وتصنيفه في إحدى فئات مشكاة الست.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+                  <span className="text-emerald-400 font-medium">✓ حصة مجانية يومية: 1,500 فحص يومياً بدون بطاقة بنكية</span>
+                  <span className="text-slate-500">•</span>
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 underline font-semibold"
+                  >
+                    <span>الحصول على مفتاح API مجاني من Google AI Studio</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div className="md:col-span-2">
+              <label className="block text-slate-300 font-medium mb-1 flex items-center justify-between">
+                <span>مفتاح Google Gemini API Key</span>
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="text-[10px] text-slate-400 hover:text-slate-200 underline cursor-pointer"
+                >
+                  {showApiKey ? 'إخفاء المفتاح' : 'إظهار المفتاح'}
+                </button>
+              </label>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={form.geminiApiKey || ''}
+                  onChange={(e) => setForm({ ...form, geminiApiKey: e.target.value })}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs outline-none focus:border-purple-500 pl-10"
+                />
+                <Key className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                disabled={testingGemini}
+                onClick={handleTestGeminiKey}
+                className="w-full px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 hover:border-purple-500 rounded-xl font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {testingGemini ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>جارٍ اختبار الاتصال...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>فحص صلاحية المفتاح</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {geminiTestResult && (
+            <div
+              className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                geminiTestResult.success
+                  ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+              }`}
+            >
+              {geminiTestResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-0.5">
+                <span className="font-bold">{geminiTestResult.success ? 'تم تأكيد الاتصال بنجاح:' : 'فشل فحص الاتصال:'}</span>
+                <p className="text-[11px] opacity-90">{geminiTestResult.message}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-1">
+            <label className="flex items-start gap-3 p-3 bg-slate-950/70 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition-colors">
+              <input
+                type="checkbox"
+                checked={form.enableAiOcr ?? true}
+                onChange={(e) => setForm({ ...form, enableAiOcr: e.target.checked })}
+                className="w-4 h-4 rounded text-purple-600 focus:ring-0 mt-0.5"
+              />
+              <div>
+                <span className="font-semibold text-slate-200">
+                  تفعيل الفحص الذكي التلقائي عند استيراد الكتب الممسوحة ضوئياً
+                </span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  عند تفعيل هذا الخيار، سيقوم النظام تلقائياً بفحص أي كتاب مصور لا يحتوي على نصوص مدمجة باستخدام الذكاء الاصطناعي أثناء الرفع أو الاستيراد الجماعي. الكتب الرقمية العادية التي تحتوي نصوصاً يتم فحصها محلياً وفورياً دون استهلاك أي حصة.
+                </p>
+              </div>
+            </label>
           </div>
         </div>
 

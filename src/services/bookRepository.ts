@@ -534,6 +534,26 @@ export class BookRepository {
       'X-Requested-With': 'XMLHttpRequest',
     });
   }
+
+  /**
+   * Analyze staged or digital book file with Google Gemini AI OCR (POST /api/v1/books/ai-analyze-staged)
+   */
+  public async analyzeBookWithAi(
+    filePath: string,
+    originalFileName?: string
+  ): Promise<ApiResponse<{
+    title: string;
+    author: string;
+    categoryId: string;
+    categoryName: string;
+    summary: string;
+    language: string;
+    confidence: number;
+    isScanned: boolean;
+    modelUsed: string;
+  }>> {
+    return apiClient.post('/books/ai-analyze-staged', { filePath, originalFileName });
+  }
 }
 
 export const bookRepository = new BookRepository();

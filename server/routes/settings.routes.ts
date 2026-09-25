@@ -109,4 +109,16 @@ router.put('/', authenticateToken, requireRole('admin'), async (req: Request, re
   }
 });
 
+// POST /api/v1/settings/test-gemini (Admin: Test Gemini AI OCR API key connectivity)
+router.post('/test-gemini', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { apiKey } = req.body;
+    const { testGeminiConnection } = await import('../services/bookAiService');
+    const result = await testGeminiConnection(apiKey);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: `خطأ في الخادم أثناء فحص الاتصال: ${err.message}` });
+  }
+});
+
 export default router;

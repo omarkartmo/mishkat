@@ -706,7 +706,11 @@ export interface ExtractedDocumentMetadata {
   summary: string | null;
   numPages?: number | null;
   pageFound: number | null;
-  method: 'heritage_catalog' | 'folder_heuristics' | 'page_1' | 'page_2' | 'page_3' | 'page_4' | 'intro_signature' | 'epub_creator' | 'pdf_metadata' | null;
+  method: 'heritage_catalog' | 'folder_heuristics' | 'page_1' | 'page_2' | 'page_3' | 'page_4' | 'intro_signature' | 'epub_creator' | 'pdf_metadata' | 'gemini_ocr' | null;
+  aiCategory?: string | null;
+  aiCategoryName?: string | null;
+  aiConfidence?: number | null;
+  isScanned?: boolean;
 }
 
 /**
@@ -868,6 +872,36 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
       } catch {}
     }
 
+    const isLikelyScanned = combinedPagesText.trim().length < 80;
+
+    // 4. Scanned Books & Visual OCR Fallback (Google Gemini Vision)
+    // Runs when no embedded text exists (< 80 chars across pages 1-3) or when author and title are both missing
+    if (isLikelyScanned || (!author && !title)) {
+      try {
+        const { isAiOcrEnabled, analyzeBookWithGemini } = await import('../services/bookAiService');
+        if (await isAiOcrEnabled()) {
+          const aiMeta = await analyzeBookWithGemini(filePath, path.basename(filePath));
+          if (aiMeta && aiMeta.title) {
+            return {
+              author: aiMeta.author || null,
+              title: aiMeta.title,
+              introText: aiMeta.summary || null,
+              summary: aiMeta.summary || null,
+              numPages,
+              pageFound: 1,
+              method: 'gemini_ocr',
+              aiCategory: aiMeta.categoryId,
+              aiCategoryName: aiMeta.categoryName,
+              aiConfidence: aiMeta.confidence,
+              isScanned: aiMeta.isScanned ?? isLikelyScanned,
+            };
+          }
+        }
+      } catch (aiErr) {
+        console.warn('[PDF Inspection] Gemini AI OCR fallback encountered an error:', aiErr);
+      }
+    }
+
     const { introExcerpt, introFull } = extractIntroductionExcerpt(combinedPagesText);
 
     return {
@@ -878,6 +912,7 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
       numPages,
       pageFound,
       method,
+      isScanned: isLikelyScanned,
     };
   } catch {
     return {
@@ -888,6 +923,7 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
       numPages: numPages || null,
       pageFound: null,
       method: null,
+      isScanned: false,
     };
   }
 }
@@ -963,7 +999,7 @@ export async function extractDocumentMetadata(
     docMeta = await inspectPdfDocument(filePath);
   }
 
-  if (docMeta.author && !isBlacklistedAuthor(docMeta.author)) {
+  if (docMeta.method === 'gemini_ocr' || (docMeta.author && !isBlacklistedAuthor(docMeta.author))) {
     return docMeta;
   }
 
@@ -985,6 +1021,7 @@ export async function extractDocumentMetadata(
       numPages: docMeta.numPages,
       pageFound: docMeta.pageFound,
       method: 'folder_heuristics',
+      isScanned: docMeta.isScanned,
     };
   }
 
@@ -1006,6 +1043,7 @@ export async function extractDocumentMetadata(
       numPages: docMeta.numPages,
       pageFound: docMeta.pageFound || 1,
       method: 'heritage_catalog',
+      isScanned: docMeta.isScanned,
     };
   }
 
@@ -1017,6 +1055,7 @@ export async function extractDocumentMetadata(
     numPages: docMeta.numPages,
     pageFound: docMeta.pageFound,
     method: docMeta.method,
+    isScanned: docMeta.isScanned,
   };
 }
 
@@ -1027,12 +1066,13 @@ export async function extractAuthorFromDocument(
   filePath: string,
   format: 'pdf' | 'epub',
   context?: { folderName?: string | null; title?: string | null }
-): Promise<{ author: string | null; method: 'heritage_catalog' | 'folder_heuristics' | 'pages_content' | 'epub_creator' | null }> {
+): Promise<{ author: string | null; method: 'heritage_catalog' | 'folder_heuristics' | 'pages_content' | 'epub_creator' | 'gemini_ocr' | null }> {
   const meta = await extractDocumentMetadata(filePath, format, context);
   const methodMap: Record<string, any> = {
     heritage_catalog: 'heritage_catalog',
     folder_heuristics: 'folder_heuristics',
     epub_creator: 'epub_creator',
+    gemini_ocr: 'gemini_ocr',
     page_1: 'pages_content',
     page_2: 'pages_content',
     page_3: 'pages_content',
