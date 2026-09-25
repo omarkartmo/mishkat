@@ -61,8 +61,17 @@ fn set_system_proxy(pac_url: &str) {
         // Ensure proxy is enabled conceptually, though AutoConfigURL overrides standard proxy
         let _ = internet_settings.set_value("ProxyEnable", &0u32); 
 
-        // Refresh system settings
+        // Refresh system settings & enforce QUIC blocking
         let refresh_script = r#"
+            try {
+                netsh advfirewall firewall add rule name="MISHKAT Block QUIC (UDP 443)" dir=out action=block protocol=UDP remoteport=443 | Out-Null
+            } catch {}
+            try {
+                New-Item -Path 'HKCU:\Software\Policies\Google\Chrome' -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -Path 'HKCU:\Software\Policies\Google\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+                New-Item -Path 'HKCU:\Software\Policies\Microsoft\Edge' -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -Path 'HKCU:\Software\Policies\Microsoft\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+            } catch {}
             $signature = @'
             [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
             public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);

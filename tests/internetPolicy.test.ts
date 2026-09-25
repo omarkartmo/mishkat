@@ -91,6 +91,32 @@ describe('Internet Policy Service & PAC Generation', () => {
     await internetPolicyService.setPolicyMode('RESTRICTED');
   });
 
+  it('automatically expands YouTube ecosystem to block googlevideo, ytimg, and youtu.be', async () => {
+    // Add youtube.com
+    await internetPolicyService.createBlockedSite('youtube.com', null, null);
+
+    const sites = await internetPolicyService.getBlockedSites();
+    const domains = sites.map(s => s.domain);
+
+    expect(domains).toContain('youtube.com');
+    expect(domains).toContain('youtu.be');
+    expect(domains).toContain('googlevideo.com');
+    expect(domains).toContain('ytimg.com');
+
+    // Fetch PAC file to verify smart matching
+    const res = await request(app).get('/api/v1/internet-policy/proxy.pac');
+    expect(res.text).toContain('shExpMatch(host, "*youtube*")');
+    expect(res.text).toContain('shExpMatch(host, "*googlevideo.com*")');
+    expect(res.text).toContain('shExpMatch(host, "*ytimg.com*")');
+
+    // Clean up
+    for (const site of sites) {
+      if (['youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'youtubei.googleapis.com', 'yt3.ggpht.com'].includes(site.domain)) {
+        await internetPolicyService.deleteBlockedSite(site.id);
+      }
+    }
+  });
+
   it('safely handles local windows proxy synchronization', async () => {
     const status = await internetPolicyService.getLocalWindowsProxyStatus();
     expect(status).toHaveProperty('configured');

@@ -10,12 +10,16 @@ const PRESET_CATEGORIES = [
     domains: ['facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com', 'snapchat.com', 'x.com', 'pinterest.com', 'reddit.com', 'discord.com']
   },
   {
+    name: 'منصات الفيديو واليوتيوب',
+    domains: ['youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'dailymotion.com', 'vimeo.com', 'twitch.tv']
+  },
+  {
     name: 'الألعاب الترفيهية',
     domains: ['roblox.com', 'miniclip.com', 'epicgames.com', 'steamcommunity.com', 'steampowered.com', 'ea.com', 'crazygames.com', 'poki.com']
   },
   {
     name: 'البث والموسيقى',
-    domains: ['netflix.com', 'spotify.com', 'anghami.com', 'soundcloud.com', 'hulu.com', 'disneyplus.com', 'primevideo.com']
+    domains: ['youtube.com', 'youtu.be', 'netflix.com', 'spotify.com', 'anghami.com', 'soundcloud.com', 'hulu.com', 'disneyplus.com', 'primevideo.com']
   },
   {
     name: 'محتوى غير لائق',
@@ -28,7 +32,7 @@ export const InternetPolicyView: React.FC = () => {
   const [sites, setSites] = useState<BlockedSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [policyMode, setPolicyMode] = useState<PolicyMode>('RESTRICTED');
-  const [excludeServer, setExcludeServer] = useState(true);
+  const [excludeServer, setExcludeServer] = useState(false);
   
   // Forms
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -66,7 +70,7 @@ export const InternetPolicyView: React.FC = () => {
       }
       if (excludeRes.ok) {
         const excludeData = await excludeRes.json();
-        setExcludeServer(excludeData.excludeServer ?? true);
+        setExcludeServer(excludeData.excludeServer ?? false);
       }
       if (statusRes && statusRes.ok) {
         const statusData = await statusRes.json();
@@ -119,7 +123,7 @@ export const InternetPolicyView: React.FC = () => {
         body: JSON.stringify({ excludeServer: exclude })
       });
       // Automatically synchronize local Windows proxy
-      syncLocalProxy();
+      await syncLocalProxy();
     } catch (e) {
       console.error('Failed to update exclude server setting', e);
     }

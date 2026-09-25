@@ -7,6 +7,16 @@ const execPromise = util.promisify(exec);
 
 export type InternetPolicyMode = 'OPEN' | 'RESTRICTED' | 'OFFLINE';
 
+export const DOMAIN_ECOSYSTEMS: Record<string, string[]> = {
+  'youtube.com': ['youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'youtubei.googleapis.com', 'yt3.ggpht.com'],
+  'youtu.be': ['youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'youtubei.googleapis.com', 'yt3.ggpht.com'],
+  'tiktok.com': ['tiktok.com', 'tiktokv.com', 'tiktokcdn.com', 'musical.ly'],
+  'facebook.com': ['facebook.com', 'fbcdn.net', 'fb.com', 'messenger.com'],
+  'instagram.com': ['instagram.com', 'cdninstagram.com'],
+  'twitter.com': ['twitter.com', 't.co', 'twimg.com', 'x.com'],
+  'x.com': ['x.com', 'twitter.com', 't.co', 'twimg.com']
+};
+
 export class InternetPolicyService {
   /**
    * Normalizes domain names (strips protocols, paths, ports, wildcards, and whitespace)
@@ -121,6 +131,15 @@ export class InternetPolicyService {
   async createBlockedSite(domain: string, categoryId: string | null, addedBy: string | null) {
     const cleanDomain = this.normalizeDomain(domain);
     if (!cleanDomain) throw new Error('Domain cannot be empty');
+
+    // Automatically expand multi-domain ecosystems (e.g. YouTube player, CDNs, shortlinks)
+    const ecosystem = DOMAIN_ECOSYSTEMS[cleanDomain];
+    if (ecosystem && ecosystem.length > 1) {
+      await this.createBlockedSitesBulk(ecosystem, categoryId, addedBy);
+      const { rows } = await db.query('SELECT * FROM blocked_sites WHERE domain = $1', [cleanDomain]);
+      return rows[0] || { domain: cleanDomain, is_active: true };
+    }
+
     const id = crypto.randomUUID();
     const { rows } = await db.query(
       `INSERT INTO blocked_sites (id, domain, category_id, added_by, is_active)
@@ -136,15 +155,27 @@ export class InternetPolicyService {
   async createBlockedSitesBulk(domains: string[], categoryId: string | null, addedBy: string | null) {
     if (domains.length === 0) return { count: 0 };
     
+    // Automatically expand ecosystems (e.g. including googlevideo, ytimg when youtube is added)
+    const expandedDomains: string[] = [];
+    for (const d of domains) {
+      const clean = this.normalizeDomain(d);
+      if (!clean) continue;
+      expandedDomains.push(clean);
+      if (DOMAIN_ECOSYSTEMS[clean]) {
+        for (const ecoDomain of DOMAIN_ECOSYSTEMS[clean]) {
+          expandedDomains.push(ecoDomain);
+        }
+      }
+    }
+
     // Batch insert with domain normalization and deduplication
     const values: any[] = [];
     const placeholders: string[] = [];
     let count = 1;
     const seen = new Set<string>();
     
-    for (const d of domains) {
-      const domainClean = this.normalizeDomain(d);
-      if (!domainClean || seen.has(domainClean)) continue;
+    for (const domainClean of expandedDomains) {
+      if (seen.has(domainClean)) continue;
       seen.add(domainClean);
       
       const id = crypto.randomUUID();
@@ -226,10 +257,24 @@ try {
         return { success: true, configured: false, autoConfigUrl: null };
       } else {
         // Server is NOT excluded (apply policy to Admin PC just like students!)
-        const pacUrl = 'http://127.0.0.1:3000/api/v1/internet-policy/proxy.pac';
+        // Dynamic query timestamp forces Windows and Chromium to invalidate any cached PAC script immediately
+        const pacUrl = `http://127.0.0.1:3000/api/v1/internet-policy/proxy.pac?v=${Date.now()}`;
         const setScript = `
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -Value '${pacUrl}' -Type String
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord
+
+# Enforce disabling QUIC in Chrome & Edge so video streaming/traffic cannot bypass the PAC proxy via UDP 443
+try {
+  New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Force -ErrorAction SilentlyContinue | Out-Null
+  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+  New-Item -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Force -ErrorAction SilentlyContinue | Out-Null
+  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+} catch {}
+
+try {
+  netsh advfirewall firewall add rule name="MISHKAT Block QUIC (UDP 443)" dir=out action=block protocol=UDP remoteport=443 | Out-Null
+} catch {}
+
 try {
   $sig = @'
   [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]

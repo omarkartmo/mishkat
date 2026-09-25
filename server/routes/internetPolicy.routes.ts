@@ -31,18 +31,6 @@ function isLocalServerRequest(req: express.Request): boolean {
 router.get('/proxy.pac', async (req, res) => {
   try {
     const mode = await internetPolicyService.getPolicyMode();
-    const excludeServer = await internetPolicyService.getExcludeServer();
-    const isServer = isLocalServerRequest(req);
-
-    // If the request originates from the local server machine AND excludeServer is true:
-    // Exclude the server machine completely from any blocking (return DIRECT)
-    if (isServer && excludeServer) {
-      res.setHeader('Content-Type', 'application/x-ns-proxy-autoconfig');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      return res.send('function FindProxyForURL(url, host) {\n  return "DIRECT";\n}\n');
-    }
 
     // Collect all IPv4 interface addresses for the Mishkat Server
     const serverLocalIps: string[] = ['127.0.0.1'];
@@ -89,9 +77,18 @@ router.get('/proxy.pac', async (req, res) => {
       for (const site of activeSites) {
         const cleanDomain = internetPolicyService.normalizeDomain(site.domain);
         if (!cleanDomain) continue;
+        
+        // Exact and subdomain match
         pacContent += `  if (host === "${cleanDomain}" || dnsDomainIs(host, ".${cleanDomain}") || shExpMatch(host, "*.${cleanDomain}")) {\n`;
         pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
         pacContent += `  }\n`;
+
+        // Smart media platform matching (e.g. YouTube video streaming CDN & player infrastructure)
+        if (cleanDomain.includes('youtube') || cleanDomain === 'youtu.be') {
+          pacContent += `  if (shExpMatch(host, "*youtube*") || shExpMatch(host, "*googlevideo.com*") || shExpMatch(host, "*ytimg.com*") || shExpMatch(host, "*youtu.be*") || shExpMatch(host, "*ggpht.com*")) {\n`;
+          pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
+          pacContent += `  }\n`;
+        }
       }
       pacContent += `  return "DIRECT";\n`;
     }

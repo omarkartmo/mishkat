@@ -243,6 +243,12 @@ Section "MISHKAT Core Installation" SecCore
     DetailPrint "تهيئة جدار حماية ويندوز للسماح باتصال أجهزة الطلاب..."
     nsExec::Exec 'netsh advfirewall firewall add rule name="MISHKAT Server (Port 3000)" dir=in action=allow protocol=TCP localport=3000'
 
+    ; Enforce PAC policy adherence by disabling QUIC (UDP 443) bypass in browsers
+    DetailPrint "تهيئة جدار حماية ويندوز لتعطيل تجاوز بروتوكول QUIC..."
+    nsExec::Exec 'netsh advfirewall firewall add rule name="MISHKAT Block QUIC (UDP 443)" dir=out action=block protocol=UDP remoteport=443'
+    WriteRegDWORD HKLM "SOFTWARE\Policies\Google\Chrome" "QuicAllowed" 0
+    WriteRegDWORD HKLM "SOFTWARE\Policies\Microsoft\Edge" "QuicAllowed" 0
+
     ; Start the Central Service
     DetailPrint "بدء تشغيل خدمة المكتبة المركزية..."
     nsExec::Exec 'net start MishkatLibraryService'
@@ -265,6 +271,12 @@ Section "MISHKAT Core Installation" SecCore
     SetOutPath "$INSTDIR"
     File /nonfatal "..\src-tauri\target\release\mishkat-student.exe"
     File "..\src-tauri\icons\icon.ico"
+
+    ; Enforce PAC policy adherence on student workstations by disabling QUIC bypass
+    DetailPrint "تهيئة جدار حماية ويندوز لتعطيل تجاوز بروتوكول QUIC على حاسوب الطالب..."
+    nsExec::Exec 'netsh advfirewall firewall add rule name="MISHKAT Block QUIC (UDP 443)" dir=out action=block protocol=UDP remoteport=443'
+    WriteRegDWORD HKLM "SOFTWARE\Policies\Google\Chrome" "QuicAllowed" 0
+    WriteRegDWORD HKLM "SOFTWARE\Policies\Microsoft\Edge" "QuicAllowed" 0
 
     ; Student Shortcuts with Mishkat Icon
     CreateDirectory "$SMPROGRAMS\MISHKAT"
@@ -300,8 +312,9 @@ Section "Uninstall"
   nsExec::Exec 'net stop MishkatLibraryService'
   nsExec::Exec '"$INSTDIR\bin\nssm.exe" remove MishkatLibraryService confirm'
 
-  ; Remove firewall rule
+  ; Remove firewall rules
   nsExec::Exec 'netsh advfirewall firewall delete rule name="MISHKAT Server (Port 3000)"'
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="MISHKAT Block QUIC (UDP 443)"'
 
   ; Prompt user to preserve or backup institutional data
   MessageBox MB_YESNO|MB_ICONQUESTION "هل ترغب في الاحتفاظ بقاعدة البيانات والكتب والنسخ الاحتياطية (مجلد LibraryData)؟$\r$\n$\r$\nنوصي باختيار (نعم) لحماية بيانات المدرسة." IDYES keep_data
