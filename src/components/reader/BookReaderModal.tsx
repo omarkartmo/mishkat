@@ -108,7 +108,14 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const touchStartYRef = useRef<number | null>(null);
   const touchDistanceRef = useRef<number | null>(null);
 
-  // Touchpad pinch-to-zoom & Ctrl+Wheel prevention of browser-level window zoom
+  const currentPageRef = useRef(currentPage);
+  currentPageRef.current = currentPage;
+  const numPagesRef = useRef(numPages);
+  numPagesRef.current = numPages;
+  const lastWheelTransitionRef = useRef<number>(0);
+  const accumulatedWheelDeltaRef = useRef<number>(0);
+
+  // Touchpad pinch-to-zoom, Ctrl+Wheel zoom, and Continuous Vertical Scroll Down/Up between pages
   useEffect(() => {
     const modalEl = modalRef.current;
     if (!modalEl) return;
@@ -129,6 +136,51 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           // In PDF mode, touchpad pinch smoothly scales canvas zoom in sync with manual buttons
           const zoomDelta = e.deltaY < 0 ? 0.08 : -0.08;
           setScale((prev) => Math.min(2.5, Math.max(0.6, Number((prev + zoomDelta).toFixed(2)))));
+        }
+        return;
+      }
+
+      // Continuous vertical scroll down / up between pages for PDF mode
+      if (!isEpub && viewerContainerRef.current) {
+        const container = viewerContainerRef.current;
+        const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 12;
+        const isAtTop = container.scrollTop <= 12;
+        const now = Date.now();
+
+        if (e.deltaY > 0 && isAtBottom) {
+          // Reached bottom of current page, continue scrolling down directly into next page
+          if (now - lastWheelTransitionRef.current > 350) {
+            accumulatedWheelDeltaRef.current += e.deltaY;
+            if (accumulatedWheelDeltaRef.current >= 40) {
+              if (currentPageRef.current < numPagesRef.current) {
+                e.preventDefault();
+                lastWheelTransitionRef.current = now;
+                accumulatedWheelDeltaRef.current = 0;
+                setCurrentPage((p) => Math.min(numPagesRef.current, p + 1));
+                container.scrollTop = 0;
+              }
+            }
+          }
+        } else if (e.deltaY < 0 && isAtTop) {
+          // Reached top of current page, continue scrolling up directly into previous page
+          if (now - lastWheelTransitionRef.current > 350) {
+            accumulatedWheelDeltaRef.current += e.deltaY;
+            if (accumulatedWheelDeltaRef.current <= -40) {
+              if (currentPageRef.current > 1) {
+                e.preventDefault();
+                lastWheelTransitionRef.current = now;
+                accumulatedWheelDeltaRef.current = 0;
+                setCurrentPage((p) => Math.max(1, p - 1));
+                setTimeout(() => {
+                  if (viewerContainerRef.current) {
+                    viewerContainerRef.current.scrollTop = viewerContainerRef.current.scrollHeight;
+                  }
+                }, 20);
+              }
+            }
+          }
+        } else {
+          accumulatedWheelDeltaRef.current = 0;
         }
       }
     };
@@ -652,6 +704,34 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           setCurrentPage((p) => Math.min(numPages, p + 1));
         } else if (epubRenditionRef.current) {
           epubRenditionRef.current.next();
+        }
+      } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        // Continuous Scroll Down: if at bottom of page, advance to next page
+        if (!isEpub) {
+          const container = viewerContainerRef.current;
+          const isAtBottom = !container || container.scrollTop + container.clientHeight >= container.scrollHeight - 15;
+          if (isAtBottom) {
+            e.preventDefault();
+            setCurrentPage((p) => Math.min(numPages, p + 1));
+            if (container) container.scrollTop = 0;
+          }
+        }
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        // Continuous Scroll Up: if at top of page, advance to previous page
+        if (!isEpub) {
+          const container = viewerContainerRef.current;
+          const isAtTop = !container || container.scrollTop <= 15;
+          if (isAtTop) {
+            e.preventDefault();
+            setCurrentPage((p) => Math.max(1, p - 1));
+            if (container) {
+              setTimeout(() => {
+                if (viewerContainerRef.current) {
+                  viewerContainerRef.current.scrollTop = viewerContainerRef.current.scrollHeight;
+                }
+              }, 20);
+            }
+          }
         }
       }
     };

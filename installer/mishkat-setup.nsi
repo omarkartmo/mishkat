@@ -19,7 +19,7 @@ InstallDirRegKey HKLM "Software\MISHKAT" "Install_Dir"
 RequestExecutionLevel admin
 ShowInstDetails show
 ShowUninstDetails show
-BrandingText "MISHKAT Commercial Distribution v1.1.8"
+BrandingText "MISHKAT Commercial Distribution v1.1.0"
 
 ; --- Interface Settings ---
 !define MUI_ABORTWARNING
@@ -292,9 +292,9 @@ Section "MISHKAT Core Installation" SecCore
   ; 4. Registry Keys & Uninstaller
   WriteRegStr HKLM "Software\MISHKAT" "Install_Dir" "$INSTDIR"
   WriteRegStr HKLM "Software\MISHKAT" "Role" "$SelectedRole"
-  WriteRegStr HKLM "Software\MISHKAT" "Version" "1.1.8"
+  WriteRegStr HKLM "Software\MISHKAT" "Version" "1.1.0"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "DisplayName" "MISHKAT School Library System"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "DisplayVersion" "1.1.8"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "DisplayVersion" "1.1.0"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "DisplayIcon" "$INSTDIR\icon.ico"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "Publisher" "MISHKAT"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MISHKAT" "UninstallString" '"$INSTDIR\uninstall.exe"'

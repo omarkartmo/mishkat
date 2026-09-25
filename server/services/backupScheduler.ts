@@ -29,6 +29,8 @@ export interface BackupOverallStatus {
     count: number | null;
     maxRetention: number;
     pendingFile: string | null;
+    folderId?: string | null;
+    folderName?: string | null;
   };
 }
 
@@ -320,6 +322,8 @@ class BackupScheduler {
         count: cloudCount,
         maxRetention: CLOUD_BACKUP_RETENTION_LIMIT,
         pendingFile: this.pendingCloudUploadFile,
+        folderId: driveStatus.folderId || null,
+        folderName: driveStatus.folderName || null,
       },
     };
   }

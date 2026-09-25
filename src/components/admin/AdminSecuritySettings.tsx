@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Key, Save, CheckCircle2, User, Mail, Phone, Hash } from 'lucide-react';
+import { Shield, Key, Save, CheckCircle2, User, Hash } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 
 export const AdminSecuritySettings: React.FC = () => {
   const { user, refreshUser, logout } = useAuth();
 
-  // Initial Registration Information
+  // Initial Registration Information (Simplified)
   const [registrationNumber, setRegistrationNumber] = useState(user?.registrationNumber || '');
   const [name, setName] = useState(user?.name || '');
-  const [username, setUsername] = useState(user?.username || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phone || '');
 
   // Password & Security Question
   const [currentPassword, setCurrentPassword] = useState('');
@@ -28,9 +25,6 @@ export const AdminSecuritySettings: React.FC = () => {
     if (user) {
       setRegistrationNumber(user.registrationNumber || '');
       setName(user.name || '');
-      setUsername(user.username || '');
-      setEmail(user.email || '');
-      setPhone(user.phone || '');
     }
   }, [user]);
 
@@ -42,12 +36,12 @@ export const AdminSecuritySettings: React.FC = () => {
     }
 
     if (!registrationNumber.trim()) {
-      setError('رقم القيد لا يمكن أن يكون فارغاً.');
+      setError('رمز الدخول لا يمكن أن يكون فارغاً.');
       return;
     }
 
     if (!name.trim()) {
-      setError('الاسم الكامل للمشرف مطلوب.');
+      setError('اسم أمين المكتبة مطلوب.');
       return;
     }
 
@@ -60,9 +54,6 @@ export const AdminSecuritySettings: React.FC = () => {
         currentPassword,
         registrationNumber: registrationNumber.trim(),
         name: name.trim(),
-        username: username.trim() || undefined,
-        email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
         newPassword: newPassword.trim() || undefined,
         securityQuestion: securityQuestion.trim() || undefined,
         securityAnswer: securityAnswer.trim() || undefined,
@@ -77,7 +68,7 @@ export const AdminSecuritySettings: React.FC = () => {
             await logout();
           }, 2000);
         } else {
-          setSuccess(res.data?.message || 'تم تحديث معلومات التسجيل وإعدادات الحساب بنجاح.');
+          setSuccess(res.data?.message || 'تم تحديث معلومات الحساب بنجاح.');
           setCurrentPassword('');
           setSecurityQuestion('');
           setSecurityAnswer('');
@@ -102,7 +93,7 @@ export const AdminSecuritySettings: React.FC = () => {
             <span>معلومات الحساب وإعدادات الأمان للمشرف</span>
           </h3>
           <p className="text-slate-400 mt-1 text-[11px] leading-relaxed">
-            يمكنك هنا تغيير معلومات التسجيل الأولية (رقم القيد، الاسم، اسم المستخدم) بالإضافة لتحديث كلمة المرور وسؤال الأمان.
+            يمكنك هنا تعديل رمز الدخول الخاص بحساب أمين المكتبة واسمك الشخصي بالإضافة لتحديث كلمة المرور وسؤال الأمان.
           </p>
         </div>
       </div>
@@ -125,13 +116,13 @@ export const AdminSecuritySettings: React.FC = () => {
         <div className="space-y-4 bg-slate-950/40 p-4 rounded-xl border border-slate-800/60">
           <h4 className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
             <User className="w-3.5 h-3.5" />
-            <span>معلومات التسجيل والهوية الأساسية</span>
+            <span>بيانات حساب أمين المكتبة</span>
           </h4>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="block text-slate-300 font-medium">
-                رقم القيد الأساسي (رمز الدخول) *
+                رمز / اسم الدخول (رقم القيد) *
               </label>
               <div className="relative">
                 <input
@@ -144,12 +135,12 @@ export const AdminSecuritySettings: React.FC = () => {
                 />
                 <Hash className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-              <p className="text-[10px] text-slate-500">يستخدم لتسجيل الدخول في الواجهة الرئيسية.</p>
+              <p className="text-[10px] text-slate-500">يستخدم لتسجيل الدخول في واجهة أمين المكتبة.</p>
             </div>
 
             <div className="space-y-1">
               <label className="block text-slate-300 font-medium">
-                الاسم الكامل للمشرف *
+                اسم أمين المكتبة (صاحب الحساب) *
               </label>
               <input
                 type="text"
@@ -159,49 +150,7 @@ export const AdminSecuritySettings: React.FC = () => {
                 placeholder="أ. عمر بن حميد المعمري"
                 required
               />
-              <p className="text-[10px] text-slate-500">الاسم المعروض في السجلات والتقارير الرسمية.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-            <div className="space-y-1">
-              <label className="block text-slate-300 font-medium">اسم مستخدم اختياري (Username)</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
-                placeholder="omar_admin"
-              />
-              <p className="text-[10px] text-slate-500">يتيح تسجيل الدخول باسم المستخدم بديلاً عن رقم القيد.</p>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-slate-300 font-medium">البريد الإلكتروني</label>
-              <div className="relative">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-8 text-slate-200 focus:outline-none focus:border-indigo-500"
-                  placeholder="admin@mishkat.edu"
-                />
-                <Mail className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-slate-300 font-medium">رقم الهاتف</label>
-              <div className="relative">
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-8 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
-                  placeholder="968XXXXXXXX"
-                />
-                <Phone className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
+              <p className="text-[10px] text-slate-500">الاسم الشخصي لأمين المكتبة المعروض في السجلات والتقارير.</p>
             </div>
           </div>
         </div>

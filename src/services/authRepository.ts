@@ -29,7 +29,8 @@ export class AuthRepository {
     });
 
     if (res.success && res.data?.token) {
-      apiClient.setToken(res.data.token, true);
+      const isStudent = res.data.user?.role === 'student';
+      apiClient.setToken(res.data.token, !isStudent);
       return {
         success: true,
         data: res.data,

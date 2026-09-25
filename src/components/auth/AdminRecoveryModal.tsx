@@ -26,7 +26,7 @@ export const AdminRecoveryModal: React.FC<AdminRecoveryModalProps> = ({ onClose,
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`http://localhost:3000/api/v1/auth/security-question?registrationNumber=${encodeURIComponent(registrationNumber)}`);
+      const res = await fetch(`/api/v1/auth/security-question?registrationNumber=${encodeURIComponent(registrationNumber)}`);
       const data = await res.json();
       
       if (data.success && data.data?.question) {
@@ -52,7 +52,7 @@ export const AdminRecoveryModal: React.FC<AdminRecoveryModalProps> = ({ onClose,
     setError('');
     
     try {
-      const res = await fetch('http://localhost:3000/api/v1/auth/recover', {
+      const res = await fetch('/api/v1/auth/recover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

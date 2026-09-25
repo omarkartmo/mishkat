@@ -23,6 +23,8 @@ import bcrypt from 'bcryptjs';
 let app: Express;
 let adminToken: string;
 let studentToken: string;
+let mockRemoteFiles: Array<{ id: string; name: string; size: string; createdTime: string; parents?: string[] }> = [];
+let mockDrive: any;
 
 beforeAll(async () => {
   app = await createExpressApp();
@@ -141,10 +143,8 @@ describe('MISHKAT: Automatic Backup, Local Retention & Google Drive Integration 
   });
 
   describe('2. Google Drive Cloud Integration, Duplicate Prevention & Cloud Retention', () => {
-    let mockRemoteFiles: Array<{ id: string; name: string; size: string; createdTime: string }> = [];
-
     // Construct mock drive client
-    const mockDrive = {
+    mockDrive = {
       files: {
         list: vi.fn().mockImplementation(async ({ q }) => {
           if (q.includes(`name = '${DRIVE_BACKUPS_FOLDER_NAME}'`)) {
@@ -179,7 +179,17 @@ describe('MISHKAT: Automatic Backup, Local Retention & Google Drive Integration 
           mockRemoteFiles = mockRemoteFiles.filter((f) => f.id !== fileId);
           return { data: {} };
         }),
+        update: vi.fn().mockImplementation(async ({ fileId, addParents, removeParents }: any) => {
+          const file = mockRemoteFiles.find((f) => f.id === fileId);
+          if (file) {
+            (file as any).parents = [addParents];
+          }
+          return { data: file || { id: fileId } };
+        }),
         get: vi.fn().mockImplementation(async ({ fileId }) => {
+          if (fileId.startsWith('folder-') || fileId.includes('mock-folder')) {
+            return { data: { id: fileId, name: DRIVE_BACKUPS_FOLDER_NAME, trashed: false } };
+          }
           // Return mock stream with authentic current users so tokens remain valid
           const { rows: currentUsers } = await db.query('SELECT * FROM users');
           const { rows: currentCats } = await db.query('SELECT * FROM categories');
@@ -356,6 +366,95 @@ describe('MISHKAT: Automatic Backup, Local Retention & Google Drive Integration 
         .set('Authorization', `Bearer ${studentToken}`)
         .send({ confirm: true });
       expect(restoreDriveRes.status).toBe(403);
+    });
+  });
+
+  describe('4. Dual-Layer Token Persistence, Auto-Healing Across Updates & Dedicated Folder Organization', () => {
+    it('persists tokens to PostgreSQL system_settings and restores them when secrets file is removed (update simulation)', async () => {
+      // 1. Ensure tokens are saved
+      const testTokens = {
+        access_token: 'test-access-token-persistent',
+        refresh_token: 'test-refresh-token-vital-across-updates',
+        token_type: 'Bearer',
+        expiry_date: Date.now() + 7200_000,
+      };
+      await googleDriveService.saveTokens(testTokens);
+
+      // Verify stored in PostgreSQL system_settings
+      const dbRow = await db.query("SELECT value FROM system_settings WHERE key = 'google_drive_tokens'");
+      expect(dbRow.rows.length).toBe(1);
+      const parsedFromDb = typeof dbRow.rows[0].value === 'string' ? JSON.parse(dbRow.rows[0].value) : dbRow.rows[0].value;
+      expect(parsedFromDb.refresh_token).toBe('test-refresh-token-vital-across-updates');
+
+      // 2. Simulate application update / secrets directory wipe:
+      // Delete the secrets file on disk
+      const secretsTokensPath = path.join(serverConfig.dirs.secrets, 'google_drive_tokens.json');
+      if (fs.existsSync(secretsTokensPath)) {
+        fs.unlinkSync(secretsTokensPath);
+      }
+      expect(fs.existsSync(secretsTokensPath)).toBe(false);
+
+      // 3. Call syncTokensWithDb (as executed on server startup in index.ts)
+      await googleDriveService.syncTokensWithDb();
+
+      // 4. File must be re-created from database
+      expect(fs.existsSync(secretsTokensPath)).toBe(true);
+      const restoredFileTokens = JSON.parse(fs.readFileSync(secretsTokensPath, 'utf8'));
+      expect(restoredFileTokens.refresh_token).toBe('test-refresh-token-vital-across-updates');
+      expect(googleDriveService.getTokens()?.refresh_token).toBe('test-refresh-token-vital-across-updates');
+    });
+
+    it('merges tokens so refreshing access token does not destroy the long-lived refresh_token', async () => {
+      // Save tokens with refresh_token
+      await googleDriveService.saveTokens({
+        access_token: 'initial-access-token',
+        refresh_token: 'initial-refresh-token-must-stay',
+        token_type: 'Bearer',
+        expiry_date: Date.now() + 3600_000,
+      });
+
+      // Now Google OAuth token refresh response returns ONLY an access_token (without refresh_token)
+      await googleDriveService.saveTokens({
+        access_token: 'refreshed-short-lived-access-token',
+        token_type: 'Bearer',
+        expiry_date: Date.now() + 3600_000,
+      } as any);
+
+      // Verify refresh_token was NOT lost in DB or file
+      const current = googleDriveService.getTokens();
+      expect(current?.access_token).toBe('refreshed-short-lived-access-token');
+      expect(current?.refresh_token).toBe('initial-refresh-token-must-stay');
+    });
+
+    it('organizes loose root backups into dedicated "MISHKAT Backups" folder', async () => {
+      // Prepare simulated loose backup files located in root (parents: ['root'])
+      mockRemoteFiles = [
+        { id: 'loose-1', name: 'mishkat_backup_old1.json', size: '1024', createdTime: new Date().toISOString() },
+        { id: 'loose-2', name: 'mishkat_backup_old2.json', size: '2048', createdTime: new Date().toISOString() },
+      ];
+
+      const organizedCount = await googleDriveService.organizeLooseBackups(mockDrive, 'mock-folder-id-123');
+      expect(organizedCount).toBe(2);
+      expect((mockRemoteFiles[0] as any).parents).toEqual(['mock-folder-id-123']);
+      expect((mockRemoteFiles[1] as any).parents).toEqual(['mock-folder-id-123']);
+    });
+
+    it('GET /api/v1/backups/status exposes folderId and folderName for UI deep linking', async () => {
+      // Ensure folder is set in config
+      await googleDriveService.saveConfig({
+        clientId: 'mock-client-id-12345',
+        clientSecret: 'mock-client-secret-67890',
+        folderId: 'folder-abc-987',
+        folderName: 'MISHKAT Backups',
+      });
+
+      const res = await request(app)
+        .get('/api/v1/backups/status')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.cloud.folderId).toBe('folder-abc-987');
+      expect(res.body.data.cloud.folderName).toBe('MISHKAT Backups');
     });
   });
 

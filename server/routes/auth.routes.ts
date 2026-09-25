@@ -74,16 +74,17 @@ router.post('/login', authRateLimiter(15), async (req: Request, res: Response) =
     // Update last login
     await db.query('UPDATE users SET last_login_at = $1 WHERE id = $2', [new Date().toISOString(), user.id]);
 
-    // Generate JWT Token with tokenVersion for session revocation
+    // Generate JWT Token with tokenVersion for session revocation and serverBootId for reboot detection
     const token = jwt.sign(
       {
         userId: user.id,
         registrationNumber: user.registration_number,
         role: user.role_id,
         tokenVersion: user.token_version || 1,
+        serverBootId: user.role_id === 'student' ? serverConfig.serverBootId : undefined,
       },
       serverConfig.jwtSecret,
-      { expiresIn: '7d' }
+      { expiresIn: user.role_id === 'student' ? '12h' : '7d' }
     );
 
     const userPayload = {
@@ -173,8 +174,8 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
   });
 });
 
-// GET /api/v1/auth/security-question
-router.get('/security-question', authRateLimiter(15), async (req: Request, res: Response) => {
+// GET /api/v1/auth/security-question (No lockout rate limiter for library institutional usability)
+router.get('/security-question', async (req: Request, res: Response) => {
   const { registrationNumber } = req.query;
   
   if (!registrationNumber) {
@@ -225,8 +226,8 @@ router.get('/security-question', authRateLimiter(15), async (req: Request, res: 
   }
 });
 
-// POST /api/v1/auth/recover
-router.post('/recover', authRateLimiter(5), async (req: Request, res: Response) => {
+// POST /api/v1/auth/recover (No lockout rate limiter for library institutional usability)
+router.post('/recover', async (req: Request, res: Response) => {
   const { registrationNumber, securityAnswer, newPassword } = req.body;
 
   if (!registrationNumber || !securityAnswer) {

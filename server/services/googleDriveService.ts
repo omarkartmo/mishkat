@@ -4,6 +4,7 @@ import { Readable } from 'stream';
 import type { drive_v3 } from 'googleapis';
 import { serverConfig } from '../config';
 import { logger } from '../utils/logger';
+import { db } from '../db/pool';
 
 export const CLOUD_BACKUP_RETENTION_LIMIT = 7;
 export const DRIVE_BACKUPS_FOLDER_NAME = 'MISHKAT Backups';
@@ -20,6 +21,8 @@ export interface GoogleDriveConfig {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  folderId?: string;
+  folderName?: string;
 }
 
 export interface GoogleDriveTokens {
@@ -43,6 +46,7 @@ export interface DriveConnectionStatus {
   connected: boolean;
   email?: string;
   folderId?: string;
+  folderName?: string;
   error?: string;
 }
 
@@ -88,6 +92,8 @@ class GoogleDriveService {
             clientId: parsed.clientId,
             clientSecret: parsed.clientSecret,
             redirectUri: parsed.redirectUri || `http://localhost:${serverConfig.port}/api/v1/backups/drive/callback`,
+            folderId: parsed.folderId,
+            folderName: parsed.folderName,
           };
         }
       } catch (err: any) {
@@ -105,6 +111,7 @@ class GoogleDriveService {
 
   /**
    * Saves OAuth configuration entered by the administrator.
+   * Persists both to secrets filesystem and PostgreSQL system_settings table.
    */
   public saveConfig(config: Partial<GoogleDriveConfig>): void {
     const current = this.getConfig();
@@ -112,6 +119,8 @@ class GoogleDriveService {
       clientId: config.clientId?.trim() || current.clientId,
       clientSecret: config.clientSecret?.trim() || current.clientSecret,
       redirectUri: config.redirectUri?.trim() || current.redirectUri,
+      folderId: config.folderId || current.folderId,
+      folderName: config.folderName || current.folderName,
     };
 
     if (!fs.existsSync(serverConfig.dirs.secrets)) {
@@ -119,6 +128,17 @@ class GoogleDriveService {
     }
 
     fs.writeFileSync(this.configFilePath, JSON.stringify(updated, null, 2), 'utf8');
+
+    // Dual-layer persistence to PostgreSQL system_settings
+    try {
+      db.query(`
+        INSERT INTO system_settings (key, value, updated_at)
+        VALUES ('google_drive_config', $1, CURRENT_TIMESTAMP)
+        ON CONFLICT (key) DO UPDATE
+        SET value = $1, updated_at = CURRENT_TIMESTAMP
+      `, [JSON.stringify(updated)]).catch(() => {});
+    } catch {}
+
     logger.info('[GoogleDrive] Saved OAuth configuration.');
   }
 
@@ -136,20 +156,43 @@ class GoogleDriveService {
     }
     try {
       const content = fs.readFileSync(this.tokensFilePath, 'utf8');
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      if (parsed && (parsed.access_token || parsed.refresh_token)) {
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
   }
 
   /**
-   * Saves updated tokens to disk.
+   * Saves updated tokens to disk and database.
+   * ALWAYS merges with existing tokens to prevent accidental loss of refresh_token.
    */
   public saveTokens(tokens: GoogleDriveTokens): void {
+    const existing = this.getTokens();
+    const merged: GoogleDriveTokens = {
+      ...existing,
+      ...tokens,
+      refresh_token: tokens.refresh_token || existing?.refresh_token || null,
+      expiry_date: tokens.expiry_date || ((tokens as any).expires_in ? Date.now() + ((tokens as any).expires_in * 1000) : existing?.expiry_date),
+    };
+
     if (!fs.existsSync(serverConfig.dirs.secrets)) {
       fs.mkdirSync(serverConfig.dirs.secrets, { recursive: true });
     }
-    fs.writeFileSync(this.tokensFilePath, JSON.stringify(tokens, null, 2), 'utf8');
+    fs.writeFileSync(this.tokensFilePath, JSON.stringify(merged, null, 2), 'utf8');
+
+    // Dual-layer persistence to PostgreSQL system_settings
+    try {
+      db.query(`
+        INSERT INTO system_settings (key, value, updated_at)
+        VALUES ('google_drive_tokens', $1, CURRENT_TIMESTAMP)
+        ON CONFLICT (key) DO UPDATE
+        SET value = $1, updated_at = CURRENT_TIMESTAMP
+      `, [JSON.stringify(merged)]).catch(() => {});
+    } catch {}
   }
 
   /**
@@ -161,7 +204,53 @@ class GoogleDriveService {
         fs.unlinkSync(this.tokensFilePath);
       } catch {}
     }
+    try {
+      db.query("DELETE FROM system_settings WHERE key = 'google_drive_tokens'").catch(() => {});
+    } catch {}
     logger.info('[GoogleDrive] Disconnected Google Drive and removed tokens.');
+  }
+
+  /**
+   * Synchronizes Google Drive configuration and tokens between the PostgreSQL database
+   * and the secrets filesystem. This guarantees that the Google Drive connection survives
+   * application updates, re-installations, and database restores.
+   */
+  public async syncTokensWithDb(): Promise<void> {
+    try {
+      // 1. Sync Config
+      const { rows: configRows } = await db.query("SELECT value FROM system_settings WHERE key = 'google_drive_config'");
+      if (configRows && configRows.length > 0 && configRows[0].value) {
+        const dbConfig = configRows[0].value;
+        const fileConfig = this.getConfig();
+        const mergedConfig: GoogleDriveConfig = {
+          clientId: fileConfig.clientId || dbConfig.clientId || DEFAULT_GOOGLE_CLIENT_ID,
+          clientSecret: fileConfig.clientSecret || dbConfig.clientSecret || DEFAULT_GOOGLE_CLIENT_SECRET,
+          redirectUri: fileConfig.redirectUri || dbConfig.redirectUri,
+          folderId: fileConfig.folderId || dbConfig.folderId,
+          folderName: fileConfig.folderName || dbConfig.folderName,
+        };
+        this.saveConfig(mergedConfig);
+      } else {
+        const currentConfig = this.getConfig();
+        if (currentConfig.folderId || currentConfig.clientId !== DEFAULT_GOOGLE_CLIENT_ID) {
+          this.saveConfig(currentConfig);
+        }
+      }
+
+      // 2. Sync Tokens
+      const { rows: tokenRows } = await db.query("SELECT value FROM system_settings WHERE key = 'google_drive_tokens'");
+      const dbTokens = tokenRows && tokenRows.length > 0 ? tokenRows[0].value : null;
+      const fileTokens = this.getTokens();
+
+      if (dbTokens && (!fileTokens || (!fileTokens.refresh_token && dbTokens.refresh_token))) {
+        this.saveTokens(dbTokens);
+        logger.info('[GoogleDrive] Successfully restored Google Drive tokens from database.');
+      } else if (fileTokens && !dbTokens) {
+        this.saveTokens(fileTokens);
+      }
+    } catch (err: any) {
+      logger.warn(`[GoogleDrive] Sync tokens with DB notice: ${err.message}`);
+    }
   }
 
   /**
@@ -415,6 +504,30 @@ class GoogleDriveService {
           });
           return { status: res.status };
         },
+
+        update: async (params: any) => {
+          const token = await this.getValidAccessToken();
+          const searchParams = new URLSearchParams();
+          if (params.addParents) searchParams.set('addParents', params.addParents);
+          if (params.removeParents) searchParams.set('removeParents', params.removeParents);
+          if (params.fields) searchParams.set('fields', params.fields);
+
+          const url = `https://www.googleapis.com/drive/v3/files/${params.fileId}?${searchParams.toString()}`;
+          const res = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: params.requestBody ? JSON.stringify(params.requestBody) : undefined,
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Google Drive update failed: ${errText}`);
+          }
+          const data = (await res.json()) as any;
+          return { data };
+        },
       },
     };
   }
@@ -468,10 +581,12 @@ class GoogleDriveService {
     try {
       const drive = await this.getDriveClient();
       const folderId = await this.ensureBackupsFolder(drive);
+      const config = this.getConfig();
       return {
         configured: true,
         connected: true,
         folderId,
+        folderName: config.folderName || DRIVE_BACKUPS_FOLDER_NAME,
       };
     } catch (err: any) {
       return {
@@ -484,10 +599,31 @@ class GoogleDriveService {
 
   /**
    * Finds or creates the dedicated "MISHKAT Backups" folder on Google Drive.
+   * Caches folderId permanently in config and database, and organizes any loose
+   * backup files previously created in root into this folder.
    */
   public async ensureBackupsFolder(drive?: drive_v3.Drive): Promise<string> {
+    const config = this.getConfig();
     const driveClient = drive || (await this.getDriveClient());
 
+    // 1. If we have a cached folderId, verify it still exists on Drive
+    if (config.folderId) {
+      try {
+        if (typeof driveClient.files?.get === 'function') {
+          const getRes = await driveClient.files.get({
+            fileId: config.folderId,
+            fields: 'id, name, trashed',
+          });
+          if (getRes?.data && !getRes.data.trashed && getRes.data.id === config.folderId) {
+            return config.folderId;
+          }
+        }
+      } catch {
+        // Cached folderId query failed, proceed to search or create
+      }
+    }
+
+    // 2. Query folder by primary name
     const query = `mimeType = 'application/vnd.google-apps.folder' and name = '${DRIVE_BACKUPS_FOLDER_NAME}' and trashed = false`;
     const res = await driveClient.files.list({
       q: query,
@@ -496,14 +632,38 @@ class GoogleDriveService {
     });
 
     if (res.data.files && res.data.files.length > 0) {
-      return res.data.files[0].id!;
+      const folderId = res.data.files[0].id!;
+      const folderName = res.data.files[0].name || DRIVE_BACKUPS_FOLDER_NAME;
+      this.saveConfig({ folderId, folderName });
+      return folderId;
     }
 
-    // Create the folder if it does not exist
+    // 3. Fallback: Search for any legacy folder names
+    const legacyFolderNames = ['نسخ مشكاة الاحتياطية - MISHKAT Backups', 'Mishkat Backups'];
+    for (const legacyName of legacyFolderNames) {
+      if (legacyName === DRIVE_BACKUPS_FOLDER_NAME) continue;
+      try {
+        const legacyQuery = `mimeType = 'application/vnd.google-apps.folder' and name = '${legacyName}' and trashed = false`;
+        const legacyRes = await driveClient.files.list({
+          q: legacyQuery,
+          fields: 'files(id, name)',
+          spaces: 'drive',
+        });
+        if (legacyRes.data.files && legacyRes.data.files.length > 0) {
+          const folderId = legacyRes.data.files[0].id!;
+          const folderName = legacyRes.data.files[0].name || legacyName;
+          this.saveConfig({ folderId, folderName });
+          return folderId;
+        }
+      } catch {}
+    }
+
+    // 4. Create the folder if it does not exist
     const createRes = await driveClient.files.create({
       requestBody: {
         name: DRIVE_BACKUPS_FOLDER_NAME,
         mimeType: 'application/vnd.google-apps.folder',
+        description: 'المجلد الرسمي المخصص لحفظ النسخ الاحتياطية لقاعدة بيانات نظام مشكاة للمكتبات',
       },
       fields: 'id, name',
     });
@@ -512,8 +672,62 @@ class GoogleDriveService {
       throw new Error('فشل إنشاء مجلد النسخ الاحتياطية على Google Drive.');
     }
 
-    logger.info(`[GoogleDrive] Created folder "${DRIVE_BACKUPS_FOLDER_NAME}" with ID: ${createRes.data.id}`);
-    return createRes.data.id;
+    const folderId = createRes.data.id;
+    this.saveConfig({ folderId, folderName: DRIVE_BACKUPS_FOLDER_NAME });
+    logger.info(`[GoogleDrive] Created dedicated folder "${DRIVE_BACKUPS_FOLDER_NAME}" with ID: ${folderId}`);
+
+    // 5. Automatically organize any loose backups previously in root into this folder
+    try {
+      await this.organizeLooseBackups(driveClient, folderId);
+    } catch (orgErr: any) {
+      logger.warn(`[GoogleDrive] Loose backup organization notice: ${orgErr.message}`);
+    }
+
+    return folderId;
+  }
+
+  /**
+   * Scans for any loose mishkat_backup_*.json files in Google Drive that are not inside
+   * the dedicated backups folder, and moves them into the folder to prevent unorganized clutter.
+   */
+  public async organizeLooseBackups(driveClient: any, targetFolderId: string): Promise<number> {
+    try {
+      if (!driveClient || typeof driveClient.files?.list !== 'function') return 0;
+
+      const listRes = await driveClient.files.list({
+        q: `name contains 'mishkat_backup_' and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id, name, parents)',
+        spaces: 'drive',
+        pageSize: 50,
+      });
+
+      const files = listRes.data?.files || [];
+      let movedCount = 0;
+
+      for (const file of files) {
+        const parents: string[] = file.parents || [];
+        if (!parents.includes(targetFolderId)) {
+          try {
+            if (typeof driveClient.files.update === 'function') {
+              await driveClient.files.update({
+                fileId: file.id,
+                addParents: targetFolderId,
+                removeParents: parents.length > 0 ? parents.join(',') : undefined,
+                fields: 'id, parents',
+              });
+              movedCount++;
+              logger.info(`[GoogleDrive] Organized loose backup "${file.name}" into dedicated folder.`);
+            }
+          } catch (moveErr: any) {
+            logger.warn(`[GoogleDrive] Could not move loose backup file ${file.id}: ${moveErr.message}`);
+          }
+        }
+      }
+      return movedCount;
+    } catch (err: any) {
+      logger.warn(`[GoogleDrive] Scan for loose backups notice: ${err.message}`);
+      return 0;
+    }
   }
 
   /**

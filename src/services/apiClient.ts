@@ -48,8 +48,10 @@ class ApiClient {
     if (token) {
       if (persist) {
         localStorage.setItem('mishkat_jwt_token', token);
+        sessionStorage.removeItem('mishkat_jwt_token');
       } else {
         sessionStorage.setItem('mishkat_jwt_token', token);
+        localStorage.removeItem('mishkat_jwt_token');
       }
     } else {
       localStorage.removeItem('mishkat_jwt_token');

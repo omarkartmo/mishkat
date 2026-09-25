@@ -64,16 +64,25 @@ export class SettingsRepository {
     model?: string;
     error?: string;
   }> {
-    const res = await apiClient.post<{ success: boolean; message: string; model?: string; error?: string }>(
+    const res = await apiClient.post<any>(
       '/settings/test-gemini',
       { apiKey }
     );
-    if (res.success && res.data) {
-      return res.data;
+    const resAny = res as any;
+    if (resAny.data) {
+      return resAny.data;
+    }
+    if (resAny.message) {
+      return {
+        success: Boolean(resAny.success),
+        message: resAny.message,
+        model: resAny.model,
+        error: resAny.error,
+      };
     }
     return {
       success: false,
-      message: res.error?.message || 'فشل الاتصال بمحرك الذكاء الاصطناعي.',
+      message: res.error?.message || 'فشل الاتصال بمحرك الذكاء الاصطناعي. يرجى التحقق من اتصال الإنترنت ومفتاح API.',
     };
   }
 
@@ -206,6 +215,8 @@ export class SettingsRepository {
         count: number | null;
         maxRetention: number;
         pendingFile: string | null;
+        folderId?: string | null;
+        folderName?: string | null;
       };
     };
     error?: ApiError;

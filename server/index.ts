@@ -29,6 +29,7 @@ import { auditRouter, backupRouter, healthRouter, systemRouter, incomingRouter }
 import { supportRouter, clientEventsRouter } from './routes/support.routes';
 import { startIncomingWatcher, stopIncomingWatcher } from './services/incomingWatcher';
 import { backupScheduler } from './services/backupScheduler';
+import { googleDriveService } from './services/googleDriveService';
 import { supportAgentService } from './services/supportAgentService';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
@@ -105,6 +106,11 @@ export async function createExpressApp() {
       await seedInitialData();
       await healCorruptedDigitalBooks(db);
       await healDigitalBookPageCounts(db);
+      try {
+        await googleDriveService.syncTokensWithDb();
+      } catch (syncErr: any) {
+        logger.warn(`[GoogleDrive] Token DB sync deferred: ${syncErr.message}`);
+      }
     } else {
       console.log('ℹ️ [Database] Central Database is currently not connected. API will serve health checks and handle connection gracefully.');
     }

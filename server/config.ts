@@ -67,9 +67,12 @@ if (rawPort && (isNaN(parsedPort) || parsedPort <= 0 || parsedPort > 65535)) {
   console.warn(`⚠️ [Config] Invalid PORT '${rawPort}' specified in environment. Defaulting to 3000.`);
 }
 
+export const SERVER_BOOT_ID = Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);
+
 export const serverConfig = {
   port,
   host: '0.0.0.0',
+  serverBootId: SERVER_BOOT_ID,
   nodeEnv: process.env.NODE_ENV || 'development',
   version: (() => {
     try {

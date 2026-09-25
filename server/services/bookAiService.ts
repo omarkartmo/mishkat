@@ -16,6 +16,12 @@ export interface AiExtractedBookMetadata {
   modelUsed: string;
 }
 
+export interface LibraryCategoryInfo {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 const OFFICIAL_CATEGORIES: Record<string, string> = {
   'cat-islamic': 'العلوم الشرعية والفكر الإسلامي',
   'cat-arabic': 'اللغة العربية وآدابها',
@@ -24,6 +30,32 @@ const OFFICIAL_CATEGORIES: Record<string, string> = {
   'cat-education': 'التربية ومناهج البحث العلمي',
   'cat-general': 'الثقافة العامة والتطوير الذاتي',
 };
+
+/**
+ * Retrieves the active categories from the database, falling back to default categories
+ */
+export async function getActiveCategories(): Promise<LibraryCategoryInfo[]> {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, name, description FROM categories ORDER BY sort_order ASC, name ASC'
+    );
+    if (rows && rows.length > 0) {
+      return rows.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description || '',
+      }));
+    }
+  } catch (err) {
+    console.warn('[BookAI] Failed to fetch dynamic categories from db, using fallback:', err);
+  }
+
+  return Object.entries(OFFICIAL_CATEGORIES).map(([id, name]) => ({
+    id,
+    name,
+    description: '',
+  }));
+}
 
 /**
  * Retrieves the Gemini API Key from environment or database system_settings
@@ -73,13 +105,114 @@ export async function isAiOcrEnabled(): Promise<boolean> {
   return Boolean(key);
 }
 
+function extractCleanErrorMessage(err: any): string {
+  let raw = err?.message || String(err);
+  try {
+    const parsed = typeof raw === 'string' && raw.trim().startsWith('{') ? JSON.parse(raw) : null;
+    if (parsed?.error?.message) {
+      raw = parsed.error.message;
+    }
+  } catch {}
+
+  if (/API key not valid|API_KEY_INVALID/i.test(raw)) {
+    return 'مفتاح Google Gemini API غير صالح أو غير مفعل. يرجى التأكد من نسخه بدقة من Google AI Studio.';
+  }
+  if (/quota|RESOURCE_EXHAUSTED/i.test(raw)) {
+    return 'تم استنفاد الحصة المسموحة للمفتاح مؤقتاً (Quota Exceeded). يرجى المحاولة بعد قليل أو مراجعة الحساب في Google AI Studio.';
+  }
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|NetworkError/i.test(raw)) {
+    return 'تعذر الاتصال بخوادم Google (يرجى التحقق من اتصال الإنترنت أو إعدادات الشبكة).';
+  }
+  if (/User location is not supported/i.test(raw)) {
+    return 'خدمة Google Gemini غير مدعومة حالياً في منطقتك الجغرافية بدون وسيط VPN/Proxy.';
+  }
+  if (/is not found for API version|not supported for generateContent/i.test(raw)) {
+    return 'النموذج المطلوب غير متاح لهذا المفتاح أو تم إيقافه من قِبل Google. يرجى التأكد من تفعيل أحدث النماذج في Google AI Studio.';
+  }
+  return raw;
+}
+
+export interface WorkingAiModel {
+  modelName: string;
+  apiVersion?: 'v1' | 'v1beta';
+}
+
+let cachedWorkingModel: WorkingAiModel | null = null;
+
+/**
+ * Dynamically queries Google ModelService.ListModels across v1 and v1beta
+ * to find the exact models available and authorized for this specific API key.
+ */
+export async function discoverAvailableGeminiModels(apiKey: string): Promise<WorkingAiModel[]> {
+  const versions: Array<'v1' | 'v1beta'> = ['v1', 'v1beta'];
+  const candidates: WorkingAiModel[] = [];
+
+  for (const version of versions) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/${version}/models?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        let parsed: any;
+        try { parsed = JSON.parse(errorText); } catch {}
+        const rawMsg = parsed?.error?.message || errorText;
+        if (/API key not valid|API_KEY_INVALID/i.test(rawMsg)) {
+          throw new Error('API_KEY_INVALID: ' + rawMsg);
+        }
+        continue;
+      }
+
+      const data = (await res.json()) as any;
+      const models = data?.models || [];
+      const supported = models
+        .filter((m: any) => !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))
+        .map((m: any) => m.name.replace(/^models\//, '')) as string[];
+
+      // Sort models: flash first, newer versions first
+      supported.sort((a, b) => {
+        const aIsFlash = a.includes('flash') ? 1 : 0;
+        const bIsFlash = b.includes('flash') ? 1 : 0;
+        if (aIsFlash !== bIsFlash) return bIsFlash - aIsFlash;
+        return b.localeCompare(a);
+      });
+
+      for (const model of supported) {
+        if (!candidates.some((c) => c.modelName === model && c.apiVersion === version)) {
+          candidates.push({ modelName: model, apiVersion: version });
+        }
+      }
+    } catch (err: any) {
+      if (/API_KEY_INVALID/i.test(err?.message || '')) {
+        throw err;
+      }
+    }
+  }
+
+  // Fallback defaults if discovery returned nothing (e.g. offline or restricted endpoint)
+  if (candidates.length === 0) {
+    return [
+      { modelName: 'gemini-2.5-flash', apiVersion: 'v1' },
+      { modelName: 'gemini-2.5-flash', apiVersion: 'v1beta' },
+      { modelName: 'gemini-2.0-flash', apiVersion: 'v1' },
+      { modelName: 'gemini-2.0-flash', apiVersion: 'v1beta' },
+      { modelName: 'gemini-1.5-flash', apiVersion: 'v1' },
+    ];
+  }
+
+  return candidates;
+}
+
 /**
  * Tests Gemini connectivity and API Key validity
  */
 export async function testGeminiConnection(
   customApiKey?: string
 ): Promise<{ success: boolean; message: string; model?: string; error?: string }> {
-  const key = customApiKey?.trim() || (await getGeminiApiKey());
+  const cleanedKey = customApiKey?.trim().replace(/^["']|["']$/g, '');
+  const key = cleanedKey || (await getGeminiApiKey());
   if (!key) {
     return {
       success: false,
@@ -87,29 +220,46 @@ export async function testGeminiConnection(
     };
   }
 
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+  let candidates: WorkingAiModel[] = [];
+  try {
+    candidates = await discoverAvailableGeminiModels(key);
+  } catch (discoveryErr: any) {
+    const cleanErr = extractCleanErrorMessage(discoveryErr);
+    return {
+      success: false,
+      message: `فشل الاتصال بمفتاح الذكاء الاصطناعي: ${cleanErr}`,
+      error: cleanErr,
+    };
+  }
+
   let lastError = '';
 
-  for (const modelName of modelsToTry) {
+  for (const candidate of candidates) {
     try {
-      const ai = new GoogleGenAI({ apiKey: key });
+      const ai = new GoogleGenAI({
+        apiKey: key,
+        ...(candidate.apiVersion ? { apiVersion: candidate.apiVersion } : {}),
+      });
       const response = await ai.models.generateContent({
-        model: modelName,
+        model: candidate.modelName,
         contents: [
           'أجب بكلمة واحدة فقط: جاهز'
         ],
       });
 
       if (response && response.text) {
+        cachedWorkingModel = candidate;
         return {
           success: true,
-          message: `تم التحقق بنجاح! الاتصال بمحرك الذكاء الاصطناعي Google Gemini (${modelName}) نشط ومستعد لفحص وتصنيف الكتب.`,
-          model: modelName,
+          message: `تم التحقق بنجاح! الاتصال بمحرك الذكاء الاصطناعي Google Gemini (${candidate.modelName}) نشط ومستعد لفحص وتصنيف الكتب.`,
+          model: candidate.modelName,
         };
       }
     } catch (err: any) {
-      lastError = err.message || String(err);
-      if (err.status === 400 || err.status === 403) {
+      const rawError = err.message || String(err);
+      lastError = extractCleanErrorMessage(err);
+      const isAuthError = err.status === 403 || /API key not valid|API_KEY_INVALID/i.test(rawError);
+      if (isAuthError) {
         // Authentication or key error, no need to try other models
         break;
       }
@@ -173,12 +323,22 @@ export async function slicePdfFirstPages(filePath: string, maxPages: number = 3)
 export async function analyzeBookWithGemini(
   pdfBufferOrPath: string | Buffer,
   originalFilename?: string,
-  providedApiKey?: string
+  providedApiKey?: string,
+  providedCategories?: LibraryCategoryInfo[]
 ): Promise<AiExtractedBookMetadata | null> {
   const apiKey = providedApiKey?.trim() || (await getGeminiApiKey());
   if (!apiKey) {
     return null;
   }
+
+  // Fetch actual categories defined in the library system
+  const activeCategories = (providedCategories && providedCategories.length > 0)
+    ? providedCategories
+    : await getActiveCategories();
+
+  const categoriesPromptList = activeCategories
+    .map((c) => `- "${c.id}": ${c.name}${c.description ? ` (${c.description})` : ''}`)
+    .join('\n');
 
   let pdfSliceBuffer: Buffer;
   if (typeof pdfBufferOrPath === 'string') {
@@ -219,14 +379,9 @@ export async function analyzeBookWithGemini(
    - في الرسائل والمذكرات الجامعية وأطروحات الدكتوراه والماجستير: استخرج اسم الطالب أو الباحث (الطالب / الباحثة / إعداد)، وتجنب تماماً وضع اسم المشرف أو لجنة المناقشة.
    - في أمهات الكتب التراثية: استخرج اسم العلامة/الشيخ/الإمام المصنّف، وإذا وجد محقق يمكن إضافته (تحقيق: ...).
    - تجنب إدراج أسماء الجامعات أو الكليات أو الوزارات كاسم مؤلف.
-3. "categoryId": اختر كود التصنيف المناسب بدقة من بين الفئات الست المعتمدة حصراً:
-   - "cat-islamic": العلوم الشرعية والفكر الإسلامي (فقه، عقيدة، حديث، تفسير، أصول، فتاوى، تصوف، سيرة نبوية، دراسات إسلامية).
-   - "cat-arabic": اللغة العربية وآدابها (نحو، صرف، بلاغة، معاجم، شعر، أدب، نقد، رواية، قصة).
-   - "cat-history": التاريخ والحضارة والآثار (سير وتراجم، وفيات، تاريخ عام، تاريخ عمان، حضارات، جغرافيا تاريخية، وثائق).
-   - "cat-science": العلوم الطبيعية والتكنولوجيا (فيزياء، كيمياء، أحياء، طب، هندسة، تقنية، حاسوب، ذكاء اصطناعي، رياضيات).
-   - "cat-education": التربية ومناهج البحث العلمي (طرق تدريس، علم نفس تربوي، توجيه مدرسي، مناهج بحث).
-   - "cat-general": الثقافة العامة والتطوير الذاتي (موسوعات، تنمية ذاتية، فكر عام، إدارة).
-4. "categoryName": الاسم العربي للفئة المختارة أعلاه.
+3. "categoryId": اختر كود ومعرّف (ID) التصنيف الأنسب لموضوع الكتاب حصراً من بين قائمة التصنيفات المعتمدة حالياً في النظام:
+${categoriesPromptList}
+4. "categoryName": اسم التصنيف المعتمد المختار أعلاه.
 5. "summary": ملخص أكاديمي موجز من 1 إلى 3 جمل باللغة العربية الفصحى يوضح موضوع الكتاب وما يتناوله استناداً إلى العنوان والمقدمة.
 6. "language": لغة الكتاب الأصلية ("ar" أو "fr" أو "en" أو "other").
 7. "confidence": رقم صحيح من 0 إلى 100 يعبر عن ثقتك في صحة البيانات المستخرجة.
@@ -237,8 +392,8 @@ export async function analyzeBookWithGemini(
 {
   "title": "عنوان الكتاب",
   "author": "اسم المؤلف",
-  "categoryId": "cat-islamic",
-  "categoryName": "العلوم الشرعية والفكر الإسلامي",
+  "categoryId": "${activeCategories[0]?.id || 'cat-general'}",
+  "categoryName": "${activeCategories[0]?.name || 'عام'}",
   "summary": "ملخص موضوع الكتاب...",
   "language": "ar",
   "confidence": 95,
@@ -246,15 +401,30 @@ export async function analyzeBookWithGemini(
 }
 `;
 
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+  let candidatesToTry: WorkingAiModel[] = cachedWorkingModel ? [cachedWorkingModel] : [];
+  if (candidatesToTry.length === 0) {
+    try {
+      candidatesToTry = await discoverAvailableGeminiModels(apiKey);
+    } catch {
+      candidatesToTry = [
+        { modelName: 'gemini-2.5-flash', apiVersion: 'v1' },
+        { modelName: 'gemini-2.0-flash', apiVersion: 'v1' },
+        { modelName: 'gemini-1.5-flash', apiVersion: 'v1' },
+      ];
+    }
+  }
+
   let rawJsonText = '';
   let modelUsed = '';
 
-  for (const modelName of modelsToTry) {
+  for (const candidate of candidatesToTry) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({
+        apiKey,
+        ...(candidate.apiVersion ? { apiVersion: candidate.apiVersion } : {}),
+      });
       const response = await ai.models.generateContent({
-        model: modelName,
+        model: candidate.modelName,
         contents: [
           {
             inlineData: {
@@ -271,12 +441,14 @@ export async function analyzeBookWithGemini(
 
       if (response && response.text) {
         rawJsonText = response.text.trim();
-        modelUsed = modelName;
+        modelUsed = candidate.modelName;
+        cachedWorkingModel = candidate;
         break;
       }
     } catch (err: any) {
-      console.warn(`[BookAI] Model ${modelName} attempt failed:`, err.message || err);
-      if (err.status === 400 || err.status === 403) {
+      console.warn(`[BookAI] Model ${candidate.modelName} attempt failed:`, err.message || err);
+      const rawError = err.message || String(err);
+      if (err.status === 403 || /API key not valid|API_KEY_INVALID/i.test(rawError)) {
         // Invalid API Key, abort
         break;
       }
@@ -302,8 +474,14 @@ export async function analyzeBookWithGemini(
       return null;
     }
 
-    const catId = OFFICIAL_CATEGORIES[parsed.categoryId] ? parsed.categoryId : 'cat-general';
-    const catName = OFFICIAL_CATEGORIES[catId];
+    // Resolve category dynamically against active system categories
+    let matchedCat = activeCategories.find((c) => c.id === parsed.categoryId);
+    if (!matchedCat && parsed.categoryName) {
+      const normName = parsed.categoryName.trim();
+      matchedCat = activeCategories.find((c) => c.name.includes(normName) || normName.includes(c.name));
+    }
+    const catId = matchedCat?.id || activeCategories[0]?.id || 'cat-general';
+    const catName = matchedCat?.name || OFFICIAL_CATEGORIES[catId] || 'عام';
 
     return {
       title,

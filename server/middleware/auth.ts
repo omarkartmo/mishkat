@@ -83,6 +83,17 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       });
     }
 
+    // Auto-logout on computer reboot/shutdown for students sharing the workstation
+    if (decoded.role === 'student' && decoded.serverBootId && decoded.serverBootId !== serverConfig.serverBootId) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'SESSION_REBOOTED',
+          message: 'تمت إعادة تشغيل الحاسوب أو إطفاؤه، تم تسجيل خروج الطالب تلقائياً لخصوصية الحساب.',
+        },
+      });
+    }
+
     req.user = {
       id: u.id,
       name: u.name,

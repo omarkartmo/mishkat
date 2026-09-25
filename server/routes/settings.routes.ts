@@ -115,9 +115,18 @@ router.post('/test-gemini', authenticateToken, requireRole('admin'), async (req:
     const { apiKey } = req.body;
     const { testGeminiConnection } = await import('../services/bookAiService');
     const result = await testGeminiConnection(apiKey);
-    res.json(result);
+    res.json({
+      success: true,
+      data: result,
+    });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: `خطأ في الخادم أثناء فحص الاتصال: ${err.message}` });
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: `خطأ في الخادم أثناء فحص الاتصال: ${err.message}`,
+      },
+    });
   }
 });
 

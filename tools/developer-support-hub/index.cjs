@@ -725,7 +725,7 @@ app.get(['/', '/dashboard'], authenticateAdmin, (req, res) => {
           </td>
           <td><span class="inst-id">${inst.institutionId}</span></td>
           <td><span class="inst-id">${inst.installationId}</span></td>
-          <td><span class="badge" style="background:#1e293b; color:#cbd5e1;">v${inst.appVersion || '1.1.8'}</span></td>
+          <td><span class="badge" style="background:#1e293b; color:#cbd5e1;">v${inst.appVersion || '1.1.0'}</span></td>
           <td><strong style="color: #10b981;">${Object.keys(inst.clientDevices || {}).length} جهاز</strong></td>
           <td><strong>${inst.totalReportsCount || 0}</strong></td>
           <td style="color: var(--text-muted); font-size: 12px;">${new Date(inst.lastSeenAt).toLocaleString('ar-EG')}</td>
