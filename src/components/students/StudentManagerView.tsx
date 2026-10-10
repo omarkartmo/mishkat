@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Users,
   Search,
@@ -16,6 +16,9 @@ import {
   Printer,
   Copy,
   CheckSquare,
+  UploadCloud,
+  FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import { User, StudentRosterRow } from '../../types/library';
 import {
@@ -854,33 +857,94 @@ interface BulkImportModalProps {
 }
 
 const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, result }) => {
+  const [importMode, setImportMode] = useState<'file' | 'paste'>('file');
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [selectedFileSize, setSelectedFileSize] = useState<string | null>(null);
+  const [parsedPreview, setParsedPreview] = useState<StudentRosterRow[]>([]);
   const [csvContent, setCsvContent] = useState(
     `رقم التسجيل,اسم الطالب,القسم\n2025-0101,سيف بن عامر المعولي,الثالثة ثانوي - آداب وفلسفة\n2025-0102,البتول بنت يوسف الشيبانية,الثانية ثانوي - علوم تجريبية\n2025-0103,محمد الأمين بلقاسم,الأولى ثانوي - جذع مشترك علوم\n2025-0104,فاطمة الزهراء الهنائي,الثالثة ثانوي - رياضيات`
   );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleProcessImport = () => {
-    const lines = csvContent.trim().split('\n');
-    if (lines.length <= 1) {
-      alert('يرجى إدخال بيانات الطلبة');
-      return;
-    }
+  // Helper parser for CSV/TSV with smart delimiter detection and quote support
+  const parseCsvText = (text: string): StudentRosterRow[] => {
+    const cleanText = text.replace(/^\uFEFF/, '').trim();
+    const lines = cleanText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
 
+    const firstLine = lines[0];
+    let delimiter = ',';
+    if (firstLine.includes(';') && !firstLine.includes(',')) delimiter = ';';
+    else if (firstLine.includes('\t')) delimiter = '\t';
+
+    const parseLine = (line: string): string[] => {
+      const pattern = new RegExp(
+        `(?:^|${delimiter})\\s*(?:"([^"]*(?:""[^"]*)*)"|([^${delimiter}]*))`,
+        'g'
+      );
+      const values: string[] = [];
+      let match;
+      while ((match = pattern.exec(line)) !== null) {
+        const val = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
+        values.push((val || '').trim());
+      }
+      return values;
+    };
+
+    const firstRowParts = parseLine(lines[0]);
+    const isHeader =
+      /رقم|تسجيل|قيد|id|registration|code|nom|name/i.test(firstRowParts[0] || '') ||
+      /اسم|طالب|name|student/i.test(firstRowParts[1] || '');
+
+    const startIndex = isHeader ? 1 : 0;
     const rows: StudentRosterRow[] = [];
-    // Skip header
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      const parts = line.split(',');
-      if (parts.length >= 2) {
+
+    for (let i = startIndex; i < lines.length; i++) {
+      const parts = parseLine(lines[i]);
+      if (parts.length >= 2 && parts[0] && parts[1]) {
         rows.push({
-          registrationNumber: parts[0].trim(),
-          name: parts[1].trim(),
-          grade: parts[2]?.trim(),
+          registrationNumber: parts[0],
+          name: parts[1],
+          grade: parts[2] || undefined,
         });
       }
     }
+    return rows;
+  };
 
-    onImport(rows);
+  const handleFileChange = (file: File) => {
+    setErrorMessage(null);
+    setSelectedFileName(file.name);
+    setSelectedFileSize(`${(file.size / 1024).toFixed(1)} KB`);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (content) {
+        setCsvContent(content);
+        const parsed = parseCsvText(content);
+        setParsedPreview(parsed);
+        if (parsed.length === 0) {
+          setErrorMessage('لم يتم العثور على سجلات صالحة في ملف CSV. تأكد من أن الملف يحتوي على الأعمدة: رقم التسجيل، اسم الطالب، القسم.');
+        }
+      }
+    };
+    reader.onerror = () => {
+      setErrorMessage('تعذر قراءة ملف CSV. يرجى التأكد من صلاحية الملف والمحاولة مجدداً.');
+    };
+    reader.readAsText(file, 'utf-8');
+  };
+
+  const handleProcessImport = () => {
+    setErrorMessage(null);
+    const parsed = parseCsvText(csvContent);
+    if (parsed.length === 0) {
+      setErrorMessage('يرجى تحديد ملف CSV صالح أو إدخال بيانات الطلبة (رقم التسجيل، اسم الطالب، القسم).');
+      return;
+    }
+    onImport(parsed);
   };
 
   return (
@@ -958,29 +1022,162 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, re
             </div>
           </div>
         ) : (
-          <div className="space-y-3 text-xs">
-            <p className="text-slate-300 leading-relaxed">
-              قم بلصق بيانات ملف Excel أو CSV بالصيغة: <code>رقم التسجيل, اسم الطالب, القسم</code>. سيقوم النظام
-              بإنشاء الحسابات وتشفير كلمات المرور في قاعدة البيانات المركزية.
-            </p>
+          <div className="space-y-4 text-xs">
+            {/* Mode Selector Tabs */}
+            <div className="flex items-center gap-2 p-1 bg-slate-950 border border-slate-800 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setImportMode('file')}
+                className={`flex-1 py-2 px-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  importMode === 'file'
+                    ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>رفع ملف CSV مباشرة</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportMode('paste')}
+                className={`flex-1 py-2 px-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  importMode === 'paste'
+                    ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>لصق بيانات نصية يدوي</span>
+              </button>
+            </div>
 
-            <textarea
-              rows={8}
-              value={csvContent}
-              onChange={(e) => setCsvContent(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-slate-200 outline-none focus:border-emerald-500"
-            />
+            {errorMessage && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {importMode === 'file' ? (
+              <div className="space-y-3">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".csv,.txt,.tsv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileChange(file);
+                  }}
+                  className="hidden"
+                />
+
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleFileChange(file);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+                    isDragging
+                      ? 'border-emerald-500 bg-emerald-500/10'
+                      : selectedFileName
+                      ? 'border-emerald-500/40 bg-slate-950/80 hover:border-emerald-500'
+                      : 'border-slate-800 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-950'
+                  }`}
+                >
+                  <div className="flex flex-col items-center justify-center gap-2.5">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-inner">
+                      <UploadCloud className="w-6 h-6" />
+                    </div>
+                    {selectedFileName ? (
+                      <div className="space-y-1">
+                        <div className="font-semibold text-slate-100 flex items-center justify-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>{selectedFileName}</span>
+                          <span className="text-slate-500 text-[10px]">({selectedFileSize})</span>
+                        </div>
+                        <p className="text-emerald-400 font-bold text-[11px]">
+                          ✓ تم التعرف على {parsedPreview.length} طالب في الملف
+                        </p>
+                        <p className="text-slate-500 text-[10px]">
+                          اضغط لاختيار ملف آخر أو استبداله
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="font-semibold text-slate-200">
+                          اضغط لاختيار ملف CSV أو أسقطه هنا
+                        </p>
+                        <p className="text-slate-400 text-[11px]">
+                          يقبل ملفات Excel المصدرة بصيغة <code>.CSV</code> أو <code>.TXT</code>
+                        </p>
+                        <p className="text-slate-500 text-[10px]">
+                          الترتيب المطلوب للأعمدة: رقم التسجيل ، اسم الطالب ، القسم
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {parsedPreview.length > 0 && (
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                      <span>معاينة البيانات المستخرجة ({parsedPreview.length} طالب):</span>
+                    </div>
+                    <div className="max-h-28 overflow-y-auto divide-y divide-slate-800/60 font-mono text-[11px]">
+                      {parsedPreview.slice(0, 4).map((p, i) => (
+                        <div key={i} className="py-1 flex items-center justify-between text-slate-300">
+                          <span>{p.registrationNumber} - {p.name}</span>
+                          <span className="text-slate-500 text-[10px]">{p.grade || 'بدون قسم'}</span>
+                        </div>
+                      ))}
+                      {parsedPreview.length > 4 && (
+                        <div className="py-1 text-center text-slate-500 text-[10px]">
+                          + {parsedPreview.length - 4} طالب إضافي سيتم استيرادهم
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-slate-300 leading-relaxed">
+                  قم بلصق بيانات ملف Excel أو CSV بالصيغة: <code>رقم التسجيل, اسم الطالب, القسم</code>. سيقوم النظام
+                  بإنشاء الحسابات وتشفير كلمات المرور في قاعدة البيانات المركزية.
+                </p>
+
+                <textarea
+                  rows={7}
+                  value={csvContent}
+                  onChange={(e) => {
+                    setCsvContent(e.target.value);
+                    setParsedPreview(parseCsvText(e.target.value));
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-slate-200 outline-none focus:border-emerald-500"
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
               <button
+                type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-medium"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium cursor-pointer"
               >
                 إلغاء
               </button>
               <button
+                type="button"
                 onClick={handleProcessImport}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-1.5"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>معالجة واستيراد الحسابات</span>

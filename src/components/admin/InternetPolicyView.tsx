@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Plus, Trash2, Globe, Wifi, WifiOff, AlertTriangle, ListPlus, CheckCircle2, ChevronDown, MonitorPlay, Layers, RefreshCw } from 'lucide-react';
 import { BlockedCategory, BlockedSite } from '../../types/library';
+import { apiClient } from '../../services/apiClient';
 
 type PolicyMode = 'OPEN' | 'RESTRICTED' | 'OFFLINE';
 
@@ -48,9 +49,21 @@ export const InternetPolicyView: React.FC = () => {
     fetchData();
   }, []);
 
+  const getHeaders = (hasJson = false): HeadersInit => {
+    const token = apiClient.getToken() || localStorage.getItem('mishkat_jwt_token') || sessionStorage.getItem('mishkat_jwt_token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (hasJson) {
+      headers['Content-Type'] = 'application/json';
+    }
+    return headers;
+  };
+
   const fetchData = async () => {
     try {
-      const headers = { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` };
+      const headers = getHeaders();
       const [catsRes, sitesRes, modeRes, excludeRes, statusRes] = await Promise.all([
         fetch('/api/v1/internet-policy/categories', { headers }),
         fetch('/api/v1/internet-policy/sites', { headers }),
@@ -85,22 +98,23 @@ export const InternetPolicyView: React.FC = () => {
     setIsSyncing(true);
     setSyncStatusMsg(null);
     try {
-      const headers = { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` };
       const res = await fetch('/api/v1/internet-policy/sync-local-proxy', {
         method: 'POST',
-        headers
+        headers: getHeaders()
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setLocalProxyConfigured(data.configured);
         setSyncStatusMsg(
           data.configured
             ? 'تم تفعيل الحظر على هذا الجهاز بنجاح (AutoConfigURL مفعل).'
             : 'حاسوب الإدارة مستثنى من الحظر (الوصول مباشر لكافة المواقع).'
         );
+      } else {
+        setSyncStatusMsg(data.details || data.error || 'تعذر مزامنة إعدادات الويندوز على هذا الجهاز');
       }
     } catch {
-      setSyncStatusMsg('تعذر مزامنة إعدادات الويندوز');
+      setSyncStatusMsg('تعذر مزامنة إعدادات الويندوز على هذا الجهاز');
     } finally {
       setIsSyncing(false);
       setTimeout(() => setSyncStatusMsg(null), 4000);
@@ -108,20 +122,25 @@ export const InternetPolicyView: React.FC = () => {
   };
 
   const updateExcludeServer = async (exclude: boolean) => {
+    const prev = excludeServer;
     setExcludeServer(exclude);
     try {
-      await fetch('/api/v1/internet-policy/exclude-server', {
+      const res = await fetch('/api/v1/internet-policy/exclude-server', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}`
-        },
+        headers: getHeaders(true),
         body: JSON.stringify({ excludeServer: exclude })
       });
+      if (!res.ok) {
+        setExcludeServer(prev);
+        setSyncStatusMsg('تعذر تحديث إعداد استثناء الجهاز');
+        return;
+      }
       // Automatically synchronize local Windows proxy
       await syncLocalProxy();
     } catch (e) {
+      setExcludeServer(prev);
       console.error('Failed to update exclude server setting', e);
+      setSyncStatusMsg('تعذر تحديث إعداد استثناء الجهاز');
     }
   };
 
@@ -131,10 +150,7 @@ export const InternetPolicyView: React.FC = () => {
     try {
       const res = await fetch('/api/v1/internet-policy/mode', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}`
-        },
+        headers: getHeaders(true),
         body: JSON.stringify({ mode })
       });
       if (!res.ok) {
@@ -155,10 +171,7 @@ export const InternetPolicyView: React.FC = () => {
     try {
       const res = await fetch('/api/v1/internet-policy/categories', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}`
-        },
+        headers: getHeaders(true),
         body: JSON.stringify({ name: newCategoryName.trim() })
       });
       if (res.ok) {
@@ -173,10 +186,7 @@ export const InternetPolicyView: React.FC = () => {
   const handleAddSite = async (domain: string, categoryId: string) => {
     await fetch('/api/v1/internet-policy/sites', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}`
-      },
+      headers: getHeaders(true),
       body: JSON.stringify({ domain: domain.trim(), categoryId: categoryId || null })
     });
   };
@@ -184,10 +194,7 @@ export const InternetPolicyView: React.FC = () => {
   const handleBulkAdd = async (domainsArray: string[], categoryId: string) => {
     await fetch('/api/v1/internet-policy/sites/bulk', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}`
-      },
+      headers: getHeaders(true),
       body: JSON.stringify({ domains: domainsArray, categoryId: categoryId || null })
     });
   };
@@ -222,10 +229,7 @@ export const InternetPolicyView: React.FC = () => {
       let catId = '';
       const res = await fetch('/api/v1/internet-policy/categories', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}`
-        },
+        headers: getHeaders(true),
         body: JSON.stringify({ name: preset.name })
       });
       if (res.ok) {
@@ -242,7 +246,7 @@ export const InternetPolicyView: React.FC = () => {
     try {
       await fetch(`/api/v1/internet-policy/categories/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` }
+        headers: getHeaders()
       });
       await fetchData();
       syncLocalProxy();
@@ -255,7 +259,7 @@ export const InternetPolicyView: React.FC = () => {
     try {
       await fetch(`/api/v1/internet-policy/sites/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}` }
+        headers: getHeaders()
       });
       setDeleteNotice(domain ? `✅ تم رفع الحظر فوراً عن "${domain}". يمكن للطلاب استخدامه الآن.` : '✅ تم حذف الموقع من قائمة الحظر.');
       setTimeout(() => setDeleteNotice(null), 4000);
@@ -270,10 +274,7 @@ export const InternetPolicyView: React.FC = () => {
     try {
       await fetch(`/api/v1/internet-policy/sites/${site.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('mishkat_jwt_token')}`
-        },
+        headers: getHeaders(true),
         body: JSON.stringify({
           domain: site.domain,
           categoryId: site.categoryId,

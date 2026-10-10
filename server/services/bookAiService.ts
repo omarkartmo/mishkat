@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { GoogleGenAI } from '@google/genai';
 import { PDFDocument } from 'pdf-lib';
 import { db } from '../db/pool';
 
@@ -114,8 +113,8 @@ function extractCleanErrorMessage(err: any): string {
     }
   } catch {}
 
-  if (/API key not valid|API_KEY_INVALID/i.test(raw)) {
-    return 'مفتاح Google Gemini API غير صالح أو غير مفعل. يرجى التأكد من نسخه بدقة من Google AI Studio.';
+  if (/API key not valid|API_KEY_INVALID|invalid authentication credentials|UNAUTHENTICATED|PERMISSION_DENIED|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(raw)) {
+    return 'مفتاح Google Gemini API غير صالح أو غير معتمد. يرجى التأكد من نسخه بدقة من Google AI Studio.';
   }
   if (/quota|RESOURCE_EXHAUSTED/i.test(raw)) {
     return 'تم استنفاد الحصة المسموحة للمفتاح مؤقتاً (Quota Exceeded). يرجى المحاولة بعد قليل أو مراجعة الحساب في Google AI Studio.';
@@ -144,14 +143,18 @@ let cachedWorkingModel: WorkingAiModel | null = null;
  * to find the exact models available and authorized for this specific API key.
  */
 export async function discoverAvailableGeminiModels(apiKey: string): Promise<WorkingAiModel[]> {
-  const versions: Array<'v1' | 'v1beta'> = ['v1', 'v1beta'];
+  const versions: Array<'v1' | 'v1beta'> = ['v1beta', 'v1'];
   const candidates: WorkingAiModel[] = [];
 
   for (const version of versions) {
     try {
-      const url = `https://generativelanguage.googleapis.com/${version}/models?key=${encodeURIComponent(apiKey)}`;
+      const url = `https://generativelanguage.googleapis.com/${version}/models`;
       const res = await fetch(url, {
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!res.ok) {
@@ -159,7 +162,12 @@ export async function discoverAvailableGeminiModels(apiKey: string): Promise<Wor
         let parsed: any;
         try { parsed = JSON.parse(errorText); } catch {}
         const rawMsg = parsed?.error?.message || errorText;
-        if (/API key not valid|API_KEY_INVALID/i.test(rawMsg)) {
+        if (
+          res.status === 400 ||
+          res.status === 401 ||
+          res.status === 403 ||
+          /API key not valid|API_KEY_INVALID|invalid authentication credentials|UNAUTHENTICATED|PERMISSION_DENIED|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(rawMsg)
+        ) {
           throw new Error('API_KEY_INVALID: ' + rawMsg);
         }
         continue;
@@ -171,8 +179,10 @@ export async function discoverAvailableGeminiModels(apiKey: string): Promise<Wor
         .filter((m: any) => !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))
         .map((m: any) => m.name.replace(/^models\//, '')) as string[];
 
-      // Sort models: flash first, newer versions first
+      // Sort models: gemini-flash-latest first, then newer versions, then flash, then others
       supported.sort((a, b) => {
+        if (a === 'gemini-flash-latest') return -1;
+        if (b === 'gemini-flash-latest') return 1;
         const aIsFlash = a.includes('flash') ? 1 : 0;
         const bIsFlash = b.includes('flash') ? 1 : 0;
         if (aIsFlash !== bIsFlash) return bIsFlash - aIsFlash;
@@ -194,11 +204,10 @@ export async function discoverAvailableGeminiModels(apiKey: string): Promise<Wor
   // Fallback defaults if discovery returned nothing (e.g. offline or restricted endpoint)
   if (candidates.length === 0) {
     return [
+      { modelName: 'gemini-flash-latest', apiVersion: 'v1beta' },
+      { modelName: 'gemini-3.8-flash', apiVersion: 'v1beta' },
+      { modelName: 'gemini-3.5-flash', apiVersion: 'v1beta' },
       { modelName: 'gemini-2.5-flash', apiVersion: 'v1' },
-      { modelName: 'gemini-2.5-flash', apiVersion: 'v1beta' },
-      { modelName: 'gemini-2.0-flash', apiVersion: 'v1' },
-      { modelName: 'gemini-2.0-flash', apiVersion: 'v1beta' },
-      { modelName: 'gemini-1.5-flash', apiVersion: 'v1' },
     ];
   }
 
@@ -236,6 +245,7 @@ export async function testGeminiConnection(
 
   for (const candidate of candidates) {
     try {
+      const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({
         apiKey: key,
         ...(candidate.apiVersion ? { apiVersion: candidate.apiVersion } : {}),
@@ -258,7 +268,11 @@ export async function testGeminiConnection(
     } catch (err: any) {
       const rawError = err.message || String(err);
       lastError = extractCleanErrorMessage(err);
-      const isAuthError = err.status === 403 || /API key not valid|API_KEY_INVALID/i.test(rawError);
+      const isAuthError =
+        err.status === 400 ||
+        err.status === 401 ||
+        err.status === 403 ||
+        /API key not valid|API_KEY_INVALID|UNAUTHENTICATED|invalid authentication credentials|PERMISSION_DENIED|ACCESS_TOKEN_TYPE_UNSUPPORTED/i.test(rawError);
       if (isAuthError) {
         // Authentication or key error, no need to try other models
         break;
@@ -419,6 +433,7 @@ ${categoriesPromptList}
 
   for (const candidate of candidatesToTry) {
     try {
+      const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({
         apiKey,
         ...(candidate.apiVersion ? { apiVersion: candidate.apiVersion } : {}),

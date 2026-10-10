@@ -552,7 +552,22 @@ async function resolveDigitalBookFilePath(book: any): Promise<string | null> {
       return path.resolve(book.file_path);
     }
 
-    // File was not found in the configured custom repository
+    // 4. Backward-compatibility safety: If not found in custom root but exists in defaultDir or allowedDirs, serve it gracefully
+    for (const fname of fileNames) {
+      const defaultCand = path.join(defaultDir, fname);
+      if (fs.existsSync(defaultCand)) {
+        return path.resolve(defaultCand);
+      }
+    }
+    if (book.file_path && fs.existsSync(book.file_path)) {
+      const resolved = path.resolve(book.file_path);
+      const isAllowed = allowedDirs.some((dir) => isWithinDirectory(resolved, dir));
+      if (isAllowed) {
+        return resolved;
+      }
+    }
+
+    // File was not found in the configured custom repository or storage
     return null;
   }
 
@@ -1174,6 +1189,7 @@ router.post('/bulk-import', authenticateToken, requireRole('admin', 'librarian')
         for (const item of batch) {
           const {
             stagedFilePath,
+            originalFileName,
             title,
             author,
             categoryId,
@@ -1229,9 +1245,33 @@ router.post('/bulk-import', authenticateToken, requireRole('admin', 'librarian')
           const isUploadedToStaging = stagedFilePath.includes(stagingDir);
 
           if (isUploadedToStaging) {
-            // Browser-uploaded temporary file: move it to permanent destinationDir
-            const finalFileName = `${bookId}.${format}`;
-            finalFilePath = path.join(destinationDir, finalFileName);
+            if (!fs.existsSync(destinationDir)) {
+              fs.mkdirSync(destinationDir, { recursive: true });
+            }
+
+            // Browser-uploaded temporary file: move it to permanent destinationDir using clean original filename
+            let cleanBase = path.basename(originalFileName || item.originalFileName || `${title}.${format}`);
+            cleanBase = cleanBase.replace(/[\\/:*?"<>|]/g, '_').trim();
+            if (!cleanBase.toLowerCase().endsWith(`.${format}`)) {
+              cleanBase = `${cleanBase}.${format}`;
+            }
+
+            let finalFileName = cleanBase;
+            let candidatePath = path.join(destinationDir, finalFileName);
+            if (fs.existsSync(candidatePath)) {
+              try {
+                const existingBuf = fs.readFileSync(candidatePath);
+                const existingHash = crypto.createHash('sha256').update(existingBuf).digest('hex');
+                if (existingHash !== computedHash) {
+                  const extWithDot = `.${format}`;
+                  const nameWithoutExt = cleanBase.slice(0, -extWithDot.length);
+                  finalFileName = `${nameWithoutExt}-${bookId.slice(-4)}${extWithDot}`;
+                  candidatePath = path.join(destinationDir, finalFileName);
+                }
+              } catch {}
+            }
+
+            finalFilePath = candidatePath;
             try {
               fs.renameSync(stagedFilePath, finalFilePath);
             } catch {
@@ -1728,12 +1768,42 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
       });
     }
 
-    // Generate a stable canonical book ID and move to canonical digital storage
-    const uploadBookId = `dig-upload-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    const canonicalName = `${uploadBookId}.${ext}`;
-    const canonicalPath = path.join(serverConfig.dirs.digital, canonicalName);
+    // Resolve digital storage directory (respects digitalBookRootUrl custom path from settings)
+    const { allowedDirs, customRoot, defaultDir, hasCustomRoot } = await getDigitalStorageContext();
+    const destinationDir = (hasCustomRoot && customRoot) ? customRoot : defaultDir;
+    if (!fs.existsSync(destinationDir)) {
+      fs.mkdirSync(destinationDir, { recursive: true });
+    }
 
-    fs.renameSync(uploadedFile.path, canonicalPath);
+    // Generate a stable canonical book ID and move to destination digital storage keeping original filename
+    const uploadBookId = `dig-upload-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    let cleanBase = path.basename(uploadedFile.originalname || `book.${ext}`);
+    cleanBase = cleanBase.replace(/[\\/:*?"<>|]/g, '_').trim();
+    if (!cleanBase.toLowerCase().endsWith(`.${ext}`)) {
+      cleanBase = `${cleanBase}.${ext}`;
+    }
+
+    let canonicalName = cleanBase;
+    let canonicalPath = path.join(destinationDir, canonicalName);
+    if (fs.existsSync(canonicalPath)) {
+      try {
+        const existingBuf = fs.readFileSync(canonicalPath);
+        const existingHash = crypto.createHash('sha256').update(existingBuf).digest('hex');
+        if (existingHash !== fileHash) {
+          const extWithDot = `.${ext}`;
+          const nameWithoutExt = cleanBase.slice(0, -extWithDot.length);
+          canonicalName = `${nameWithoutExt}-${uploadBookId.slice(-4)}${extWithDot}`;
+          canonicalPath = path.join(destinationDir, canonicalName);
+        }
+      } catch {}
+    }
+
+    try {
+      fs.renameSync(uploadedFile.path, canonicalPath);
+    } catch {
+      fs.copyFileSync(uploadedFile.path, canonicalPath);
+      try { fs.unlinkSync(uploadedFile.path); } catch {}
+    }
 
     // Physically verify file was stored at canonical location
     if (!fs.existsSync(canonicalPath)) {

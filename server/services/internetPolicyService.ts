@@ -2,6 +2,7 @@ import { db } from '../db/pool';
 import crypto from 'crypto';
 import { exec } from 'child_process';
 import util from 'util';
+import { serverConfig } from '../config';
 
 const execPromise = util.promisify(exec);
 
@@ -239,8 +240,9 @@ export class InternetPolicyService {
       // If Server is excluded, or if Policy is OPEN: clear AutoConfigURL so admin has full direct internet
       if (excludeServer || mode === 'OPEN') {
         const clearScript = `
-Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -ErrorAction SilentlyContinue
-Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue
+$ErrorActionPreference = 'SilentlyContinue'
+Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -ErrorAction SilentlyContinue 2>$null
+Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
 try {
   $sig = @'
   [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
@@ -258,21 +260,23 @@ try {
       } else {
         // Server is NOT excluded (apply policy to Admin PC just like students!)
         // Dynamic query timestamp forces Windows and Chromium to invalidate any cached PAC script immediately
-        const pacUrl = `http://127.0.0.1:3000/api/v1/internet-policy/proxy.pac?v=${Date.now()}`;
+        const port = serverConfig.port || 3000;
+        const pacUrl = `http://127.0.0.1:${port}/api/v1/internet-policy/proxy.pac?v=${Date.now()}`;
         const setScript = `
-Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -Value '${pacUrl}' -Type String
-Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord
+$ErrorActionPreference = 'SilentlyContinue'
+Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -Value '${pacUrl}' -Type String -ErrorAction SilentlyContinue 2>$null
+Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
 
 # Enforce disabling QUIC in Chrome & Edge so video streaming/traffic cannot bypass the PAC proxy via UDP 443
 try {
-  New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Force -ErrorAction SilentlyContinue | Out-Null
-  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue
-  New-Item -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Force -ErrorAction SilentlyContinue | Out-Null
-  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+  New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
+  New-Item -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
 } catch {}
 
 try {
-  netsh advfirewall firewall add rule name="MISHKAT Block QUIC (UDP 443)" dir=out action=block protocol=UDP remoteport=443 | Out-Null
+  netsh advfirewall firewall add rule name="MISHKAT Block QUIC (UDP 443)" dir=out action=block protocol=UDP remoteport=443 2>&1 | Out-Null
 } catch {}
 
 try {
