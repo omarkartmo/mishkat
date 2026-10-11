@@ -241,6 +241,11 @@ export class InternetPolicyService {
       if (excludeServer || mode === 'OPEN') {
         const clearScript = `
 $ErrorActionPreference = 'SilentlyContinue'
+# Remove machine-wide Group Policy proxy (clears for ALL user accounts)
+$policyPath = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+Remove-ItemProperty -Path $policyPath -Name AutoConfigUrl -ErrorAction SilentlyContinue 2>$null
+
+# Legacy cleanup: remove any HKCU entries left from previous versions
 Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -ErrorAction SilentlyContinue 2>$null
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
 try {
@@ -264,15 +269,22 @@ try {
         const pacUrl = `http://127.0.0.1:${port}/api/v1/internet-policy/proxy.pac?v=${Date.now()}`;
         const setScript = `
 $ErrorActionPreference = 'SilentlyContinue'
-Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -Value '${pacUrl}' -Type String -ErrorAction SilentlyContinue 2>$null
+# Machine-wide Group Policy proxy (applies to ALL user accounts on this machine)
+# This works correctly when running as Windows Service (LocalSystem) — unlike HKCU which only affects the service account
+$policyPath = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+New-Item -Path $policyPath -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+Set-ItemProperty -Path $policyPath -Name AutoConfigUrl -Value '${pacUrl}' -Type String -ErrorAction SilentlyContinue 2>$null
+
+# Legacy cleanup: remove any HKCU entries left from previous versions
+Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -ErrorAction SilentlyContinue 2>$null
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
 
-# Enforce disabling QUIC in Chrome & Edge so video streaming/traffic cannot bypass the PAC proxy via UDP 443
+# Enforce disabling QUIC in Chrome & Edge via HKLM machine policy so traffic cannot bypass PAC via UDP 443
 try {
-  New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
-  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
-  New-Item -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
-  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
+  New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Google\\Chrome' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+  Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
+  New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+  Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
 } catch {}
 
 try {
@@ -308,8 +320,9 @@ try {
       return { configured: false, autoConfigUrl: null };
     }
     try {
+      // Check HKLM Group Policy path first (machine-wide, takes precedence), then fall back to HKCU (legacy)
       const { stdout } = await execPromise(
-        'powershell -NoProfile -NonInteractive -Command "(Get-ItemProperty -Path \'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\' -ErrorAction SilentlyContinue).AutoConfigURL"'
+        'powershell -NoProfile -NonInteractive -Command "$v = (Get-ItemProperty -Path \'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\' -ErrorAction SilentlyContinue).AutoConfigUrl; if (-not $v) { $v = (Get-ItemProperty -Path \'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\' -ErrorAction SilentlyContinue).AutoConfigURL }; if ($v) { Write-Output $v }"'
       );
       const url = (stdout || '').trim();
       return { configured: !!url, autoConfigUrl: url || null };
