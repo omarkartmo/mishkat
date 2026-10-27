@@ -2450,35 +2450,4 @@ router.post('/ai-analyze-staged', authenticateToken, requireRole('admin', 'libra
   }
 });
 
-// POST /api/v1/books/ocr-snippet (Authenticated Reader: Extract text from selected canvas snippet for quotes & notes)
-router.post('/ocr-snippet', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { imageBase64, mimeType } = req.body;
-    if (!imageBase64 || typeof imageBase64 !== 'string') {
-      return res.status(400).json({ success: false, error: { message: 'صورة الفقرة المحددة مطلوبة لاستخراج النص.' } });
-    }
-
-    const { extractTextFromImageSnippet } = await import('../services/bookAiService');
-    const result = await extractTextFromImageSnippet(imageBase64, mimeType || 'image/png');
-
-    if (!result || !result.text) {
-      return res.status(422).json({
-        success: false,
-        error: { message: result?.error || 'تعذر استخراج النص من الفقرة المحددة. يرجى التأكد من وضوح التحديد أو كتابة الاقتباس يدوياً.' }
-      });
-    }
-
-    res.json({
-      success: true,
-      data: {
-        text: result.text,
-        engine: result.engine,
-        confidence: result.confidence,
-      },
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: { message: err.message || 'حدث خطأ أثناء استخراج النص من الفقرة المحددة.' } });
-  }
-});
-
 export default router;
