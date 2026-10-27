@@ -554,6 +554,20 @@ export class BookRepository {
   }>> {
     return apiClient.post('/books/ai-analyze-staged', { filePath, originalFileName });
   }
+
+  /**
+   * Extract text from a selected page snippet/crop via AI OCR or local engine (POST /api/v1/books/ocr-snippet)
+   */
+  public async ocrSnippet(
+    imageBase64: string,
+    mimeType: string = 'image/png'
+  ): Promise<ApiResponse<{
+    text: string;
+    engine?: string;
+    confidence?: number;
+  }>> {
+    return apiClient.post('/books/ocr-snippet', { imageBase64, mimeType });
+  }
 }
 
 export const bookRepository = new BookRepository();

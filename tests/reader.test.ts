@@ -311,6 +311,39 @@ describe('Digital Library Reader & Streaming Architecture (Phase 15.4-F)', () =>
     expect(rows.length).toBe(0);
   });
 
+  it('14. POST /api/v1/books/ocr-snippet enforces authentication and validates input', async () => {
+    // Unauthenticated request must be rejected with 401
+    const unauthRes = await request(app)
+      .post('/api/v1/books/ocr-snippet')
+      .send({ imageBase64: 'some-data' });
+    expect(unauthRes.status).toBe(401);
+
+    // Missing imageBase64 must be rejected with 400
+    const missingRes = await request(app)
+      .post('/api/v1/books/ocr-snippet')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({});
+    expect(missingRes.status).toBe(400);
+    expect(missingRes.body.success).toBe(false);
+
+    // Valid sample snippet
+    const dummyPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const ocrRes = await request(app)
+      .post('/api/v1/books/ocr-snippet')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ imageBase64: dummyPngBase64, mimeType: 'image/png' });
+
+    // Expect response contract (either 200 or 422 if empty pixel has no text)
+    expect([200, 422]).toContain(ocrRes.status);
+    if (ocrRes.status === 422) {
+      expect(ocrRes.body.success).toBe(false);
+      expect(ocrRes.body.error?.message).toBeTruthy();
+    } else {
+      expect(ocrRes.body.success).toBe(true);
+      expect(ocrRes.body.data).toHaveProperty('text');
+    }
+  });
+
   afterAll(async () => {
     // Clean up sample test files created by tests in serverConfig.dirs.digital
     const testPdfPath = path.join(serverConfig.dirs.digital, testPdfFilename);

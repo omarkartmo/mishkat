@@ -64,4 +64,50 @@ describe('Book AI Multimodal Vision & OCR Service', () => {
 
     try { fs.unlinkSync(scannedPdfPath); } catch {}
   });
+
+  it('rejects invalid or empty imageBase64 in extractTextFromImageSnippet', async () => {
+    const { extractTextFromImageSnippet } = await import('../server/services/bookAiService');
+    const res = await extractTextFromImageSnippet('');
+    expect(res.text).toBe('');
+    expect(res.engine).toBe('fallback');
+    expect(res.error).toContain('لم يتم استلام صورة صالحة');
+  });
+
+  it('extracts Arabic text from an image snippet using offline Windows native OCR fallback', async () => {
+    if (process.platform !== 'win32') return;
+
+    const { extractTextFromImageSnippet } = await import('../server/services/bookAiService');
+    const { execFileSync } = await import('child_process');
+    const os = await import('os');
+
+    // Create a 1-line Arabic bitmap via System.Drawing
+    const genPs = path.join(os.tmpdir(), `test_snippet_${Date.now()}.ps1`);
+    const outImg = path.join(os.tmpdir(), `test_snippet_${Date.now()}.png`);
+    fs.writeFileSync(genPs, `
+Add-Type -AssemblyName System.Drawing
+$bmp = New-Object System.Drawing.Bitmap(350, 90)
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.Clear([System.Drawing.Color]::White)
+$font = New-Object System.Drawing.Font('Arial', 22)
+$brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
+$g.DrawString('الحكمة ضالة المؤمن', $font, $brush, 15, 20)
+$g.Dispose()
+$bmp.Save('${outImg.replace(/\\/g, '\\\\')}', [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+`);
+
+    try {
+      execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', genPs]);
+      const imgBytes = fs.readFileSync(outImg);
+      const base64Str = imgBytes.toString('base64');
+
+      const result = await extractTextFromImageSnippet(base64Str, 'image/png');
+      expect(result.text).toBeTruthy();
+      expect(result.text).toContain('الحكمة');
+      expect(result.confidence).toBeGreaterThan(0);
+    } finally {
+      try { fs.unlinkSync(genPs); } catch {}
+      try { fs.unlinkSync(outImg); } catch {}
+    }
+  });
 });

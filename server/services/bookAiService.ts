@@ -1,7 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { PDFDocument } from 'pdf-lib';
 import { db } from '../db/pool';
+
+const execFileAsync = promisify(execFile);
 
 export interface AiExtractedBookMetadata {
   title: string;
@@ -524,3 +529,212 @@ ${categoriesPromptList}
     return null;
   }
 }
+
+/**
+ * Windows Native WinRT OCR engine for offline Arabic recognition.
+ * Requires 0 external packages or internet, runs in ~100ms.
+ */
+export async function runWindowsNativeOcr(imageBuffer: Buffer): Promise<string> {
+  if (process.platform !== 'win32') {
+    return '';
+  }
+
+  const tempFilePath = path.join(os.tmpdir(), `mishkat_ocr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.png`);
+  fs.writeFileSync(tempFilePath, imageBuffer);
+
+  const psScript = `
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Foundation, ContentType = WindowsRuntime]
+$null = [Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]
+
+$awaiterMethod = [WindowsRuntimeSystemExtensions].GetMember('GetAwaiter', 'Method', 'Public,Static') | 
+    Where-Object { $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' } | 
+    Select-Object -First 1
+
+function Invoke-Async {
+    param ([object]$AsyncTask, [Type]$ReturnType)
+    $genericMethod = $awaiterMethod.MakeGenericMethod($ReturnType)
+    $awaiter = $genericMethod.Invoke($null, @($AsyncTask))
+    return $awaiter.GetResult()
+}
+
+$imagePath = [System.IO.Path]::GetFullPath('${tempFilePath.replace(/\\/g, '\\\\')}')
+
+try {
+    $imageBytes = [System.IO.File]::ReadAllBytes($imagePath)
+    $stream = [Windows.Storage.Streams.InMemoryRandomAccessStream]::new()
+    $writer = [Windows.Storage.Streams.DataWriter]::new($stream)
+    $writer.WriteBytes($imageBytes)
+    Invoke-Async $writer.StoreAsync() ([uint32]) | Out-Null
+    [void]$writer.DetachStream()
+    $stream.Seek(0)
+
+    $decoderAsync = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)
+    $decoder = Invoke-Async $decoderAsync ([Windows.Graphics.Imaging.BitmapDecoder])
+
+    $bitmapAsync = $decoder.GetSoftwareBitmapAsync()
+    $softwareBitmap = Invoke-Async $bitmapAsync ([Windows.Graphics.Imaging.SoftwareBitmap])
+
+    $lang = [Windows.Globalization.Language]::new("ar-SA")
+    $ocrEngine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)
+    if (-not $ocrEngine) {
+        $ocrEngine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+    }
+
+    $ocrAsync = $ocrEngine.RecognizeAsync($softwareBitmap)
+    $ocrResult = Invoke-Async $ocrAsync ([Windows.Media.Ocr.OcrResult])
+
+    $fullLines = @()
+    foreach ($line in $ocrResult.Lines) {
+        $sortedWords = $line.Words | Sort-Object { $_.BoundingRect.X } -Descending
+        $lineText = ($sortedWords | ForEach-Object { $_.Text }) -join " "
+        $fullLines += $lineText
+    }
+    $finalResult = $fullLines -join "\`n"
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    Write-Output $finalResult
+} finally {
+    if ($stream) { $stream.Dispose() }
+    if (Test-Path $imagePath) { Remove-Item $imagePath -Force -ErrorAction SilentlyContinue }
+}
+`;
+
+  try {
+    const { stdout } = await execFileAsync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript], {
+      timeout: 10000,
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    return (stdout || '').trim();
+  } catch (err) {
+    console.warn('[WindowsOCR] PowerShell OCR execution error:', err);
+    return '';
+  } finally {
+    if (fs.existsSync(tempFilePath)) {
+      try { fs.unlinkSync(tempFilePath); } catch {}
+    }
+  }
+}
+
+export interface ExtractedSnippetOcrResult {
+  text: string;
+  engine: 'gemini' | 'windows-ocr' | 'fallback';
+  confidence: number;
+  error?: string;
+}
+
+/**
+ * Extracts text from an image crop / snippet using AI (Gemini Vision) or Local Windows OCR.
+ */
+export async function extractTextFromImageSnippet(
+  imageBase64: string,
+  mimeType: string = 'image/png'
+): Promise<ExtractedSnippetOcrResult> {
+  const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '').trim();
+  if (!cleanBase64) {
+    return {
+      text: '',
+      engine: 'fallback',
+      confidence: 0,
+      error: 'لم يتم استلام صورة صالحة للفقرة المحددة.',
+    };
+  }
+
+  const imageBuffer = Buffer.from(cleanBase64, 'base64');
+
+  // Strategy 1: Google Gemini AI Multimodal Vision (if configured and online)
+  const apiKey = await getGeminiApiKey();
+  if (apiKey) {
+    let candidatesToTry: WorkingAiModel[] = cachedWorkingModel ? [cachedWorkingModel] : [];
+    if (candidatesToTry.length === 0) {
+      try {
+        candidatesToTry = await discoverAvailableGeminiModels(apiKey);
+      } catch {
+        candidatesToTry = [
+          { modelName: 'gemini-2.5-flash', apiVersion: 'v1' },
+          { modelName: 'gemini-2.0-flash', apiVersion: 'v1' },
+          { modelName: 'gemini-1.5-flash', apiVersion: 'v1' },
+        ];
+      }
+    }
+
+    const prompt = `أنت مساعد أكاديمي متخصص في التدقيق اللغوي واستخراج الاقتباسات من أمهات الكتب والمخطوطات المصورة.
+أمامك صورة لقصاصة أو فقرة تم تحديدها واقتطاعها من صفحة كتاب.
+المهمة: تفريغ النص المكتوب داخل الصورة بدقة متناهية (OCR).
+القواعد الصارمة:
+1. استخرج النص الحرفي المكتوب بالضبط، محتفظاً باللغة الأصلية (عربية، فرنسية، إنجليزية).
+2. حافظ على علامات الترقيم، الفواصل، والهمزات، والكلمات التراثية أو الاصطلاحية كما هي.
+3. تجنب تماماً كتابة أي عبارات تمهيدية أو شروح أو تعليقات مثل: "النص هو:" أو "إليك الاقتباس:" أو "في الصورة مكتوب".
+4. أعد النص المستخرج فقط مباشرة. إذا كانت الصورة غير واضحة أو لا تحتوي على أي نص إطلاقاً، أجب بـ: [لا يوجد نص واضح].`;
+
+    for (const candidate of candidatesToTry) {
+      try {
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = new GoogleGenAI({
+          apiKey,
+          ...(candidate.apiVersion ? { apiVersion: candidate.apiVersion } : {}),
+        });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('AI OCR timed out')), 12000)
+        );
+        const response = (await Promise.race([
+          ai.models.generateContent({
+            model: candidate.modelName,
+            contents: [
+              {
+                inlineData: {
+                  mimeType: mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'image/jpeg' : 'image/png',
+                  data: cleanBase64,
+                },
+              },
+              prompt,
+            ],
+          }),
+          timeoutPromise,
+        ])) as any;
+
+        if (response && response.text) {
+          const rawText = response.text.trim();
+          if (rawText && !rawText.includes('[لا يوجد نص واضح]')) {
+            cachedWorkingModel = candidate;
+            return {
+              text: rawText,
+              engine: 'gemini',
+              confidence: 98,
+            };
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[BookAI] Gemini OCR attempt with ${candidate.modelName} failed:`, err?.message || err);
+      }
+    }
+  }
+
+  // Strategy 2: Local Windows Native OCR Engine (100% Offline)
+  try {
+    const localText = await runWindowsNativeOcr(imageBuffer);
+    if (localText && localText.trim().length > 0) {
+      return {
+        text: localText.trim(),
+        engine: 'windows-ocr',
+        confidence: 85,
+      };
+    }
+  } catch (winErr) {
+    console.warn('[BookAI] Windows native OCR failed:', winErr);
+  }
+
+  return {
+    text: '',
+    engine: 'fallback',
+    confidence: 0,
+    error: 'تعذر استخراج النص من الفقرة المحددة. يرجى التأكد من وضوح التحديد أو كتابة الاقتباس يدوياً.',
+  };
+}
+

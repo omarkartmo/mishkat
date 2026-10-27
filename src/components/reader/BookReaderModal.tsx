@@ -24,6 +24,9 @@ import {
   Printer,
   Copy,
   Check,
+  Crop,
+  Sparkles,
+  Quote,
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -130,6 +133,16 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     y: number;
   } | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+
+  // Scanned page detection & visual OCR snipping quote states
+  const [isScannedPage, setIsScannedPage] = useState<boolean>(false);
+  const [isOcrSelectionMode, setIsOcrSelectionMode] = useState<boolean>(false);
+  const [isDraggingSelection, setIsDraggingSelection] = useState<boolean>(false);
+  const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const [isOcrProcessing, setIsOcrProcessing] = useState<boolean>(false);
+  const [ocrResultPopup, setOcrResultPopup] = useState<{ text: string; x: number; y: number; engine?: string } | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const selectionOverlayRef = useRef<HTMLDivElement | null>(null);
 
   // Touchpad pinch-to-zoom, Ctrl+Wheel zoom, and Continuous Vertical Scroll Down/Up between pages
   useEffect(() => {
@@ -567,7 +580,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
     const cacheKey = `${targetPage}_${scale}`;
 
-    // Helper to render text layer for selection
+    // Helper to render text layer for selection and detect scanned pages
     const updateTextLayer = async (page: any, viewport: any) => {
       if (!textLayerRef.current) return;
       try {
@@ -575,13 +588,19 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         textLayerDiv.innerHTML = '';
         textLayerDiv.style.width = `${viewport.width}px`;
         textLayerDiv.style.height = `${viewport.height}px`;
+        textLayerDiv.style.setProperty('--scale-factor', String(viewport.scale));
         const textContent = await page.getTextContent();
-        const textLayer = new pdfjsLib.TextLayer({
-          textContentSource: textContent,
-          container: textLayerDiv,
-          viewport: viewport,
-        });
-        await textLayer.render();
+        const hasText = Boolean(textContent && textContent.items && textContent.items.length > 0);
+        setIsScannedPage(!hasText);
+
+        if (hasText) {
+          const textLayer = new pdfjsLib.TextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport: viewport,
+          });
+          await textLayer.render();
+        }
       } catch (err: any) {
         if (err?.name !== 'RenderingCancelledException') {
           console.warn('[BookReaderModal] TextLayer render error:', err);
@@ -763,6 +782,174 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
     }, 1200);
   };
 
+  // Reset popups on page change
+  useEffect(() => {
+    setOcrResultPopup(null);
+    setSelectionBox(null);
+    setSelectedTextPopup(null);
+  }, [currentPage]);
+
+  // Apply OCR or native quote to note creation form
+  const handleApplyOcrQuote = (textToQuote: string) => {
+    if (!textToQuote || !textToQuote.trim()) return;
+    setSelectedQuote(textToQuote.trim());
+    setShowNotes(true);
+    setOcrResultPopup(null);
+    setSelectionBox(null);
+    setIsOcrSelectionMode(false);
+    setSelectedTextPopup(null);
+    setTimeout(() => {
+      noteTextareaRef.current?.focus();
+    }, 150);
+  };
+
+  // Drag selection handlers for visual OCR quote tool
+  const handleOcrMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const overlay = selectionOverlayRef.current;
+    if (!overlay) return;
+    const rect = overlay.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setIsDraggingSelection(true);
+    setSelectionBox({
+      startX: x,
+      startY: y,
+      currentX: x,
+      currentY: y,
+    });
+    setOcrResultPopup(null);
+    setOcrError(null);
+  };
+
+  const handleOcrMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDraggingSelection || !selectionBox) return;
+    const overlay = selectionOverlayRef.current;
+    if (!overlay) return;
+    const rect = overlay.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+
+    setSelectionBox((prev) => (prev ? { ...prev, currentX: x, currentY: y } : null));
+  };
+
+  const handleOcrMouseUp = async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDraggingSelection || !selectionBox) {
+      setIsDraggingSelection(false);
+      return;
+    }
+    setIsDraggingSelection(false);
+
+    const w = Math.abs(selectionBox.currentX - selectionBox.startX);
+    const h = Math.abs(selectionBox.currentY - selectionBox.startY);
+
+    // Minimum selection size threshold (to prevent accidental tiny clicks)
+    if (w < 15 || h < 15) {
+      setSelectionBox(null);
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const overlay = selectionOverlayRef.current;
+    if (!canvas || !overlay) {
+      setSelectionBox(null);
+      return;
+    }
+
+    const overlayRect = overlay.getBoundingClientRect();
+    const minX = Math.min(selectionBox.startX, selectionBox.currentX);
+    const minY = Math.min(selectionBox.startY, selectionBox.currentY);
+
+    // Map screen/overlay coords to actual canvas pixel resolution
+    const scaleX = canvas.width / overlayRect.width;
+    const scaleY = canvas.height / overlayRect.height;
+
+    const cropX = Math.max(0, Math.round(minX * scaleX));
+    const cropY = Math.max(0, Math.round(minY * scaleY));
+    const cropW = Math.min(canvas.width - cropX, Math.round(w * scaleX));
+    const cropH = Math.min(canvas.height - cropY, Math.round(h * scaleY));
+
+    if (cropW < 10 || cropH < 10) {
+      setSelectionBox(null);
+      return;
+    }
+
+    // Crop snippet onto an offscreen canvas
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = cropW;
+    cropCanvas.height = cropH;
+    const ctx = cropCanvas.getContext('2d');
+    if (!ctx) {
+      setSelectionBox(null);
+      return;
+    }
+
+    ctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    const imageBase64 = cropCanvas.toDataURL('image/png');
+
+    const popupX = overlayRect.left + minX + w / 2;
+    const popupY = overlayRect.top + minY;
+
+    setIsOcrProcessing(true);
+    setOcrResultPopup({
+      text: '',
+      x: popupX,
+      y: popupY,
+    });
+
+    try {
+      const res = await bookRepository.ocrSnippet(imageBase64, 'image/png');
+      if (res.success && res.data?.text && res.data.text.trim()) {
+        setOcrResultPopup({
+          text: res.data.text.trim(),
+          x: popupX,
+          y: popupY,
+          engine: res.data.engine,
+        });
+      } else {
+        setOcrError(res.error?.message || 'تعذر التعرف على نص واضح في الفقرة المحددة.');
+      }
+    } catch (err: any) {
+      setOcrError(err?.message || 'حدث خطأ أثناء الاتصال بمحرك التعرف على النصوص.');
+    } finally {
+      setIsOcrProcessing(false);
+    }
+  };
+
+  // Full-page OCR recognition
+  const handleOcrWholePage = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    setIsOcrProcessing(true);
+    setOcrError(null);
+    setOcrResultPopup({
+      text: '',
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+
+    try {
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.9);
+      const res = await bookRepository.ocrSnippet(imageBase64, 'image/jpeg');
+      if (res.success && res.data?.text && res.data.text.trim()) {
+        setOcrResultPopup({
+          text: res.data.text.trim(),
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+          engine: res.data.engine,
+        });
+      } else {
+        setOcrError(res.error?.message || 'تعذر استخراج نصوص الصفحة. يمكنك كتابة الاقتباس يدوياً في الملاحظات.');
+      }
+    } catch (err: any) {
+      setOcrError(err?.message || 'حدث خطأ أثناء فحص نصوص الصفحة.');
+    } finally {
+      setIsOcrProcessing(false);
+    }
+  };
+
   // Touch navigation handlers for phones (RTL horizontal swipe & 2-finger pinch zoom)
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
@@ -845,11 +1032,32 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (ocrResultPopup) {
+          setOcrResultPopup(null);
+          setSelectionBox(null);
+          return;
+        }
+        if (isOcrSelectionMode) {
+          setIsOcrSelectionMode(false);
+          setSelectionBox(null);
+          return;
+        }
+        if (selectedTextPopup) {
+          setSelectedTextPopup(null);
+          return;
+        }
         if (isFullscreen) {
           setIsFullscreen(false);
         } else {
           onClose();
         }
+      } else if ((e.key === 's' || e.key === 'S' || e.key === 'س') && !isEpub) {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as any).isContentEditable)) {
+          return;
+        }
+        e.preventDefault();
+        setIsOcrSelectionMode((prev) => !prev);
       } else if (e.key === 'ArrowRight') {
         // Arabic RTL: ArrowRight navigates to previous page
         if (!isEpub) {
@@ -1081,6 +1289,34 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             </button>
           )}
 
+          {/* Visual Snippet / Area Selection Quote Tool (for Scanned & Digital Books) */}
+          {!isEpub && (
+            <button
+              onClick={() => {
+                setIsOcrSelectionMode(!isOcrSelectionMode);
+                setSelectedTextPopup(null);
+                setOcrResultPopup(null);
+              }}
+              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                isOcrSelectionMode
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-lg ring-2 ring-amber-400/50'
+                  : isScannedPage
+                  ? 'bg-indigo-600/90 text-white hover:bg-indigo-600 ring-1 ring-indigo-400/40 shadow-sm'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+              title={
+                isOcrSelectionMode
+                  ? 'إلغاء وضع التحديد (Esc أو مفتاح S)'
+                  : 'اقتباس فقرة بالتحديد (OCR) - اسحب بالمؤشر على أي فقرة أو سطر (اختصار: S)'
+              }
+            >
+              <Crop className={`w-4 h-4 ${isOcrSelectionMode ? 'text-slate-950' : 'text-amber-400'}`} />
+              <span className="hidden md:inline">
+                {isOcrSelectionMode ? 'التحديد نشط (اسحب)' : 'اقتباس بالتحديد (OCR)'}
+              </span>
+            </button>
+          )}
+
           {/* Notes Toggle */}
           <button
             onClick={() => setShowNotes(!showNotes)}
@@ -1161,31 +1397,67 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             </div>
 
             {/* Note creation form */}
-            <form onSubmit={handleCreateNote} className="p-3 border-b border-slate-800 space-y-2 text-xs">
+            <form onSubmit={handleCreateNote} className="p-3 border-b border-slate-800 space-y-2.5 text-xs">
               <span className="text-slate-300 font-semibold block text-[11px]">
                 تدوين ملاحظة في (صفحة {currentPage}):
               </span>
-              <input
-                type="text"
-                value={selectedQuote}
-                onChange={(e) => setSelectedQuote(e.target.value)}
-                placeholder="اقتباس نصي من الصفحة (اختياري)..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500 text-xs"
-              />
-              <textarea
-                ref={noteTextareaRef}
-                rows={3}
-                required
-                value={newNoteContent}
-                onChange={(e) => setNewNoteContent(e.target.value)}
-                placeholder="اكتب تحليلك المنهجي، الشواهد، أو الفائدة..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 placeholder-slate-500 resize-none outline-none focus:border-indigo-500 text-xs"
-              />
+
+              {/* Quote Card (if a quote was selected/extracted) */}
+              {selectedQuote ? (
+                <div className="bg-amber-500/10 border-r-2 border-amber-500 p-2.5 rounded-xl space-y-1.5 shadow-sm">
+                  <div className="flex items-center justify-between text-[11px] text-amber-400 font-bold">
+                    <span className="flex items-center gap-1">
+                      <Quote className="w-3.5 h-3.5" />
+                      النص المقتبس من الكتاب:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedQuote('')}
+                      className="text-slate-400 hover:text-rose-400 text-[10px] cursor-pointer"
+                      title="إزالة الاقتباس"
+                    >
+                      إلغاء
+                    </button>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={selectedQuote}
+                    onChange={(e) => setSelectedQuote(e.target.value)}
+                    className="w-full bg-slate-950/70 border border-amber-500/30 rounded-lg p-1.5 text-slate-200 text-xs italic leading-relaxed outline-none focus:border-amber-400 resize-none font-serif"
+                    dir="auto"
+                  />
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={selectedQuote}
+                  onChange={(e) => setSelectedQuote(e.target.value)}
+                  placeholder="اقتباس نصي من الصفحة (اختياري)..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500 text-xs"
+                />
+              )}
+
+              <div className="space-y-1">
+                <label className="text-slate-300 font-semibold block text-[11px]">
+                  الفائدة المستخلصة، التحليل، أو الملاحظة الشخصية:
+                </label>
+                <textarea
+                  ref={noteTextareaRef}
+                  rows={3}
+                  required
+                  value={newNoteContent}
+                  onChange={(e) => setNewNoteContent(e.target.value)}
+                  placeholder="اكتب فائدتك المكتسبة، تحليلك للشاهد، أو تعليقك على هذا الاقتباس..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 placeholder-slate-500 resize-none outline-none focus:border-indigo-500 text-xs leading-relaxed"
+                />
+              </div>
+
               <button
                 type="submit"
-                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs flex items-center justify-center gap-1.5"
               >
-                حفظ في مذكرة الطالب
+                <MessageSquarePlus className="w-3.5 h-3.5" />
+                حفظ الفائدة في مذكرة الطالب
               </button>
             </form>
 
@@ -1290,6 +1562,37 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                   <span className="text-[11px] font-medium">جاري معالجة الصفحة...</span>
                 </div>
               )}
+
+              {/* Scanned Book Smart Assistance Badge */}
+              {isScannedPage && (
+                <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-amber-500/40 flex items-center gap-2 z-20 shadow-xl text-slate-200 text-xs animate-in fade-in duration-200">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-[11px] font-medium">كتاب مصوّر</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOcrSelectionMode(true);
+                      setOcrResultPopup(null);
+                    }}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition-colors ${
+                      isOcrSelectionMode
+                        ? 'bg-amber-500 text-slate-950 font-black'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                    }`}
+                  >
+                    {isOcrSelectionMode ? 'التحديد نشط' : 'تحديد فقرة للاقتباس'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOcrWholePage}
+                    disabled={isOcrProcessing}
+                    className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg text-[10px] font-semibold cursor-pointer transition-colors disabled:opacity-50"
+                  >
+                    اقتباس كل الصفحة
+                  </button>
+                </div>
+              )}
+
               <canvas
                 ref={canvasRef}
                 dir="ltr"
@@ -1310,10 +1613,188 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                   textAlign: 'left',
                 }}
               />
+
+              {/* Interactive Snipping / Area Selection Layer for OCR Quotes */}
+              {(isOcrSelectionMode || isScannedPage) && (
+                <div
+                  ref={selectionOverlayRef}
+                  onMouseDown={handleOcrMouseDown}
+                  onMouseMove={handleOcrMouseMove}
+                  onMouseUp={handleOcrMouseUp}
+                  className={`absolute inset-0 z-30 select-none ${
+                    isOcrSelectionMode ? 'cursor-crosshair bg-indigo-500/5' : 'cursor-text'
+                  }`}
+                  style={{ pointerEvents: isOcrSelectionMode ? 'auto' : 'none' }}
+                >
+                  {selectionBox && (
+                    <div
+                      className="absolute border-2 border-dashed border-indigo-400 bg-indigo-500/25 rounded-lg shadow-2xl pointer-events-none"
+                      style={{
+                        left: `${Math.min(selectionBox.startX, selectionBox.currentX)}px`,
+                        top: `${Math.min(selectionBox.startY, selectionBox.currentY)}px`,
+                        width: `${Math.abs(selectionBox.currentX - selectionBox.startX)}px`,
+                        height: `${Math.abs(selectionBox.currentY - selectionBox.startY)}px`,
+                      }}
+                    >
+                      <div className="absolute -top-6 right-0 bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+                        تحديد للاقتباس
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Scoped CSS for TextLayer high-accuracy selection & highlight */}
+      <style>{`
+        .textLayer {
+          position: absolute;
+          text-align: initial;
+          inset: 0;
+          overflow: clip;
+          opacity: 1;
+          line-height: 1;
+          -webkit-text-size-adjust: none;
+          text-size-adjust: none;
+          transform-origin: 0 0;
+          caret-color: transparent;
+          z-index: 10;
+          pointer-events: auto;
+        }
+        .textLayer :is(span, br) {
+          color: transparent;
+          position: absolute;
+          white-space: pre;
+          cursor: text;
+          transform-origin: 0% 0%;
+        }
+        .textLayer ::selection {
+          background: rgba(99, 102, 241, 0.4) !important;
+        }
+        .textLayer ::-moz-selection {
+          background: rgba(99, 102, 241, 0.4) !important;
+        }
+      `}</style>
+
+      {/* Floating Visual OCR Snippet Recognition Popup */}
+      {ocrResultPopup && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${Math.min(window.innerWidth - 180, Math.max(180, ocrResultPopup.x))}px`,
+            top: `${Math.min(window.innerHeight - 200, Math.max(70, ocrResultPopup.y))}px`,
+            transform: 'translate(-50%, -100%)',
+            zIndex: 110,
+          }}
+          className="bg-slate-900/95 border border-indigo-500/60 shadow-2xl rounded-2xl p-3.5 flex flex-col gap-2.5 backdrop-blur-md w-80 sm:w-96 animate-in fade-in zoom-in-95 duration-150"
+        >
+          {isOcrProcessing ? (
+            <div className="py-4 flex flex-col items-center justify-center gap-2 text-indigo-300">
+              <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+              <span className="text-xs font-semibold">جاري التعرف على نص الفقرة واستخراجه (OCR)...</span>
+              <span className="text-[10px] text-slate-400">فحص الكلمات والرموز بدقة...</span>
+            </div>
+          ) : ocrError ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                <span className="font-bold text-xs text-rose-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4" />
+                  تنبيه التعرف البصري
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setOcrResultPopup(null); setOcrError(null); setSelectionBox(null); }}
+                  className="text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">{ocrError}</p>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOcrResultPopup(null);
+                    setOcrError(null);
+                    setShowNotes(true);
+                    setTimeout(() => noteTextareaRef.current?.focus(), 150);
+                  }}
+                  className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold text-center cursor-pointer transition-colors"
+                >
+                  تدوين الاقتباس يدوياً
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setOcrResultPopup(null); setOcrError(null); }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  النص المستخرج من الفقرة {ocrResultPopup.engine === 'gemini' ? '(ذكاء اصطناعي)' : '(محرك محلي)'}:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setOcrResultPopup(null); setSelectionBox(null); }}
+                  className="text-slate-400 hover:text-white cursor-pointer p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <textarea
+                value={ocrResultPopup.text}
+                onChange={(e) => setOcrResultPopup({ ...ocrResultPopup, text: e.target.value })}
+                rows={3}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 resize-none outline-none focus:border-indigo-500 leading-relaxed font-serif"
+                dir="auto"
+                placeholder="النص المستخرج..."
+              />
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleApplyOcrQuote(ocrResultPopup.text)}
+                  className="flex-1 py-1.5 px-3 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
+                >
+                  <MessageSquarePlus className="w-3.5 h-3.5" />
+                  <span>اقتباس وإضافة فائدة</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(ocrResultPopup.text);
+                    setIsCopied(true);
+                    setTimeout(() => setIsCopied(false), 1500);
+                  }}
+                  className="py-1.5 px-3 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  {isCopied ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span className="text-emerald-400">تم النسخ</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-slate-400" />
+                      <span>نسخ</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Floating Selection Quote Tooltip */}
       {selectedTextPopup && (
