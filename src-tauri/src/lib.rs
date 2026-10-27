@@ -81,6 +81,27 @@ fn start_local_pac_loopback(pac_content: Arc<Mutex<String>>) {
     });
 }
 
+fn start_blackhole_proxy() {
+    thread::spawn(move || {
+        if let Ok(listener) = TcpListener::bind("127.0.0.1:9999") {
+            for stream in listener.incoming() {
+                if let Ok(mut stream) = stream {
+                    let mut buf = [0u8; 1024];
+                    let _ = stream.read(&mut buf);
+                    let body = "<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='utf-8'><title>محجوب</title></head><body style='font-family:sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;'><div style='text-align:center;padding:2rem;background:#1e293b;border-radius:1rem;border:1px solid #334155;'><h1>🛡️ تم حظر الوصول إلى هذا الموقع</h1><p style='color:#94a3b8;'>وفقاً لسياسة استخدام الإنترنت المعتمدة في مكتبة مشكاة.</p></div></body></html>";
+                    let response = format!(
+                        "HTTP/1.1 403 Forbidden\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\nCache-Control: no-cache, no-store, must-revalidate\r\nContent-Length: {}\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                    let _ = stream.flush();
+                }
+            }
+        }
+    });
+}
+
 fn register_startup() {
     if let Ok(exe_path) = std::env::current_exe() {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
@@ -161,6 +182,16 @@ fn set_system_proxy(pac_url: &str) {
                 New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Force -ErrorAction SilentlyContinue | Out-Null
                 Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue
             } catch {}
+            $connPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Connections'
+            foreach ($valName in @('DefaultConnectionSettings', 'SavedLegacySettings')) {
+                $prop = Get-ItemProperty -Path $connPath -Name $valName -ErrorAction SilentlyContinue
+                if ($prop -and $prop.$valName -and $prop.$valName.Length -ge 9) {
+                    $bytes = [byte[]]$prop.$valName
+                    $bytes[8] = [byte]($bytes[8] -bor 0x04)
+                    Set-ItemProperty -Path $connPath -Name $valName -Value $bytes -Force -ErrorAction SilentlyContinue
+                }
+            }
+
             ipconfig /flushdns | Out-Null
             $signature = @'
             [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
@@ -170,6 +201,7 @@ fn set_system_proxy(pac_url: &str) {
             if ($wininet) {
                 $wininet::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0)
                 $wininet::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)
+                $wininet::InternetSetOption([IntPtr]::Zero, 42, [IntPtr]::Zero, 0)
             }
         "#;
         let _ = Command::new("powershell")
@@ -205,10 +237,11 @@ pub fn run() {
         register_startup();
     }
 
-    // 2. Start local PAC loopback server (127.0.0.1:4005) with cached/default blocklist
+    // 2. Start local PAC loopback server (127.0.0.1:4005) & local blackhole proxy (127.0.0.1:9999)
     let initial_pac = load_initial_pac();
     let pac_state = Arc::new(Mutex::new(initial_pac));
     start_local_pac_loopback(Arc::clone(&pac_state));
+    start_blackhole_proxy();
 
     // 3. Immediately enforce local loopback PAC so student PC is protected even if server is offline
     if cfg!(target_os = "windows") {

@@ -34,6 +34,7 @@ import { googleDriveService } from './services/googleDriveService';
 import { supportAgentService } from './services/supportAgentService';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
+import { startBlackholeProxy, stopBlackholeProxy } from './services/blackholeProxyService';
 
 // Helper to determine whether an origin is from a private LAN subnet
 const isLanOrigin = (origin: string): boolean => {
@@ -231,6 +232,9 @@ export async function startServer() {
     console.log(`📱 Phone / Local LAN:    http://${lanIp}:${PORT}`);
     console.log(`📚 Central Data Dir:     ${serverConfig.dirs.root}`);
     console.log(`✨ Mode:                 ${process.env.NODE_ENV || 'development'}`);
+    try {
+      startBlackholeProxy();
+    } catch {}
     console.log(`======================================================\n`);
   });
 
@@ -260,6 +264,7 @@ export async function startServer() {
       console.log('[Server] HTTP listener closed.');
       try {
         stopIncomingWatcher();
+        await stopBlackholeProxy();
         await db.close();
         logger.info('[Database] Database pool and engine closed cleanly.');
         console.log('[Database] Database pool and engine closed cleanly.');

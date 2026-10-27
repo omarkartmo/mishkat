@@ -8,6 +8,7 @@ import util from 'util';
 import { serverConfig } from '../config';
 
 const execPromise = util.promisify(exec);
+import { startBlackholeProxy } from './blackholeProxyService';
 
 export type InternetPolicyMode = 'OPEN' | 'RESTRICTED' | 'OFFLINE';
 
@@ -245,6 +246,9 @@ export class InternetPolicyService {
         }
       };
 
+      // Ensure Blackhole Proxy Responder is running on 127.0.0.1:9999
+      startBlackholeProxy();
+
       // If Server is excluded, or if Policy is OPEN: clear AutoConfigURL so admin has full direct internet
       if (excludeServer || mode === 'OPEN') {
         const clearScript = `
@@ -259,10 +263,23 @@ $userPath = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Setti
 Remove-ItemProperty -Path $userPath -Name AutoConfigURL -Force -ErrorAction SilentlyContinue 2>$null
 Set-ItemProperty -Path $userPath -Name ProxyEnable -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
 
-# 3. Flush DNS immediately
+# 3. Synchronize Windows 10/11 Settings Toggle (Connections\\DefaultConnectionSettings & SavedLegacySettings)
+$connPath = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\Connections'
+foreach ($valName in @('DefaultConnectionSettings', 'SavedLegacySettings')) {
+  $prop = Get-ItemProperty -Path $connPath -Name $valName -ErrorAction SilentlyContinue
+  if ($prop -and $prop.$valName) {
+    $bytes = [byte[]]$prop.$valName
+    if ($bytes.Length -ge 9) {
+      $bytes[8] = [byte]($bytes[8] -band (-bnot 0x04))
+      Set-ItemProperty -Path $connPath -Name $valName -Value $bytes -Force -ErrorAction SilentlyContinue 2>$null
+    }
+  }
+}
+
+# 4. Flush DNS immediately
 ipconfig /flushdns 2>$null | Out-Null
 
-# 4. Notify WinINet (Options 39 and 37) so currently open browsers remove proxy instantly
+# 5. Notify WinINet (Options 39, 37, and 42) so currently open browsers apply changes and close old sessions instantly
 try {
   $sig = @'
   [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
@@ -272,6 +289,7 @@ try {
   if ($wininet) {
     $wininet::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0)
     $wininet::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)
+    $wininet::InternetSetOption([IntPtr]::Zero, 42, [IntPtr]::Zero, 0)
   }
 } catch {}
 `;
@@ -290,13 +308,36 @@ $policyPath = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\In
 New-Item -Path $policyPath -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
 Set-ItemProperty -Path $policyPath -Name AutoConfigUrl -Value '${pacUrl}' -Type String -Force -ErrorAction SilentlyContinue 2>$null
 
-# 2. Set Current User Session proxy (HKCU - guarantees user session browsers and Windows Settings apply PAC immediately)
+# 2. Set Current User Session proxy (HKCU - guarantees user session browsers apply PAC immediately)
 $userPath = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
 New-Item -Path $userPath -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
 Set-ItemProperty -Path $userPath -Name AutoConfigURL -Value '${pacUrl}' -Type String -Force -ErrorAction SilentlyContinue 2>$null
 Set-ItemProperty -Path $userPath -Name ProxyEnable -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
 
-# 3. Disable QUIC in Chrome & Edge via machine policy & user policy so traffic cannot bypass PAC via UDP 443
+# 3. Synchronize Windows 10/11 Settings UI toggle (Connections\\DefaultConnectionSettings & SavedLegacySettings)
+# Embed PAC URL and set flag byte 8 to 0x0D (AutoDetect + PAC script enabled)
+$pacBytes = [System.Text.Encoding]::ASCII.GetBytes('${pacUrl}')
+$pacLen = $pacBytes.Length
+$connPath = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\Connections'
+New-Item -Path $connPath -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+
+foreach ($valName in @('DefaultConnectionSettings', 'SavedLegacySettings')) {
+  $prop = Get-ItemProperty -Path $connPath -Name $valName -ErrorAction SilentlyContinue
+  if ($prop -and $prop.$valName -and $prop.$valName.Length -ge 9) {
+    $bytes = [byte[]]$prop.$valName
+    $bytes[8] = [byte]($bytes[8] -bor 0x04)
+    Set-ItemProperty -Path $connPath -Name $valName -Value $bytes -Force -ErrorAction SilentlyContinue 2>$null
+  } else {
+    $blob = [System.Collections.Generic.List[byte]]::new()
+    $blob.AddRange([byte[]]@(0x46, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00))
+    $blob.AddRange([System.BitConverter]::GetBytes([int]$pacLen))
+    $blob.AddRange($pacBytes)
+    $blob.AddRange([byte[]](New-Object byte[] 32))
+    Set-ItemProperty -Path $connPath -Name $valName -Value $blob.ToArray() -Type Binary -Force -ErrorAction SilentlyContinue 2>$null
+  }
+}
+
+# 4. Disable QUIC in Chrome & Edge via machine policy & user policy so traffic cannot bypass PAC via UDP 443
 try {
   New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Google\\Chrome' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
   Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
@@ -313,10 +354,10 @@ try {
   netsh advfirewall firewall add rule name="MISHKAT Block QUIC (UDP 443)" dir=out action=block protocol=UDP remoteport=443 2>&1 | Out-Null
 } catch {}
 
-# 4. Flush DNS immediately
+# 5. Flush DNS immediately
 ipconfig /flushdns 2>$null | Out-Null
 
-# 5. Notify WinINet (Options 39 and 37) so currently open browsers apply new proxy settings instantly
+# 6. Notify WinINet (Options 39, 37, and 42) so currently open browsers apply new proxy settings instantly
 try {
   $sig = @'
   [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
@@ -326,6 +367,7 @@ try {
   if ($wininet) {
     $wininet::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0)
     $wininet::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)
+    $wininet::InternetSetOption([IntPtr]::Zero, 42, [IntPtr]::Zero, 0)
   }
 } catch {}
 `;

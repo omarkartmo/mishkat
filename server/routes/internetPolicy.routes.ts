@@ -3,6 +3,8 @@ import { internetPolicyService } from '../services/internetPolicyService';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import os from 'os';
+import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
 
@@ -44,6 +46,7 @@ router.get('/proxy.pac', async (req, res) => {
     }
 
     let pacContent = `function FindProxyForURL(url, host) {\n`;
+    pacContent += `  host = (host || "").toLowerCase();\n\n`;
 
     // 1. ALWAYS allow localhost, local hostnames, and server LAN IPs directly
     // This guarantees that access to Mishkat Central Server (Port 3000) and local library assets is NEVER blocked
@@ -83,9 +86,29 @@ router.get('/proxy.pac', async (req, res) => {
         pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
         pacContent += `  }\n`;
 
-        // Smart media platform matching (e.g. YouTube video streaming CDN & player infrastructure)
+        // Smart media & social platform matching (e.g. CDNs, streaming, web players)
         if (cleanDomain.includes('youtube') || cleanDomain === 'youtu.be') {
           pacContent += `  if (shExpMatch(host, "*youtube*") || shExpMatch(host, "*googlevideo.com*") || shExpMatch(host, "*ytimg.com*") || shExpMatch(host, "*youtu.be*") || shExpMatch(host, "*ggpht.com*")) {\n`;
+          pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
+          pacContent += `  }\n`;
+        }
+        if (cleanDomain.includes('facebook') || cleanDomain === 'fb.com') {
+          pacContent += `  if (shExpMatch(host, "*facebook*") || shExpMatch(host, "*fbcdn*") || shExpMatch(host, "*fb.com*") || shExpMatch(host, "*messenger.com*")) {\n`;
+          pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
+          pacContent += `  }\n`;
+        }
+        if (cleanDomain.includes('instagram')) {
+          pacContent += `  if (shExpMatch(host, "*instagram*") || shExpMatch(host, "*cdninstagram*")) {\n`;
+          pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
+          pacContent += `  }\n`;
+        }
+        if (cleanDomain.includes('tiktok')) {
+          pacContent += `  if (shExpMatch(host, "*tiktok*") || shExpMatch(host, "*musical.ly*")) {\n`;
+          pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
+          pacContent += `  }\n`;
+        }
+        if (cleanDomain.includes('twitter') || cleanDomain === 'x.com') {
+          pacContent += `  if (shExpMatch(host, "*twitter*") || shExpMatch(host, "*x.com*") || shExpMatch(host, "*twimg*") || shExpMatch(host, "*t.co*")) {\n`;
           pacContent += `    return "PROXY 127.0.0.1:9999";\n`;
           pacContent += `  }\n`;
         }
@@ -94,6 +117,13 @@ router.get('/proxy.pac', async (req, res) => {
     }
 
     pacContent += `}\n`;
+
+    // Cache locally for offline survival
+    try {
+      const localPacDir = path.join(process.env.LOCALAPPDATA || 'C:\\ProgramData', 'Mishkat');
+      if (!fs.existsSync(localPacDir)) fs.mkdirSync(localPacDir, { recursive: true });
+      fs.writeFileSync(path.join(localPacDir, 'proxy.pac'), pacContent, 'utf8');
+    } catch {}
 
     res.setHeader('Content-Type', 'application/x-ns-proxy-autoconfig');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
