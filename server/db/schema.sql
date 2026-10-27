@@ -205,13 +205,13 @@ CREATE INDEX IF NOT EXISTS idx_requests_status ON loan_requests(status);
 
 -- 9. Reading Progress (Digital Books & in-app reading)
 CREATE TABLE IF NOT EXISTS reading_progress (
-    id VARCHAR(50) PRIMARY KEY,
-    student_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
-    book_id VARCHAR(50) REFERENCES books(id) ON DELETE CASCADE,
+    id VARCHAR(255) PRIMARY KEY,
+    student_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+    book_id VARCHAR(255) REFERENCES books(id) ON DELETE CASCADE,
     current_page INT NOT NULL DEFAULT 1,
     total_pages INT NOT NULL DEFAULT 1,
     percentage INT NOT NULL DEFAULT 0,
-    last_read_at VARCHAR(50) NOT NULL,
+    last_read_at VARCHAR(100) NOT NULL,
     is_completed BOOLEAN DEFAULT FALSE,
     is_dismissed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -224,9 +224,9 @@ CREATE INDEX IF NOT EXISTS idx_progress_book ON reading_progress(book_id);
 
 -- 10. Physical Bookmarks (Physical books bookmarking & session notes)
 CREATE TABLE IF NOT EXISTS physical_bookmarks (
-    id VARCHAR(50) PRIMARY KEY,
-    student_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
-    book_id VARCHAR(50) REFERENCES books(id) ON DELETE CASCADE,
+    id VARCHAR(255) PRIMARY KEY,
+    student_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+    book_id VARCHAR(255) REFERENCES books(id) ON DELETE CASCADE,
     book_title VARCHAR(300) NOT NULL,
     book_author VARCHAR(200),
     cabinet VARCHAR(100),
@@ -247,9 +247,9 @@ CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON physical_bookmarks(book_id);
 
 -- 11. Book Summaries (Creative and structured multi-format summaries)
 CREATE TABLE IF NOT EXISTS book_summaries (
-    id VARCHAR(50) PRIMARY KEY,
-    student_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
-    book_id VARCHAR(50) REFERENCES books(id) ON DELETE CASCADE,
+    id VARCHAR(255) PRIMARY KEY,
+    student_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+    book_id VARCHAR(255) REFERENCES books(id) ON DELETE CASCADE,
     book_title VARCHAR(300) NOT NULL,
     book_author VARCHAR(200) NOT NULL,
     book_medium VARCHAR(20) NOT NULL CHECK (book_medium IN ('physical', 'digital')),
@@ -272,9 +272,9 @@ CREATE INDEX IF NOT EXISTS idx_summaries_book ON book_summaries(book_id);
 
 -- 12. Student Notes & Annotations
 CREATE TABLE IF NOT EXISTS student_notes (
-    id VARCHAR(50) PRIMARY KEY,
-    student_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
-    book_id VARCHAR(50) REFERENCES books(id) ON DELETE CASCADE,
+    id VARCHAR(255) PRIMARY KEY,
+    student_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+    book_id VARCHAR(255) REFERENCES books(id) ON DELETE CASCADE,
     book_title VARCHAR(300) NOT NULL,
     book_medium VARCHAR(20) DEFAULT 'digital' CHECK (book_medium IN ('physical', 'digital')),
     page_number INT DEFAULT 1,
@@ -293,9 +293,9 @@ CREATE INDEX IF NOT EXISTS idx_notes_book ON student_notes(book_id);
 
 -- 13. Student Favorites
 CREATE TABLE IF NOT EXISTS student_favorites (
-    id VARCHAR(50) PRIMARY KEY,
-    student_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
-    book_id VARCHAR(50) REFERENCES books(id) ON DELETE CASCADE,
+    id VARCHAR(255) PRIMARY KEY,
+    student_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+    book_id VARCHAR(255) REFERENCES books(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (student_id, book_id)
 );
@@ -383,3 +383,28 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+
+-- DIGITAL BOOK PRINT REQUESTS
+CREATE TABLE IF NOT EXISTS print_requests (
+    id VARCHAR(50) PRIMARY KEY,
+    book_id VARCHAR(50) REFERENCES books(id) ON DELETE SET NULL,
+    book_title VARCHAR(255) NOT NULL,
+    student_id VARCHAR(50) REFERENCES users(id) ON DELETE SET NULL,
+    student_name VARCHAR(255) NOT NULL,
+    student_reg_number VARCHAR(100),
+    page_from INTEGER NOT NULL,
+    page_to INTEGER NOT NULL,
+    total_pages INTEGER NOT NULL,
+    purpose VARCHAR(100) DEFAULT 'بحث صفي',
+    notes TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    admin_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS idx_print_requests_student_id ON print_requests(student_id);
+CREATE INDEX IF NOT EXISTS idx_print_requests_status ON print_requests(status);
+CREATE INDEX IF NOT EXISTS idx_print_requests_created_at ON print_requests(created_at DESC);
+

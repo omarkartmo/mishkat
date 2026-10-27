@@ -720,7 +720,10 @@ export interface ExtractedDocumentMetadata {
  * - Prioritizes Academic Researcher / Student over Supervisor
  * - Checks introduction signature at pages 4-8 as fallback
  */
-async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMetadata> {
+async function inspectPdfDocument(
+  filePath: string,
+  context?: { folderName?: string | null; title?: string | null }
+): Promise<ExtractedDocumentMetadata> {
   let author: string | null = null;
   let title: string | null = null;
   let pageFound: number | null = null;
@@ -875,8 +878,11 @@ async function inspectPdfDocument(filePath: string): Promise<ExtractedDocumentMe
     const isLikelyScanned = combinedPagesText.trim().length < 80;
 
     // 4. Scanned Books & Visual OCR Fallback (Google Gemini Vision)
-    // Runs when no embedded text exists (< 80 chars across pages 1-3) or when author and title are both missing
-    if (isLikelyScanned || (!author && !title)) {
+    // Runs when no embedded text exists (< 80 chars across pages 1-3) or when both title and external title are absent
+    const hasExternalTitle = Boolean(context?.title && context.title.trim().length >= 3 && !isInvalidBookTitle(context.title));
+    const shouldRunAiOcr = isLikelyScanned || (!title && !hasExternalTitle && combinedPagesText.trim().length < 120);
+
+    if (shouldRunAiOcr) {
       try {
         const { isAiOcrEnabled, analyzeBookWithGemini } = await import('../services/bookAiService');
         if (await isAiOcrEnabled()) {
@@ -996,7 +1002,7 @@ export async function extractDocumentMetadata(
   if (format === 'epub') {
     docMeta = await inspectEpubDocument(filePath);
   } else {
-    docMeta = await inspectPdfDocument(filePath);
+    docMeta = await inspectPdfDocument(filePath, context);
   }
 
   if (docMeta.method === 'gemini_ocr' || (docMeta.author && !isBlacklistedAuthor(docMeta.author))) {

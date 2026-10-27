@@ -21,13 +21,19 @@ import {
   List,
   ArrowRight,
   Bookmark,
+  Printer,
+  Copy,
+  Check,
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import 'pdfjs-dist/web/pdf_viewer.css';
 import ePub, { Book, Rendition } from 'epubjs';
 import { DigitalBook, StudentNote } from '../../types/library';
 import { bookRepository } from '../../services/bookRepository';
+import { apiClient } from '../../services/apiClient';
 import { telemetryService } from '../../services/telemetry/telemetryService';
+import { StudentPrintRequestModal } from './StudentPrintRequestModal';
 
 // Configure PDF.js worker
 if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
@@ -64,6 +70,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
   const [showNotes, setShowNotes] = useState(false);
   const [showToc, setShowToc] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRenderingPage, setIsRenderingPage] = useState(false);
@@ -115,6 +122,15 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const lastWheelTransitionRef = useRef<number>(0);
   const accumulatedWheelDeltaRef = useRef<number>(0);
 
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
+  const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [selectedTextPopup, setSelectedTextPopup] = useState<{
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
+
   // Touchpad pinch-to-zoom, Ctrl+Wheel zoom, and Continuous Vertical Scroll Down/Up between pages
   useEffect(() => {
     const modalEl = modalRef.current;
@@ -140,7 +156,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         return;
       }
 
-      // Continuous vertical scroll down / up between pages for PDF mode
+      // Smooth continuous vertical scroll down / up between pages for PDF mode (zero freezing)
       if (!isEpub && viewerContainerRef.current) {
         const container = viewerContainerRef.current;
         const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 12;
@@ -149,9 +165,9 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
         if (e.deltaY > 0 && isAtBottom) {
           // Reached bottom of current page, continue scrolling down directly into next page
-          if (now - lastWheelTransitionRef.current > 350) {
+          if (now - lastWheelTransitionRef.current > 160) {
             accumulatedWheelDeltaRef.current += e.deltaY;
-            if (accumulatedWheelDeltaRef.current >= 40) {
+            if (accumulatedWheelDeltaRef.current >= 30) {
               if (currentPageRef.current < numPagesRef.current) {
                 e.preventDefault();
                 lastWheelTransitionRef.current = now;
@@ -163,19 +179,19 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           }
         } else if (e.deltaY < 0 && isAtTop) {
           // Reached top of current page, continue scrolling up directly into previous page
-          if (now - lastWheelTransitionRef.current > 350) {
+          if (now - lastWheelTransitionRef.current > 160) {
             accumulatedWheelDeltaRef.current += e.deltaY;
-            if (accumulatedWheelDeltaRef.current <= -40) {
+            if (accumulatedWheelDeltaRef.current <= -30) {
               if (currentPageRef.current > 1) {
                 e.preventDefault();
                 lastWheelTransitionRef.current = now;
                 accumulatedWheelDeltaRef.current = 0;
                 setCurrentPage((p) => Math.max(1, p - 1));
-                setTimeout(() => {
+                requestAnimationFrame(() => {
                   if (viewerContainerRef.current) {
                     viewerContainerRef.current.scrollTop = viewerContainerRef.current.scrollHeight;
                   }
-                }, 20);
+                });
               }
             }
           }
@@ -277,7 +293,32 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           cacheObj = await caches.open('mishkat-books-cache-v1');
           const matched = await cacheObj.match(cacheKey);
           if (matched) {
-            fileBlob = await matched.blob();
+            // If online, perform a fast HEAD verification to ensure file hasn't been deleted on server
+            if (typeof navigator !== 'undefined' && navigator.onLine !== false) {
+              try {
+                const headRes = await fetch(`/api/v1/books/${book.id}/file`, {
+                  method: 'HEAD',
+                  headers: apiClient.getAuthHeaders(),
+                });
+                if (headRes.status === 404) {
+                  // File was removed from server disk! Purge stale cache and report error.
+                  await cacheObj.delete(cacheKey);
+                  setError('ملف الكتاب غير موجود على الخادم المركزي (تم حذفه من مساحة التخزين).');
+                  setErrorCode('FILE_NOT_FOUND');
+                  setIsLoading(false);
+                  return;
+                } else if (headRes.ok) {
+                  fileBlob = await matched.blob();
+                } else {
+                  fileBlob = await matched.blob();
+                }
+              } catch {
+                // If HEAD fails due to transient connection, keep offline cache
+                fileBlob = await matched.blob();
+              }
+            } else {
+              fileBlob = await matched.blob();
+            }
           }
         }
       } catch {}
@@ -291,6 +332,9 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             setError('ليس لديك صلاحية لقراءة هذا الكتاب.');
             setErrorCode('UNAUTHORIZED');
           } else if (status === 404) {
+            if (cacheObj) {
+              cacheObj.delete(cacheKey).catch(() => {});
+            }
             setError('ملف الكتاب غير موجود على الخادم المركزي.');
             setErrorCode('FILE_NOT_FOUND');
           } else {
@@ -452,6 +496,19 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             }
           }
         });
+
+        // Enable quoting selected text in EPUB mode
+        rendition.on('selected', (cfiRange: string) => {
+          try {
+            rendition.getRange(cfiRange).then((range: Range) => {
+              const text = range?.toString()?.trim();
+              if (text && text.length >= 2) {
+                setSelectedQuote(text);
+                setShowNotes(true);
+              }
+            });
+          } catch {}
+        });
       } catch (e) {
         console.error('[BookReaderModal] EPUB render error:', e);
       }
@@ -510,19 +567,53 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
     const cacheKey = `${targetPage}_${scale}`;
 
-    // 1. Instant Cache Hit: Blit pre-rendered canvas in 1-2ms without any spinner!
+    // Helper to render text layer for selection
+    const updateTextLayer = async (page: any, viewport: any) => {
+      if (!textLayerRef.current) return;
+      try {
+        const textLayerDiv = textLayerRef.current;
+        textLayerDiv.innerHTML = '';
+        textLayerDiv.style.width = `${viewport.width}px`;
+        textLayerDiv.style.height = `${viewport.height}px`;
+        const textContent = await page.getTextContent();
+        const textLayer = new pdfjsLib.TextLayer({
+          textContentSource: textContent,
+          container: textLayerDiv,
+          viewport: viewport,
+        });
+        await textLayer.render();
+      } catch (err: any) {
+        if (err?.name !== 'RenderingCancelledException') {
+          console.warn('[BookReaderModal] TextLayer render error:', err);
+        }
+      }
+    };
+
+    // 1. Instant Cache Hit: Blit pre-rendered canvas in 1-2ms without any blink!
     if (renderedCanvasCacheRef.current.has(cacheKey)) {
       const cached = renderedCanvasCacheRef.current.get(cacheKey)!;
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d', { alpha: false });
       if (context) {
-        canvas.width = cached.width;
-        canvas.height = cached.height;
+        if (canvas.width !== cached.width || canvas.height !== cached.height) {
+          canvas.width = cached.width;
+          canvas.height = cached.height;
+        }
         context.drawImage(cached, 0, 0);
       }
 
+      // Update text layer for selection
+      let page = pageCacheRef.current.get(targetPage);
+      if (!page) {
+        page = await pdfDoc.getPage(targetPage);
+        pageCacheRef.current.set(targetPage, page);
+      }
+      const viewport = page.getViewport({ scale });
+      updateTextLayer(page, viewport);
+
       // Pre-fetch adjacent pages in background while user reads
       if (targetPage + 1 <= numPages) prefetchRenderPage(targetPage + 1);
+      if (targetPage + 2 <= numPages) prefetchRenderPage(targetPage + 2);
       if (targetPage - 1 >= 1) prefetchRenderPage(targetPage - 1);
       return;
     }
@@ -548,19 +639,18 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         pageCacheRef.current.set(targetPage, page);
       }
 
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const context = canvas.getContext('2d', { alpha: false });
-      if (!context) return;
-      // Force Left-to-Right context direction to prevent Arabic glyph inversion / overlapping
-      context.direction = 'ltr';
-
       const viewport = page.getViewport({ scale });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+
+      // DOUBLE-BUFFERING: Render entirely to an offscreen canvas first to prevent white flash / blink!
+      const offscreen = document.createElement('canvas');
+      offscreen.width = viewport.width;
+      offscreen.height = viewport.height;
+      const offCtx = offscreen.getContext('2d', { alpha: false });
+      if (!offCtx) return;
+      offCtx.direction = 'ltr';
 
       const renderContext = {
-        canvasContext: context,
+        canvasContext: offCtx,
         viewport: viewport,
       };
 
@@ -568,24 +658,34 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       renderTaskRef.current = renderTask;
       await renderTask.promise;
 
+      // Only now blit onto visible canvas in 0ms! No blank white canvas ever appears!
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const context = canvas.getContext('2d', { alpha: false });
+        if (context) {
+          if (canvas.width !== offscreen.width || canvas.height !== offscreen.height) {
+            canvas.width = offscreen.width;
+            canvas.height = offscreen.height;
+          }
+          context.drawImage(offscreen, 0, 0);
+        }
+      }
+
+      // Render TextLayer for text selection and quotes
+      await updateTextLayer(page, viewport);
+
       // Save rendered canvas copy to cache for instant backward/forward re-visitation
       try {
-        const offscreen = document.createElement('canvas');
-        offscreen.width = canvas.width;
-        offscreen.height = canvas.height;
-        const offCtx = offscreen.getContext('2d', { alpha: false });
-        if (offCtx) {
-          offCtx.drawImage(canvas, 0, 0);
-          if (renderedCanvasCacheRef.current.size >= 12) {
-            const oldestKey = renderedCanvasCacheRef.current.keys().next().value;
-            if (oldestKey) renderedCanvasCacheRef.current.delete(oldestKey);
-          }
-          renderedCanvasCacheRef.current.set(cacheKey, offscreen);
+        if (renderedCanvasCacheRef.current.size >= 12) {
+          const oldestKey = renderedCanvasCacheRef.current.keys().next().value;
+          if (oldestKey) renderedCanvasCacheRef.current.delete(oldestKey);
         }
+        renderedCanvasCacheRef.current.set(cacheKey, offscreen);
       } catch {}
 
       // Pre-fetch adjacent pages in background
       if (targetPage + 1 <= numPages) prefetchRenderPage(targetPage + 1);
+      if (targetPage + 2 <= numPages) prefetchRenderPage(targetPage + 2);
       if (targetPage - 1 >= 1) prefetchRenderPage(targetPage - 1);
     } catch (err: any) {
       if (err?.name !== 'RenderingCancelledException') {
@@ -603,6 +703,65 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       }
     }
   }, [pdfDoc, scale, numPages, prefetchRenderPage]);
+
+  // Global mouseup & selection handler for text quote popup in reader
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        const text = selection?.toString()?.trim();
+        if (text && text.length >= 2) {
+          const range = selection?.getRangeAt(0);
+          if (range) {
+            const rect = range.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              setSelectedTextPopup({
+                text,
+                x: rect.left + rect.width / 2,
+                y: Math.max(20, rect.top - 12),
+              });
+              return;
+            }
+          }
+        }
+        setSelectedTextPopup(null);
+      }, 30);
+    };
+
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (!selection || !selection.toString().trim()) {
+        setSelectedTextPopup(null);
+      }
+    };
+
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, []);
+
+  const handleQuoteSelectedText = () => {
+    if (!selectedTextPopup?.text) return;
+    setSelectedQuote(selectedTextPopup.text);
+    setShowNotes(true);
+    setSelectedTextPopup(null);
+    setTimeout(() => {
+      noteTextareaRef.current?.focus();
+    }, 150);
+  };
+
+  const handleCopySelectedText = () => {
+    if (!selectedTextPopup?.text) return;
+    navigator.clipboard.writeText(selectedTextPopup.text);
+    setIsCopied(true);
+    setTimeout(() => {
+      setIsCopied(false);
+      setSelectedTextPopup(null);
+    }, 1200);
+  };
 
   // Touch navigation handlers for phones (RTL horizontal swipe & 2-finger pinch zoom)
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -934,6 +1093,16 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             <span className="hidden sm:inline">ملاحظاتي ({bookNotes.length})</span>
           </button>
 
+          {/* Student Print Request Toggle */}
+          <button
+            onClick={() => setShowPrintModal(true)}
+            className="p-1.5 rounded-xl text-xs flex items-center gap-1 transition-all cursor-pointer bg-slate-800 text-amber-300 hover:bg-slate-700 hover:text-amber-200 border border-amber-500/20 shadow-sm"
+            title="طلب طباعة صفحات من هذا الكتاب"
+          >
+            <Printer className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">طلب طباعة</span>
+          </button>
+
           {/* Fullscreen Reading Mode (Section 15 Requirement) */}
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
@@ -1004,6 +1173,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500 text-xs"
               />
               <textarea
+                ref={noteTextareaRef}
                 rows={3}
                 required
                 value={newNoteContent}
@@ -1105,16 +1275,17 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             /* Real PDF.js HTML5 Canvas Renderer (Section 12) */
             <div
               dir="ltr"
-              className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white my-auto select-none shrink-0 transition-all duration-150"
+              className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white my-auto shrink-0 transition-all duration-150 select-text"
               style={{
                 direction: 'ltr',
                 textAlign: 'left',
                 width: isMobile ? `${Math.round((window.innerWidth - 20) * scale)}px` : undefined,
                 maxWidth: isMobile ? 'none' : undefined,
+                position: 'relative',
               }}
             >
               {showRenderSpinner && (
-                <div className="absolute top-3 right-3 bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700/60 flex items-center gap-2 z-10 shadow-xl text-slate-300 text-xs animate-in fade-in duration-150">
+                <div className="absolute top-3 right-3 bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700/60 flex items-center gap-2 z-20 shadow-xl text-slate-300 text-xs animate-in fade-in duration-150">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
                   <span className="text-[11px] font-medium">جاري معالجة الصفحة...</span>
                 </div>
@@ -1122,7 +1293,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
               <canvas
                 ref={canvasRef}
                 dir="ltr"
-                className="block h-auto"
+                className="block h-auto pointer-events-none"
                 style={{
                   direction: 'ltr',
                   textAlign: 'left',
@@ -1130,10 +1301,71 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                   maxWidth: isMobile ? 'none' : '100%',
                 }}
               />
+              {/* Selectable Text Layer overlay for highlighting & quoting */}
+              <div
+                ref={textLayerRef}
+                className="textLayer absolute inset-0 select-text cursor-text z-10"
+                style={{
+                  direction: 'ltr',
+                  textAlign: 'left',
+                }}
+              />
             </div>
           )}
         </div>
       </div>
+
+      {/* Floating Selection Quote Tooltip */}
+      {selectedTextPopup && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${selectedTextPopup.x}px`,
+            top: `${selectedTextPopup.y}px`,
+            transform: 'translate(-50%, -100%)',
+            zIndex: 100,
+          }}
+          className="bg-slate-900/95 border border-indigo-500/50 shadow-2xl rounded-2xl px-2.5 py-1.5 flex items-center gap-2 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+        >
+          <button
+            type="button"
+            onClick={handleQuoteSelectedText}
+            className="px-2.5 py-1 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 transition-all shadow-md cursor-pointer select-none"
+          >
+            <MessageSquarePlus className="w-3.5 h-3.5" />
+            <span>اقتباس في الملاحظات</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleCopySelectedText}
+            className="px-2 py-1 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors cursor-pointer flex items-center gap-1 select-none"
+          >
+            {isCopied ? (
+              <>
+                <Check className="w-3 h-3 text-emerald-400" />
+                <span className="text-emerald-400">تم النسخ</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3 h-3 text-slate-400" />
+                <span>نسخ</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Student Digital Book Print Request Modal */}
+      <StudentPrintRequestModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        book={{
+          id: book.id,
+          title: book.title,
+          pagesCount: numPages,
+        }}
+        initialPage={currentPage}
+      />
     </div>
   );
 };

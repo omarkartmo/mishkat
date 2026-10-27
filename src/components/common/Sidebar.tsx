@@ -30,6 +30,7 @@ interface SidebarProps {
   pendingReviewsCount: number;
   overdueLoansCount: number;
   favoritesCount?: number;
+  studentLoansCount?: number;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onCloseMobile?: () => void;
@@ -43,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingReviewsCount,
   overdueLoansCount,
   favoritesCount = 0,
+  studentLoansCount = 0,
   isCollapsed = false,
   onToggleCollapse,
   onCloseMobile,
@@ -121,6 +123,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 active={activeTab === 'student_portal'}
                 onClick={() => onSelectTab('student_portal')}
                 isCollapsed={isCollapsed}
+              />
+              <NavItem
+                icon={<ArrowLeftRight className="w-4 h-4 text-sky-500" />}
+                label="إعارة الكتب وسجل إعاراتي"
+                active={activeTab === 'loans'}
+                onClick={() => onSelectTab('loans')}
+                isCollapsed={isCollapsed}
+                badge={
+                  studentLoansCount > 0 ? (
+                    <span className="text-[10px] bg-sky-500/15 text-sky-600 dark:text-sky-300 font-bold px-1.5 py-0.5 rounded font-mono border border-sky-500/20">
+                      {studentLoansCount}
+                    </span>
+                  ) : undefined
+                }
               />
               <NavItem
                 icon={<Search className="w-4 h-4 text-indigo-500" />}
@@ -260,20 +276,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               )}
               <div className="space-y-1">
-                <NavItem
-                  icon={<CheckSquare className="w-4 h-4" />}
-                  label="طابور مراجعة الكتب"
-                  active={activeTab === 'reviews'}
-                  onClick={() => onSelectTab('reviews')}
-                  isCollapsed={isCollapsed}
-                  badge={
-                    pendingReviewsCount > 0 ? (
-                      <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold animate-pulse border border-amber-500/20">
-                        {pendingReviewsCount}
-                      </span>
-                    ) : undefined
-                  }
-                />
                 <NavItem
                   icon={<Users className="w-4 h-4" />}
                   label="إدارة حسابات الطلبة"

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { db } from '../db/pool';
 import { authenticateToken } from '../middleware/auth';
 
@@ -35,7 +36,13 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 router.post('/', authenticateToken, async (req: Request, res: Response) => {
   const { bookId, currentPage = 1, totalPages = 1, percentage = 0, isCompleted = false } = req.body;
   const studentId = req.user!.id;
-  const id = `prog-${studentId}-${bookId}`;
+  // Construct stable, safe ID without length overflows
+  let rawId = req.body.id || `prog-${studentId}-${bookId}`;
+  if (rawId.length > 240) {
+    const hash = crypto.createHash('md5').update(`${studentId}-${bookId}`).digest('hex');
+    rawId = `prog-${studentId.substring(0, 30)}-${hash}`;
+  }
+  const id = rawId;
   const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
   try {

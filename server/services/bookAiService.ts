@@ -136,7 +136,10 @@ export interface WorkingAiModel {
   apiVersion?: 'v1' | 'v1beta';
 }
 
-let cachedWorkingModel: WorkingAiModel | null = null;
+let cachedWorkingModel: WorkingAiModel | null = {
+  modelName: 'gemini-2.5-flash',
+  apiVersion: 'v1',
+};
 
 /**
  * Dynamically queries Google ModelService.ListModels across v1 and v1beta
@@ -356,14 +359,14 @@ export async function analyzeBookWithGemini(
 
   let pdfSliceBuffer: Buffer;
   if (typeof pdfBufferOrPath === 'string') {
-    pdfSliceBuffer = await slicePdfFirstPages(pdfBufferOrPath, 3);
+    pdfSliceBuffer = await slicePdfFirstPages(pdfBufferOrPath, 2);
   } else {
     // If it's already a buffer, check size
     if (pdfBufferOrPath.length > 15 * 1024 * 1024) {
       try {
         const srcDoc = await PDFDocument.load(pdfBufferOrPath, { ignoreEncryption: true });
         const newDoc = await PDFDocument.create();
-        const countToCopy = Math.min(3, srcDoc.getPageCount());
+        const countToCopy = Math.min(2, srcDoc.getPageCount());
         const pageIndices = Array.from({ length: countToCopy }, (_, i) => i);
         const copied = await newDoc.copyPages(srcDoc, pageIndices);
         copied.forEach((p) => newDoc.addPage(p));
@@ -389,6 +392,7 @@ export async function analyzeBookWithGemini(
 1. "title": عنوان الكتاب الصحيح والدقيق (باللغة الأصلية للكتاب: العربية أو الفرنسية أو الإنجليزية).
    - تجريد العنوان من عبارات النشر والمسح (مثل: مطبعة، دار، نسخة مصورة، tesseract).
    - إذا كان العنوان التراثي طويلاً، استخرج العنوان الشائع والمعتمد.
+   - إذا كان الكتاب جزءاً أو مجلداً ضمن سلسلة متعددة المجلدات (مثل: الجزء الأول، المجلد الثاني، ج1، Part 2)، احرص على تضمين رقم المجلد أو الجزء بوضوح في نهاية العنوان لتمييزه وتوثيق تسلسله بدقة.
 2. "author": اسم المؤلف أو الباحث الحقيقي (شخص).
    - في الرسائل والمذكرات الجامعية وأطروحات الدكتوراه والماجستير: استخرج اسم الطالب أو الباحث (الطالب / الباحثة / إعداد)، وتجنب تماماً وضع اسم المشرف أو لجنة المناقشة.
    - في أمهات الكتب التراثية: استخرج اسم العلامة/الشيخ/الإمام المصنّف، وإذا وجد محقق يمكن إضافته (تحقيق: ...).
@@ -438,21 +442,27 @@ ${categoriesPromptList}
         apiKey,
         ...(candidate.apiVersion ? { apiVersion: candidate.apiVersion } : {}),
       });
-      const response = await ai.models.generateContent({
-        model: candidate.modelName,
-        contents: [
-          {
-            inlineData: {
-              mimeType: 'application/pdf',
-              data: base64Data,
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AI generation timed out after 15 seconds')), 15000)
+      );
+      const response = (await Promise.race([
+        ai.models.generateContent({
+          model: candidate.modelName,
+          contents: [
+            {
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: base64Data,
+              },
             },
+            prompt,
+          ],
+          config: {
+            responseMimeType: 'application/json',
           },
-          prompt,
-        ],
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
+        }),
+        timeoutPromise,
+      ])) as any;
 
       if (response && response.text) {
         rawJsonText = response.text.trim();

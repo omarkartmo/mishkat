@@ -63,6 +63,10 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
   const [editingBook, setEditingBook] = useState<DigitalBook | null>(null);
   const [bookToDelete, setBookToDelete] = useState<DigitalBook | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
+
+  const isStaff = userRole === 'admin' || userRole === 'librarian';
 
   const filteredBooks = (books || []).filter((b) => {
     const matchesSearch =
@@ -208,6 +212,56 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
         </div>
       </div>
 
+      {/* Batch Selection Action Bar for Admin / Librarian */}
+      {isStaff && filteredBooks.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700 dark:text-slate-300 select-none">
+              <input
+                type="checkbox"
+                checked={filteredBooks.length > 0 && selectedBookIds.length === filteredBooks.length}
+                onChange={() => {
+                  if (selectedBookIds.length === filteredBooks.length) {
+                    setSelectedBookIds([]);
+                  } else {
+                    setSelectedBookIds(filteredBooks.map((b) => b.id));
+                  }
+                }}
+                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              <span>تحديد الكل ({filteredBooks.length} كتاب)</span>
+            </label>
+
+            {selectedBookIds.length > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 font-bold border border-emerald-500/20">
+                تم تحديد {selectedBookIds.length} من {filteredBooks.length}
+              </span>
+            )}
+          </div>
+
+          {selectedBookIds.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedBookIds([])}
+                className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+              >
+                إلغاء التحديد
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsBatchDeleteModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-rose-600/20 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>حذف الكتب المحددة ({selectedBookIds.length})</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Digital Books Grid */}
       {filteredBooks.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-3xl">
@@ -222,26 +276,46 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
           {filteredBooks.map((book) => {
             const cat = getCategory(book.categoryId);
             const isFav = favorites.includes(book.id);
+            const isSelected = selectedBookIds.includes(book.id);
 
             return (
               <div
                 key={book.id}
-                className="bg-white dark:bg-slate-900/80 hover:bg-slate-50 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-2xl p-5 flex flex-col justify-between transition-all group shadow-sm hover:shadow-md"
+                className={`bg-white dark:bg-slate-900/80 hover:bg-slate-50 dark:hover:bg-slate-900 border rounded-2xl p-5 flex flex-col justify-between transition-all group shadow-sm hover:shadow-md ${
+                  isSelected
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/10 dark:bg-emerald-950/20'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
               >
                 <div className="space-y-3">
                   {/* Top Bar: Category & Format Badge */}
                   <div className="flex items-center justify-between">
-                    <span
-                      className="text-[11px] px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1"
-                      style={{
-                        backgroundColor: `${cat?.color || '#059669'}15`,
-                        color: cat?.color || '#059669',
-                        border: `1px solid ${cat?.color || '#059669'}30`,
-                      }}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat?.color }} />
-                      {cat?.name || 'عام'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {isStaff && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedBookIds((prev) =>
+                              prev.includes(book.id) ? prev.filter((id) => id !== book.id) : [...prev, book.id]
+                            );
+                          }}
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          aria-label={`تحديد كتاب ${book.title}`}
+                        />
+                      )}
+                      <span
+                        className="text-[11px] px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1"
+                        style={{
+                          backgroundColor: `${cat?.color || '#059669'}15`,
+                          color: cat?.color || '#059669',
+                          border: `1px solid ${cat?.color || '#059669'}30`,
+                        }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat?.color }} />
+                        {cat?.name || 'عام'}
+                      </span>
+                    </div>
 
                     <div className="flex items-center gap-1.5">
                       <span
@@ -456,6 +530,92 @@ export const DigitalLibraryView: React.FC<DigitalLibraryViewProps> = ({
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>تأكيد الحذف</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation Modal */}
+      {isBatchDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                <Trash2 className="w-5 h-5" />
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">حذف مجموعة من الكتب الرقمية</h3>
+              </div>
+              <button
+                onClick={() => setIsBatchDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs space-y-2">
+              <p className="font-bold text-sm">
+                أنت على وشك حذف {selectedBookIds.length} كتاب رقمي نهائياً من المكتبة!
+              </p>
+              <p className="text-[11px] opacity-90 leading-relaxed">
+                سيتم حذف ملفات هذه الكتب وجميع الفهارس وسجلات القراءة المرتبطة بها في الخادم المركزي.
+              </p>
+            </div>
+
+            <div className="max-h-40 overflow-y-auto space-y-1.5 p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+              {filteredBooks
+                .filter((b) => selectedBookIds.includes(b.id))
+                .slice(0, 10)
+                .map((b) => (
+                  <div key={b.id} className="text-slate-700 dark:text-slate-300 truncate">
+                    • {b.title} ({b.author})
+                  </div>
+                ))}
+              {selectedBookIds.length > 10 && (
+                <div className="text-[10px] text-slate-500 font-bold">
+                  + {selectedBookIds.length - 10} كتب أخرى...
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBatchDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onDeleteBook) {
+                    setIsDeleting(true);
+                    try {
+                      for (const id of selectedBookIds) {
+                        await onDeleteBook(id);
+                      }
+                      setSelectedBookIds([]);
+                      setIsBatchDeleteModalOpen(false);
+                      if (onRefreshBooks) onRefreshBooks();
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                {isDeleting ? (
+                  <span>جارٍ حذف الكتب...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>تأكيد حذف {selectedBookIds.length} كتاب</span>
                   </>
                 )}
               </button>

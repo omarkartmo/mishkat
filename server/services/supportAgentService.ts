@@ -711,15 +711,80 @@ export class SupportAgentService {
     const sanitizedContext = JSON.stringify(this.sanitizeMetadata(rawContext));
 
     const appVersion = (process.env.npm_package_version || '1.0.0').slice(0, 50);
+    const sigRaw = `${report.errorType || ''}|${report.errorCode || ''}|${report.component || ''}|${sanitizedMsg.substring(0, 150).trim().toLowerCase()}`;
+    const errorSignature = crypto.createHash('md5').update(sigRaw).digest('hex');
 
+    // 1. Deduplication Check: Aggregate into existing pending/sending report if signature matches
+    try {
+      const existingRes = await db.query(
+        `SELECT report_id, occurrence_count, affected_devices_count, affected_device_ids, severity, sanitized_stack_trace
+         FROM support_outbound_queue
+         WHERE error_signature = $1 AND status IN ('pending', 'sending')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [errorSignature]
+      );
+
+      if (existingRes.rows.length > 0) {
+        const existing = existingRes.rows[0];
+        let deviceIds: string[] = [];
+        try {
+          deviceIds = Array.isArray(existing.affected_device_ids)
+            ? existing.affected_device_ids
+            : JSON.parse(existing.affected_device_ids || '[]');
+        } catch {
+          deviceIds = [];
+        }
+        if (report.clientDeviceId && !deviceIds.includes(report.clientDeviceId)) {
+          deviceIds.push(report.clientDeviceId);
+        }
+
+        const newCount = Number(existing.occurrence_count || 1) + 1;
+        const newDevicesCount = Math.max(1, deviceIds.length);
+        const newSeverity = (report.severity === 'critical' || existing.severity === 'critical') ? 'critical' : existing.severity;
+        const newStack = existing.sanitized_stack_trace || sanitizedStack;
+
+        await db.query(
+          `UPDATE support_outbound_queue
+           SET occurrence_count = $1,
+               affected_devices_count = $2,
+               affected_device_ids = $3::jsonb,
+               severity = $4,
+               sanitized_stack_trace = $5,
+               last_occurred_at = CURRENT_TIMESTAMP,
+               next_retry_at = CURRENT_TIMESTAMP
+           WHERE report_id = $6`,
+          [
+            newCount,
+            newDevicesCount,
+            JSON.stringify(deviceIds),
+            newSeverity,
+            newStack,
+            existing.report_id,
+          ]
+        );
+
+        if (process.env.NODE_ENV !== 'test') {
+          this.flushOutboundQueue().catch(() => {});
+        }
+        return existing.report_id;
+      }
+    } catch {
+      // Table columns might not be loaded yet, fallback to insert
+    }
+
+    // 2. Insert new aggregated report
+    const initialDevices = report.clientDeviceId ? [report.clientDeviceId] : [];
     try {
       await db.query(
         `INSERT INTO support_outbound_queue (
            report_id, institution_id, installation_id, app_version,
            source_type, client_device_id, user_role, component,
            error_type, error_code, severity, sanitized_message,
-           sanitized_stack_trace, diagnostic_context, status, next_retry_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, 'pending', CURRENT_TIMESTAMP)
+           sanitized_stack_trace, diagnostic_context, status, next_retry_at,
+           error_signature, occurrence_count, affected_devices_count, affected_device_ids,
+           first_occurred_at, last_occurred_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, 'pending', CURRENT_TIMESTAMP, $15, $16, $17, $18::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (report_id) DO NOTHING`,
         [
           reportId,
@@ -736,10 +801,43 @@ export class SupportAgentService {
           sanitizedMsg,
           sanitizedStack,
           sanitizedContext,
+          errorSignature,
+          1,
+          Math.max(1, initialDevices.length),
+          JSON.stringify(initialDevices),
         ]
       );
     } catch (err: any) {
-      console.warn('⚠️ [SupportAgent] Enqueue outbound report notice:', err.message);
+      // Fallback for older schema
+      try {
+        await db.query(
+          `INSERT INTO support_outbound_queue (
+             report_id, institution_id, installation_id, app_version,
+             source_type, client_device_id, user_role, component,
+             error_type, error_code, severity, sanitized_message,
+             sanitized_stack_trace, diagnostic_context, status, next_retry_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, 'pending', CURRENT_TIMESTAMP)
+           ON CONFLICT (report_id) DO NOTHING`,
+          [
+            reportId,
+            identity.institutionId,
+            identity.installationId,
+            appVersion,
+            sourceType,
+            report.clientDeviceId || null,
+            report.userRole || 'system',
+            report.component,
+            report.errorType,
+            report.errorCode,
+            severity,
+            sanitizedMsg,
+            sanitizedStack,
+            sanitizedContext,
+          ]
+        );
+      } catch (innerErr: any) {
+        console.warn('⚠️ [SupportAgent] Enqueue outbound report notice:', innerErr.message);
+      }
     }
 
     // Trigger opportunistic background delivery to developer support hub in non-test mode
@@ -937,6 +1035,18 @@ export class SupportAgentService {
         } catch {}
         const institutionName = diagObj.institutionName || (await this.getInstitutionName());
 
+        let affectedDeviceIds: string[] = [];
+        try {
+          affectedDeviceIds = Array.isArray(row.affected_device_ids)
+            ? row.affected_device_ids
+            : JSON.parse(row.affected_device_ids || '[]');
+        } catch {
+          affectedDeviceIds = [];
+        }
+        if (affectedDeviceIds.length === 0 && row.client_device_id) {
+          affectedDeviceIds = [row.client_device_id];
+        }
+
         const payload = {
           reportId: row.report_id,
           institutionId: row.institution_id,
@@ -954,6 +1064,12 @@ export class SupportAgentService {
           sanitizedStackTrace: row.sanitized_stack_trace,
           diagnosticContext: row.diagnostic_context,
           timestamp: row.created_at,
+          errorSignature: row.error_signature,
+          occurrenceCount: Number(row.occurrence_count || 1),
+          affectedDevicesCount: Number(row.affected_devices_count || affectedDeviceIds.length || 1),
+          affectedDeviceIds,
+          firstOccurredAt: row.first_occurred_at || row.created_at,
+          lastOccurredAt: row.last_occurred_at || row.created_at,
         };
 
         const controller = new AbortController();

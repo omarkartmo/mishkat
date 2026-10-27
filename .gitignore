@@ -32,3 +32,4 @@ src-tauri/target/
 tools/developer-support-hub/support_hub_data.json
 updates/
 *.zip
+session-data/

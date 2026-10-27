@@ -20,6 +20,8 @@ const path = require('path');
 const crypto = require('crypto');
 
 const app = express();
+const tunnelSupervisor = require('./tunnelSupervisor.cjs');
+
 const PORT = process.env.SUPPORT_HUB_PORT || process.env.PORT || 4000;
 const DATA_FILE = path.join(__dirname, 'support_hub_data.json');
 const ADMIN_KEY = process.env.SUPPORT_HUB_ADMIN_KEY || 'mishkat_dev_admin_2026';
@@ -258,9 +260,69 @@ function handleReportIngest(req, res) {
     screenshot = report.diagnosticContext.screenshot;
   }
 
+  // Deduplication & Aggregation Signature
+  const sanitizedMsg = report.sanitizedMessage || report.message || 'No description provided';
+  const incomingSig = report.errorSignature || crypto.createHash('md5').update(
+    `${institutionId}|${report.errorType || ''}|${report.errorCode || ''}|${report.component || ''}|${sanitizedMsg.slice(0, 150).trim().toLowerCase()}`
+  ).digest('hex');
+
+  const incomingDevices = Array.isArray(report.affectedDeviceIds) && report.affectedDeviceIds.length > 0
+    ? report.affectedDeviceIds
+    : (report.clientDeviceId ? [report.clientDeviceId] : []);
+
+  // Check if an identical report already exists for this institution
+  const existingReport = data.reports.find(r =>
+    r.institutionId === institutionId &&
+    (r.errorSignature === incomingSig ||
+     (r.errorCode === report.errorCode && r.component === report.component && r.sanitizedMessage === sanitizedMsg))
+  );
+
+  if (existingReport) {
+    // 1. Aggregate occurrence count
+    const addCount = Number(report.occurrenceCount) || 1;
+    existingReport.occurrenceCount = (existingReport.occurrenceCount || 1) + addCount;
+
+    // 2. Aggregate affected devices list without duplicates
+    const deviceSet = new Set(existingReport.affectedDeviceIds || (existingReport.clientDeviceId ? [existingReport.clientDeviceId] : []));
+    for (const dev of incomingDevices) {
+      if (dev) deviceSet.add(dev);
+    }
+    existingReport.affectedDeviceIds = Array.from(deviceSet);
+    existingReport.affectedDevicesCount = Math.max(1, existingReport.affectedDeviceIds.length);
+    existingReport.lastReceivedAt = new Date().toISOString();
+
+    // 3. Escalate severity if incoming is more critical
+    if (report.severity === 'critical') {
+      existingReport.severity = 'critical';
+    }
+    if (!existingReport.screenshot && screenshot) {
+      existingReport.screenshot = screenshot;
+    }
+    if (!existingReport.sanitizedStackTrace && (report.sanitizedStackTrace || report.stackTrace)) {
+      existingReport.sanitizedStackTrace = report.sanitizedStackTrace || report.stackTrace;
+    }
+
+    data.receivedReportIds[reportId] = new Date().toISOString();
+    inst.totalReportsCount = (inst.totalReportsCount || 0) + 1;
+    saveData(data);
+
+    console.log(`[Support Hub] Aggregated duplicate report for ${inst.institutionName} (${existingReport.errorCode}): Total ${existingReport.occurrenceCount}x across ${existingReport.affectedDevicesCount} devices`);
+
+    return res.status(200).json({
+      success: true,
+      acknowledged: true,
+      aggregated: true,
+      reportId: existingReport.reportId,
+      occurrenceCount: existingReport.occurrenceCount,
+      affectedDevicesCount: existingReport.affectedDevicesCount,
+      receivedAt: existingReport.lastReceivedAt,
+    });
+  }
+
   // Ingest new report
   const storedReport = {
     reportId,
+    errorSignature: incomingSig,
     institutionId,
     institutionName: inst.institutionName || institutionName || institutionId,
     installationId,
@@ -272,11 +334,16 @@ function handleReportIngest(req, res) {
     errorType: report.errorType || 'UNKNOWN_ERROR',
     errorCode: report.errorCode || 'ERR',
     severity: ['critical', 'warning', 'info'].includes(report.severity) ? report.severity : 'warning',
-    sanitizedMessage: report.sanitizedMessage || report.message || 'No description provided',
+    sanitizedMessage: sanitizedMsg,
     sanitizedStackTrace: report.sanitizedStackTrace || report.stackTrace || null,
     diagnosticContext: report.diagnosticContext || {},
     screenshot,
+    occurrenceCount: Number(report.occurrenceCount) || 1,
+    affectedDevicesCount: Math.max(1, incomingDevices.length),
+    affectedDeviceIds: incomingDevices,
     clientTimestamp: report.timestamp || new Date().toISOString(),
+    firstReceivedAt: report.firstOccurredAt || new Date().toISOString(),
+    lastReceivedAt: new Date().toISOString(),
     receivedAt: new Date().toISOString(),
   };
 
@@ -291,7 +358,7 @@ function handleReportIngest(req, res) {
 
   saveData(data);
 
-  console.log(`[Support Hub] Received ${storedReport.severity.toUpperCase()} from ${inst.institutionName} (${storedReport.errorCode})`);
+  console.log(`[Support Hub] Received new ${storedReport.severity.toUpperCase()} from ${inst.institutionName} (${storedReport.errorCode})`);
 
   return res.status(200).json({
     success: true,
@@ -374,6 +441,20 @@ app.get('/api/v1/support/reports', authenticateAdmin, (req, res) => {
 
   const limit = parseInt(req.query.limit, 10) || 100;
   return res.json({ success: true, data: reports.slice(0, limit) });
+});
+
+// 6. Tunnel Status & Remote Management
+app.get('/api/v1/support/tunnel/status', (req, res) => {
+  return res.json({ success: true, data: tunnelSupervisor.getStatus() });
+});
+
+app.post('/api/v1/support/tunnel/restart', async (req, res) => {
+  try {
+    await tunnelSupervisor.restartTunnel('Triggered from Web Dashboard');
+    return res.json({ success: true, message: 'Tunnel restart initiated', data: tunnelSupervisor.getStatus() });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // 6. Developer Support Web Dashboard UI (Direct access, zero login gate)
@@ -478,6 +559,8 @@ app.get(['/', '/dashboard'], authenticateAdmin, (req, res) => {
     }
     .badge-dev { background: #312e81; color: #a5b4fc; }
     .badge-online { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
     .badge-timer { background: #1e293b; color: #94a3b8; font-family: monospace; font-size: 12px; }
 
     .stats-grid {
@@ -660,11 +743,15 @@ app.get(['/', '/dashboard'], authenticateAdmin, (req, res) => {
     <div>
       <h1>
         <span>🛡️ MISHKAT Support Dashboard</span>
-        <span class="badge badge-online">● متصل ومستعد للاستقبال</span>
+        <span class="badge badge-online">● الخادم المحلي متصل</span>
+        <span id="tunnelStatusBadge" class="badge badge-online">● نفق ngrok: متصل ومحمي</span>
       </h1>
-      <p style="color: var(--text-muted); font-size: 13px; margin-top: 6px;">
+      <p style="color: var(--text-muted); font-size: 13px; margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
         نفق الاستقبال الآمن: 
-        <code style="background: #1e293b; padding: 2px 6px; border-radius: 4px; color: #38bdf8; direction: ltr; display: inline-block;">https://calibrate-reply-aviation.ngrok-free.dev</code>
+        <code id="tunnelUrlText" style="background: #1e293b; padding: 2px 6px; border-radius: 4px; color: #38bdf8; direction: ltr; display: inline-block;">https://calibrate-reply-aviation.ngrok-free.dev</code>
+        <button class="btn" style="padding: 2px 10px; font-size: 11px; background: #1e293b; border: 1px solid #334155; color: #38bdf8;" onclick="restartNgrokTunnel(this)">
+          🔄 إعادة تشغيل النفق
+        </button>
       </p>
     </div>
 
@@ -804,6 +891,21 @@ app.get(['/', '/dashboard'], authenticateAdmin, (req, res) => {
             </td>
             <td>
               <div><strong>[${r.errorCode}]</strong> ${r.sanitizedMessage}</div>
+              ${(r.occurrenceCount > 1 || r.affectedDevicesCount > 1) ? `
+                <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                  <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: bold; font-size: 11px;">
+                    🔥 تكرر ${r.occurrenceCount || 1} مرة
+                  </span>
+                  <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: bold; font-size: 11px;" title="قائمة الحواسيب: ${(r.affectedDeviceIds || []).join(', ')}">
+                    💻 عبر ${r.affectedDevicesCount || 1} حاسوب
+                  </span>
+                  ${(r.affectedDeviceIds && r.affectedDeviceIds.length > 0) ? `
+                    <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">
+                      (${r.affectedDeviceIds.slice(0, 4).join(', ')}${r.affectedDeviceIds.length > 4 ? '...' : ''})
+                    </span>
+                  ` : ''}
+                </div>
+              ` : ''}
               ${detailsHtml}
             </td>
             <td style="text-align: center;">${screenshotCell}</td>
@@ -881,6 +983,10 @@ app.get(['/', '/dashboard'], authenticateAdmin, (req, res) => {
     // 5. Copy Report Markdown for Antigravity IDE
     function copyReportForAntigravity(btn) {
       const report = JSON.parse(btn.getAttribute('data-report'));
+      const devList = (report.affectedDeviceIds && report.affectedDeviceIds.length > 0)
+        ? report.affectedDeviceIds.join(', ')
+        : (report.clientDeviceId || 'غير محدد');
+
       const text = [
         '### 🚨 بلاغ خطأ مستلم من مؤسسة: ' + (report.institutionName || report.institutionId),
         '- **المؤسسة:** ' + (report.institutionName || report.institutionId) + ' (' + report.institutionId + ')',
@@ -888,7 +994,12 @@ app.get(['/', '/dashboard'], authenticateAdmin, (req, res) => {
         '- **المكون:** ' + report.component,
         '- **كود الخطأ:** ' + report.errorCode,
         '- **الخطورة:** ' + report.severity,
+        '- **مرات التكرار:** ' + (report.occurrenceCount || 1) + ' مرة',
+        '- **عدد الحواسيب المتأثرة:** ' + (report.affectedDevicesCount || 1) + ' حاسوب [' + devList + ']',
         '- **الوصف:** ' + report.sanitizedMessage,
+        report.sanitizedStackTrace ? '\\n**Stack Trace:**\\n\`\`\`\\n' + report.sanitizedStackTrace + '\\n\`\`\`' : '',
+        '\\nيرجى تحليل الخطأ وإصلاحه وحماية النظام من تكراره.'
+      ].join('\\n');
         report.sanitizedStackTrace ? '\\n**Stack Trace:**\\n\`\`\`\\n' + report.sanitizedStackTrace + '\\n\`\`\`' : '',
         '\\nيرجى تحليل الخطأ وإصلاحه وحماية النظام من تكراره.'
       ].join('\\n');
@@ -929,6 +1040,56 @@ app.get(['/', '/dashboard'], authenticateAdmin, (req, res) => {
         alert('تعذر جلب أخطاء المؤسسة: ' + err.message);
       }
     }
+
+    // 7. Live Tunnel Status Watchdog & Restart Control
+    async function pollTunnelStatus() {
+      try {
+        const res = await fetch('/api/v1/support/tunnel/status');
+        const json = await res.json();
+        const badge = document.getElementById('tunnelStatusBadge');
+        if (!badge || !json.success || !json.data) return;
+
+        const s = json.data;
+        if (s.status === 'online') {
+          badge.className = 'badge badge-online';
+          badge.textContent = '● نفق ngrok: متصل ومحمي';
+        } else if (s.status === 'starting' || s.status === 'reconnecting') {
+          badge.className = 'badge badge-warning';
+          badge.textContent = '🟡 نفق ngrok: جارِ الاتصال...';
+        } else {
+          badge.className = 'badge badge-danger';
+          badge.textContent = '🔴 نفق ngrok: غير متصل (جارِ الإنعاش)';
+        }
+      } catch {
+        // ignore fetch error
+      }
+    }
+
+    async function restartNgrokTunnel(btn) {
+      const origText = btn.textContent;
+      btn.textContent = '⏳ جارِ الإنعاش...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/v1/support/tunnel/restart', { method: 'POST' });
+        const json = await res.json();
+        if (json.success) {
+          btn.textContent = '✅ تم البدء!';
+          setTimeout(() => pollTunnelStatus(), 2000);
+        } else {
+          btn.textContent = '❌ تعذر البدء';
+        }
+      } catch (e) {
+        btn.textContent = '❌ خطأ';
+      }
+      setTimeout(() => {
+        btn.textContent = origText;
+        btn.disabled = false;
+      }, 3500);
+    }
+
+    // Initial check and periodic polling
+    pollTunnelStatus();
+    setInterval(pollTunnelStatus, 10000);
   </script>
 </body>
 </html>`);
@@ -943,7 +1104,12 @@ if (require.main === module) {
     console.log(` Ingestion: POST http://localhost:${PORT}/api/v1/support/reports`);
     console.log(` Direct Access: Active (Zero Password Gate)`);
     console.log(`========================================================`);
+
+    // Auto-start and supervise ngrok tunnel with endpoint pooling
+    tunnelSupervisor.startTunnel().catch((err) => {
+      console.error('[Support Hub] Failed to launch tunnel supervisor:', err.message);
+    });
   });
 }
 
-module.exports = { app, loadData, saveData };
+module.exports = { app, loadData, saveData, tunnelSupervisor };

@@ -65,6 +65,9 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
     grade?: string;
   } | null>(null);
 
+  // Cache plain passwords generated in current session for fast instant re-printing
+  const [sessionPasswords, setSessionPasswords] = useState<Record<string, string>>({});
+
   // Bulk selection and batch printing
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [isBulkPrintModalOpen, setIsBulkPrintModalOpen] = useState(false);
@@ -132,6 +135,35 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
       alert(err.message || 'حدث خطأ أثناء إعادة تعيين كلمة المرور.');
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const handleDirectPrintCredentialCard = async (student: User) => {
+    // If student already has plain password in this session, use it directly
+    if (sessionPasswords[student.id]) {
+      setCredentialCardData({
+        name: student.name,
+        registrationNumber: student.registrationNumber,
+        password: sessionPasswords[student.id],
+        grade: student.grade,
+      });
+      return;
+    }
+
+    // Auto-generate fresh readable password on the spot so librarian can print immediately
+    try {
+      const pass = generateRandomStudentPassword(8);
+      const generatedPass = await onResetStudentPassword(student.id, pass);
+      const finalPass = (typeof generatedPass === 'string' && generatedPass) ? generatedPass : pass;
+      setSessionPasswords((prev) => ({ ...prev, [student.id]: finalPass }));
+      setCredentialCardData({
+        name: student.name,
+        registrationNumber: student.registrationNumber,
+        password: finalPass,
+        grade: student.grade,
+      });
+    } catch (err: any) {
+      alert(err?.message || 'تعذر استخراج بيانات بطاقة الدخول للطالب.');
     }
   };
 
@@ -325,9 +357,9 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-semibold">
+            <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-semibold text-xs">
               <tr>
-                <th className="py-3.5 px-3 w-10 text-center">
+                <th className="py-3.5 px-3 w-10 text-center whitespace-nowrap">
                   <input
                     type="checkbox"
                     checked={filteredStudents.length > 0 && selectedStudentIds.length === filteredStudents.length}
@@ -342,12 +374,12 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                     title="تحديد كل الطلاب المعروضين"
                   />
                 </th>
-                <th className="py-3.5 px-4">الطالب</th>
-                <th className="py-3.5 px-4">رقم التسجيل المدرسي</th>
-                <th className="py-3.5 px-4">القسم / المستوى</th>
-                <th className="py-3.5 px-4">حالة الحساب</th>
-                <th className="py-3.5 px-4">حالة كلمة المرور</th>
-                <th className="py-3.5 px-4 text-center">الإجراءات</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">الطالب</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">رقم التسجيل المدرسي</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">القسم / المستوى</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">حالة الحساب</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">حالة كلمة المرور</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">الإجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-200">
@@ -363,7 +395,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                     }`}
                   >
                     {/* Checkbox */}
-                    <td className="py-3.5 px-3 text-center">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -379,9 +411,9 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                     </td>
 
                     {/* Student Name */}
-                    <td className="py-3.5 px-4 font-semibold text-slate-100">
+                    <td className="py-3.5 px-4 font-semibold text-slate-100 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-xs">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
                           {student.name.slice(0, 1)}
                         </div>
                         <div>
@@ -394,15 +426,15 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                     </td>
 
                     {/* Reg Number */}
-                    <td className="py-3.5 px-4 font-mono text-sky-400 font-semibold">
+                    <td className="py-3.5 px-4 font-mono text-sky-400 font-semibold whitespace-nowrap">
                       {student.registrationNumber}
                     </td>
 
                     {/* Grade */}
-                    <td className="py-3.5 px-4 text-slate-300 font-medium">{student.grade || '—'}</td>
+                    <td className="py-3.5 px-4 text-slate-300 font-medium whitespace-nowrap">{student.grade || '—'}</td>
 
                     {/* Status */}
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       {isBlocked ? (
                         <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1 w-fit">
                           <ShieldAlert className="w-3 h-3 text-rose-400" />
@@ -417,7 +449,7 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                     </td>
 
                     {/* Password Security Status */}
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300 font-mono">
                         <Lock className="w-3 h-3 text-emerald-400" />
                         <span>مشفرة (Bcrypt Hash)</span>
@@ -425,11 +457,12 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                    <td className="py-3.5 px-4 text-center whitespace-nowrap min-w-[260px]">
+                      <div className="flex items-center justify-center gap-1.5 flex-nowrap">
                         <button
+                          type="button"
                           onClick={() => handleOpenResetModal(student)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer shrink-0"
                           title="إعادة تعيين وتوليد كلمة سر عشوائية قوية"
                         >
                           <KeyRound className="w-3 h-3 text-amber-400" />
@@ -437,16 +470,10 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
                         </button>
 
                         <button
-                          onClick={() => {
-                            setCredentialCardData({
-                              name: student.name,
-                              registrationNumber: student.registrationNumber,
-                              password: '••••••••',
-                              grade: student.grade,
-                            });
-                          }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
-                          title="طباعة بطاقة قيد الطالب"
+                          type="button"
+                          onClick={() => handleDirectPrintCredentialCard(student)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-300 rounded-lg text-[11px] font-medium transition-colors cursor-pointer shrink-0"
+                          title="طباعة بطاقة قيد الطالب مع كلمة المرور"
                         >
                           <Printer className="w-3 h-3 text-sky-400" />
                           <span>طباعة البطاقة</span>
@@ -454,11 +481,12 @@ export const StudentManagerView: React.FC<StudentManagerViewProps> = ({
 
                         {onDeleteStudent && (
                           <button
+                            type="button"
                             onClick={() => {
                               setDeleteModalStudent(student);
                               setDeleteErrorMessage(null);
                             }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/20 hover:border-rose-600 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/20 hover:border-rose-600 rounded-lg text-[11px] font-medium transition-colors cursor-pointer shrink-0"
                             title="حذف حساب الطالب"
                           >
                             <Trash2 className="w-3 h-3" />

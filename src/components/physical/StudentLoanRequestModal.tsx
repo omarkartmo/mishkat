@@ -91,11 +91,11 @@ export const StudentLoanRequestModal: React.FC<StudentLoanRequestModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl animate-in zoom-in-95 relative overflow-hidden">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl animate-in zoom-in-95 relative overflow-hidden my-auto">
         
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+        {/* Header - Fixed at top */}
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-5 sm:p-6 pb-4 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2.5 rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
               <BookOpen className="w-5 h-5" />
@@ -119,7 +119,7 @@ export const StudentLoanRequestModal: React.FC<StudentLoanRequestModalProps> = (
         </div>
 
         {isSubmittedSuccess ? (
-          <div className="py-8 text-center space-y-3">
+          <div className="p-6 sm:p-8 py-10 text-center space-y-3">
             <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto animate-bounce">
               <CheckCircle2 className="w-8 h-8" />
             </div>
@@ -131,7 +131,7 @@ export const StudentLoanRequestModal: React.FC<StudentLoanRequestModalProps> = (
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 pt-4 space-y-4 text-xs min-h-0">
             {errorMsg && (
               <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -211,13 +211,13 @@ export const StudentLoanRequestModal: React.FC<StudentLoanRequestModalProps> = (
               <div className="flex items-center gap-2 pt-1">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">أو حدد عدداً مخصصاً:</span>
                 <input
-                  type="number"
-                  min="1"
-                  max="60"
-                  value={requestedDurationDays}
-                  onChange={(e) => setRequestedDurationDays(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-24 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1 text-center text-slate-800 dark:text-slate-100 font-mono font-bold outline-none focus:border-indigo-500"
-                />
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={requestedDurationDays}
+                    onChange={(e) => setRequestedDurationDays(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-24 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1 text-center text-slate-800 dark:text-slate-100 font-mono font-bold outline-none focus:border-indigo-500"
+                  />
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">يوم</span>
               </div>
             </div>
@@ -262,8 +262,8 @@ export const StudentLoanRequestModal: React.FC<StudentLoanRequestModalProps> = (
               </span>
             </div>
 
-            {/* Action Buttons */}
-            <div className="pt-2 flex items-center justify-end gap-2.5">
+            {/* Action Buttons - Sticky at bottom */}
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5 sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs py-2 -mx-1 px-1">
               <button
                 type="button"
                 onClick={onClose}

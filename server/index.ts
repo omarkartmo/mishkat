@@ -16,6 +16,7 @@ import booksRoutes from './routes/books.routes';
 import categoriesRoutes from './routes/categories.routes';
 import loansRoutes from './routes/loans.routes';
 import loanRequestsRoutes from './routes/loanRequests.routes';
+import printRequestsRoutes from './routes/printRequests.routes';
 import summariesRoutes from './routes/summaries.routes';
 import notesRoutes from './routes/notes.routes';
 import bookmarksRoutes from './routes/bookmarks.routes';
@@ -148,6 +149,7 @@ export async function createExpressApp() {
   app.use('/api/v1/categories', categoriesRoutes);
   app.use('/api/v1/loans', loansRoutes);
   app.use('/api/v1/loan-requests', loanRequestsRoutes);
+  app.use('/api/v1/print-requests', printRequestsRoutes);
   app.use('/api/v1/summaries', summariesRoutes);
   app.use('/api/v1/notes', notesRoutes);
   app.use('/api/v1/bookmarks', bookmarksRoutes);

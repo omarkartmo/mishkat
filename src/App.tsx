@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   NavigationTab,
   User,
@@ -30,9 +30,11 @@ import { ReviewQueueView } from './components/admin/ReviewQueueView';
 import { StudentManagerView } from './components/students/StudentManagerView';
 import { CategoryManagerView } from './components/admin/CategoryManagerView';
 import { StudentPortalView } from './components/student/StudentPortalView';
+import { StudentLoansView } from './components/student/StudentLoansView';
 import { SystemSettingsView } from './components/admin/SystemSettingsView';
 import { InternetPolicyView } from './components/admin/InternetPolicyView';
 import { SystemSupportDashboard } from './components/admin/SystemSupportDashboard';
+import { GlobalReportIssueWidget } from './components/common/GlobalReportIssueWidget';
 import { StudentKioskHeader } from './components/student/StudentKioskHeader';
 import { telemetryService } from './services/telemetry/telemetryService';
 import { FavoritesView } from './components/favorites/FavoritesView';
@@ -165,8 +167,8 @@ export default function App() {
   };
 
   // Load server-authoritative books (Phase 1.7.3-B)
-  const loadBooks = async () => {
-    setIsBooksLoading(true);
+  const loadBooks = async (silent = false) => {
+    if (!silent) setIsBooksLoading(true);
     try {
       const [physRes, digRes] = await Promise.all([
         bookRepository.getPhysicalBooks(),
@@ -181,69 +183,71 @@ export default function App() {
       }
 
       if (!physRes.success || !digRes.success) {
-        const errMsg = physRes.error?.message || digRes.error?.message || 'تعذر استرجاع فهرس الكتب من الخادم المركزي.';
-        setBooksError(errMsg);
+        if (!silent) {
+          const errMsg = physRes.error?.message || digRes.error?.message || 'تعذر استرجاع فهرس الكتب من الخادم المركزي.';
+          setBooksError(errMsg);
+        }
       } else {
         setBooksError(null);
       }
     } catch (err: any) {
-      setBooksError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الكتب.');
+      if (!silent) setBooksError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الكتب.');
     } finally {
-      setIsBooksLoading(false);
+      if (!silent) setIsBooksLoading(false);
     }
   };
 
   // Load server-authoritative loans (Phase 1.7 - Complete Loans Migration)
-  const loadLoans = async () => {
-    setIsLoansLoading(true);
+  const loadLoans = async (silent = false) => {
+    if (!silent) setIsLoansLoading(true);
     try {
       const res = await loanRepository.getLoans();
       if (res.success && Array.isArray(res.data)) {
         setLoans(res.data);
         setLoansError(null);
-      } else {
+      } else if (!silent) {
         setLoansError(res.error?.message || 'تعذر استرجاع سجل الإعارات من الخادم المركزي.');
       }
     } catch (err: any) {
-      setLoansError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الإعارات.');
+      if (!silent) setLoansError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الإعارات.');
     } finally {
-      setIsLoansLoading(false);
+      if (!silent) setIsLoansLoading(false);
     }
   };
 
   // Load server-authoritative loan requests (Phase 1.7 - Loan Requests Migration)
-  const loadLoanRequests = async () => {
-    setIsLoanRequestsLoading(true);
+  const loadLoanRequests = async (silent = false) => {
+    if (!silent) setIsLoanRequestsLoading(true);
     try {
       const res = await loanRequestRepository.getLoanRequests();
       if (res.success && Array.isArray(res.data)) {
         setLoanRequests(res.data);
         setLoanRequestsError(null);
-      } else {
+      } else if (!silent) {
         setLoanRequestsError(res.error?.message || 'تعذر استرجاع طلبات الإعارة من الخادم المركزي.');
       }
     } catch (err: any) {
-      setLoanRequestsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات طلبات الإعارة.');
+      if (!silent) setLoanRequestsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات طلبات الإعارة.');
     } finally {
-      setIsLoanRequestsLoading(false);
+      if (!silent) setIsLoanRequestsLoading(false);
     }
   };
 
   // Load server-authoritative notifications (Phase 1.7 - Notifications Migration)
-  const loadNotifications = async () => {
-    setIsNotificationsLoading(true);
+  const loadNotifications = async (silent = false) => {
+    if (!silent) setIsNotificationsLoading(true);
     try {
       const res = await notificationRepository.getNotifications();
       if (res.success && Array.isArray(res.data)) {
         setNotifications(res.data);
         setNotificationsError(null);
-      } else {
+      } else if (!silent) {
         setNotificationsError(res.error?.message || 'تعذر استرجاع الإشعارات من الخادم المركزي.');
       }
     } catch (err: any) {
-      setNotificationsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الإشعارات.');
+      if (!silent) setNotificationsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الإشعارات.');
     } finally {
-      setIsNotificationsLoading(false);
+      if (!silent) setIsNotificationsLoading(false);
     }
   };
 
@@ -338,20 +342,20 @@ export default function App() {
   };
 
   // Load server-authoritative submissions (Phase 1.7 - Submissions Migration)
-  const loadSubmissions = async () => {
-    setIsSubmissionsLoading(true);
+  const loadSubmissions = async (silent = false) => {
+    if (!silent) setIsSubmissionsLoading(true);
     try {
       const res = await submissionRepository.getSubmissions();
       if (res.success && Array.isArray(res.data)) {
         setSubmissions(res.data);
         setSubmissionsError(null);
-      } else {
+      } else if (!silent) {
         setSubmissionsError(res.error?.message || 'تعذر استرجاع قائمة الاقتراحات من الخادم المركزي.');
       }
     } catch (err: any) {
-      setSubmissionsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الاقتراحات.');
+      if (!silent) setSubmissionsError(err?.message || 'تعذر الاتصال بالخادم المركزي لاسترجاع بيانات الاقتراحات.');
     } finally {
-      setIsSubmissionsLoading(false);
+      if (!silent) setIsSubmissionsLoading(false);
     }
   };
 
@@ -440,6 +444,59 @@ export default function App() {
     loadSettings();
   }, []);
 
+  // Real-time synchronization loop between student & librarian (live updates without manual refresh)
+  useEffect(() => {
+    if (!authUser) return;
+
+    let isMounted = true;
+    let isSyncing = false;
+
+    const syncLiveState = async () => {
+      if (isSyncing || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
+      isSyncing = true;
+      try {
+        await Promise.allSettled([
+          loadNotifications(true),
+          loadLoanRequests(true),
+          loadLoans(true),
+          authUser.role === 'admin' ? loadSubmissions(true) : Promise.resolve(),
+        ]);
+      } catch {
+        // silent background sync ignores transient network errors
+      } finally {
+        if (isMounted) isSyncing = false;
+      }
+    };
+
+    // Auto-poll live changes every 3.5 seconds
+    const intervalId = setInterval(syncLiveState, 3500);
+
+    // Immediate sync on window focus or tab activation
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncLiveState();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [authUser]);
+
+  // Keep physical book copies in sync whenever loans collection updates
+  const prevLoansLengthRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevLoansLengthRef.current !== null && prevLoansLengthRef.current !== loans.length) {
+      loadBooks(true);
+    }
+    prevLoansLengthRef.current = loans.length;
+  }, [loans.length]);
+
   // Update tab and reload server-authoritative data if authenticated user changes
   useEffect(() => {
     if (authUser) {
@@ -496,7 +553,7 @@ export default function App() {
   const handleNavigateToTab = (tab: NavigationTab) => {
     setIsMobileMenuOpen(false);
     if (currentUser.role === 'student') {
-      const adminTabs: NavigationTab[] = ['overview', 'loans', 'reviews', 'students', 'categories', 'settings', 'internet_policy'];
+      const adminTabs: NavigationTab[] = ['overview', 'reviews', 'students', 'categories', 'settings', 'internet_policy'];
       if (adminTabs.includes(tab)) {
         setActiveTab('student_portal');
         return;
@@ -506,6 +563,10 @@ export default function App() {
         setActiveTab('overview');
         return;
       }
+    }
+    if (tab === 'reviews') {
+      setActiveTab('overview');
+      return;
     }
     setActiveTab(tab);
   };
@@ -583,6 +644,19 @@ export default function App() {
       }
     } catch (err: any) {
       alert(err.message || 'حدث خطأ أثناء تأكيد تسليم الكتاب.');
+    }
+  };
+
+  const handleCancelLoanRequest = async (requestId: string, reason?: string) => {
+    try {
+      const res = await loanRequestRepository.cancelLoanRequest(requestId, reason);
+      if (res.success) {
+        await Promise.all([loadLoanRequests(), loadNotifications()]);
+      } else {
+        alert(res.error?.message || 'تعذر إلغاء طلب الاستعارة في الخادم المركزي.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إلغاء طلب الاستعارة.');
     }
   };
 
@@ -739,6 +813,12 @@ export default function App() {
     try {
       const res = await bookRepository.deleteBook(id);
       if (res.success) {
+        try {
+          if (typeof window !== 'undefined' && 'caches' in window) {
+            const cache = await caches.open('mishkat-books-cache-v1');
+            await cache.delete(`/mishkat-book-cache/${id}`);
+          }
+        } catch {}
         await Promise.all([loadBooks(), loadReadingProgress()]);
       } else {
         alert(res.error?.message || 'فشل حذف الكتاب الرقمي من الخادم المركزي.');
@@ -1274,6 +1354,11 @@ export default function App() {
           overdueLoansCount={overdueLoansCount}
           pendingReviewsCount={pendingSubmissionsCount}
           favoritesCount={favorites.length}
+          studentLoansCount={
+            currentUser.role === 'student'
+              ? loans.filter((l) => l.studentId === currentUser.id && l.status !== 'returned').length
+              : 0
+          }
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
           onCloseMobile={() => setIsMobileMenuOpen(false)}
@@ -1286,7 +1371,23 @@ export default function App() {
         {/* Student Controlled Browser / Kiosk Header */}
         {currentUser.role === 'student' && (
           <StudentKioskHeader
-            currentScreenName={activeTab === 'student_portal' ? 'فضاء الطالب والأبحاث' : activeTab}
+            currentScreenName={
+              activeTab === 'student_portal'
+                ? 'فضاء الطالب والأبحاث'
+                : activeTab === 'loans'
+                ? 'إعارة الكتب وسجل إعاراتي'
+                : activeTab === 'physical'
+                ? 'فهرس الكتب الورقية'
+                : activeTab === 'digital'
+                ? 'المستودع الرقمي'
+                : activeTab === 'reading_workspace'
+                ? 'مفكرة التلخيص والفوائد'
+                : activeTab === 'favorites'
+                ? 'الكتب المفضلة'
+                : activeTab === 'search_results'
+                ? 'نتائج البحث'
+                : activeTab
+            }
             onNavigateHome={() => setActiveTab('student_portal')}
             onRefresh={() => window.location.reload()}
           />
@@ -1432,6 +1533,7 @@ export default function App() {
               onApproveLoanRequest={handleApproveLoanRequest}
               onRejectLoanRequest={handleRejectLoanRequest}
               onConfirmHandoverLoanRequest={handleConfirmHandoverLoanRequest}
+              onCancelLoanRequest={handleCancelLoanRequest}
               onCreateLoan={handleCreateLoan}
               onExtendLoan={handleExtendLoan}
               onReturnBook={handleReturnBook}
@@ -1441,6 +1543,27 @@ export default function App() {
               isNewLoanModalOpen={isNewLoanModalOpen}
               setIsNewLoanModalOpen={setIsNewLoanModalOpen}
               preSelectedBookId={preSelectedBookId}
+            />
+          )}
+
+          {activeTab === 'loans' && currentUser.role === 'student' && (
+            <StudentLoansView
+              currentUser={currentUser}
+              loans={loans}
+              loanRequests={loanRequests}
+              physicalBooks={physicalBooks}
+              physicalBookmarks={physicalBookmarks}
+              onNavigate={handleNavigateToTab}
+              onOpenPhysicalBookmark={(book) => {
+                const bm = physicalBookmarks.find((b) => b.bookId === book.id);
+                setActivePhysicalBookmarkModal({
+                  isOpen: true,
+                  book: book,
+                  bookmark: bm || null,
+                });
+              }}
+              onRequestNewLoan={() => setActiveTab('physical')}
+              onCancelLoanRequest={handleCancelLoanRequest}
             />
           )}
 
@@ -1638,6 +1761,9 @@ export default function App() {
           onDelete={handleDeletePhysicalBookmark}
         />
       )}
+
+      {/* Global Non-intrusive Report Issue Widget */}
+      <GlobalReportIssueWidget currentUser={currentUser} activeTab={activeTab} />
     </div>
   );
 }

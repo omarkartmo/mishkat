@@ -9,7 +9,7 @@ import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { recordAuditLog } from '../middleware/audit';
 import { extractAuthorFromDocument, extractDocumentMetadata, isValidArabicSentence, normalizeArabicForSearch, stripDiacritics, synthesizeBookSummary } from '../utils/authorExtractor';
-import { isSystemDangerousPath, verifyFileMagicBytes, computeFileSha256 } from '../utils/pathSafety';
+import { isSystemDangerousPath, verifyFileMagicBytes, computeFileSha256, fixUploadedFileName, sanitizeRelativePath, getSafeUniqueFilePath } from '../utils/pathSafety';
 import { healDigitalBookPageCounts, getPdfTruePageCount } from '../services/bookSanitizer';
 
 const router = Router();
@@ -316,12 +316,28 @@ export function classifyBook(
   author: string,
   filename: string,
   categories: any[],
-  introText?: string | null
+  introText?: string | null,
+  folderName?: string | null
 ): { categoryId: string; categoryName: string; confidence: number } {
   const normTitle = normalizeArabicForSearch(title || '');
   const normAuthor = normalizeArabicForSearch(author || '');
   const normFilename = normalizeArabicForSearch(filename || '');
   const normIntro = normalizeArabicForSearch(introText || '');
+  const normFolder = normalizeArabicForSearch(folderName || '');
+
+  // 0. Instant Folder-to-Category Direct Match (Folder Hierarchy Preservation)
+  if (normFolder && categories && categories.length > 0) {
+    for (const cat of categories) {
+      const normCatName = normalizeArabicForSearch(cat.name || '');
+      if (normCatName && (normFolder.includes(normCatName) || normCatName.includes(normFolder))) {
+        return {
+          categoryId: cat.id,
+          categoryName: cat.name,
+          confidence: 100,
+        };
+      }
+    }
+  }
 
   // 1. High-Precision Institutional & Academic Domain Overrides
   if (
@@ -483,6 +499,7 @@ export function classifyBook(
       if (normAuthor.includes(normalizedKw)) score += 30;
       if (normIntro.includes(normalizedKw)) score += 20;
       if (normFilename.includes(normalizedKw)) score += 10;
+      if (normFolder && normFolder.includes(normalizedKw)) score += 60;
     }
 
     if (score > bestScore) {
@@ -502,6 +519,48 @@ export function classifyBook(
 
   const confidence = bestScore > 0 ? Math.min(100, Math.max(50, Math.round(bestScore * 1.2))) : 30;
   return { categoryId: bestCatId, categoryName: bestCatName, confidence };
+}
+
+/**
+ * Recursively searches for candidate file names within a root directory tree.
+ * Strictly bounded by isWithinDirectory to guarantee complete isolation.
+ */
+function findFileInDirectoryRecursively(rootDir: string, candidateNames: string[], maxDepth = 4, currentDepth = 0): string | null {
+  if (currentDepth > maxDepth || !fs.existsSync(rootDir)) return null;
+
+  try {
+    const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+
+    // 1. Direct file matches in current folder
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        const entryNameLower = entry.name.toLowerCase();
+        for (const cand of candidateNames) {
+          if (cand.toLowerCase() === entryNameLower) {
+            const fullPath = path.join(rootDir, entry.name);
+            if (isWithinDirectory(fullPath, rootDir)) {
+              return fullPath;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Recurse into subfolders
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+        const subDir = path.join(rootDir, entry.name);
+        if (isWithinDirectory(subDir, rootDir)) {
+          const found = findFileInDirectoryRecursively(subDir, candidateNames, maxDepth, currentDepth + 1);
+          if (found) return found;
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 // Helper to resolve digital book file path safely across local, digital dirs and configured root URL (Section 17 & 19 Requirement)
@@ -545,6 +604,11 @@ async function resolveDigitalBookFilePath(book: any): Promise<string | null> {
       if (fs.existsSync(resolved) && isWithinDirectory(resolved, customRoot)) {
         return resolved;
       }
+    } else if (book.file_path) {
+      const relCand = path.join(customRoot, book.file_path);
+      if (fs.existsSync(relCand) && isWithinDirectory(relCand, customRoot)) {
+        return path.resolve(relCand);
+      }
     }
 
     // 3. Staging directory for newly uploaded/staged books awaiting finalize
@@ -552,26 +616,19 @@ async function resolveDigitalBookFilePath(book: any): Promise<string | null> {
       return path.resolve(book.file_path);
     }
 
-    // 4. Backward-compatibility safety: If not found in custom root but exists in defaultDir or allowedDirs, serve it gracefully
-    for (const fname of fileNames) {
-      const defaultCand = path.join(defaultDir, fname);
-      if (fs.existsSync(defaultCand)) {
-        return path.resolve(defaultCand);
-      }
-    }
-    if (book.file_path && fs.existsSync(book.file_path)) {
-      const resolved = path.resolve(book.file_path);
-      const isAllowed = allowedDirs.some((dir) => isWithinDirectory(resolved, dir));
-      if (isAllowed) {
-        return resolved;
-      }
+    // 4. Resilient search: File might have been organized into a subfolder inside the custom root
+    const foundInSubdir = findFileInDirectoryRecursively(customRoot, fileNames);
+    if (foundInSubdir && isWithinDirectory(foundInSubdir, customRoot)) {
+      // Opportunistically heal recorded file_path in database for future fast access
+      db.query('UPDATE books SET file_path = $1 WHERE id = $2', [foundInSubdir, book.id]).catch(() => {});
+      return path.resolve(foundInSubdir);
     }
 
     // File was not found in the configured custom repository or storage
     return null;
   }
 
-  // Case 2: Standard default storage (LibraryData/books/digital)
+  // Case 2: Standard default storage (LibraryData/books/digital & LibraryData/books)
   const candidates: string[] = [];
 
   if (book.file_path) {
@@ -586,7 +643,6 @@ async function resolveDigitalBookFilePath(book: any): Promise<string | null> {
   for (const fname of fileNames) {
     candidates.push(path.join(defaultDir, fname));
     candidates.push(path.join(serverConfig.dirs.books, fname));
-    candidates.push(path.join(stagingDir, fname));
   }
 
   for (const cand of candidates) {
@@ -597,6 +653,18 @@ async function resolveDigitalBookFilePath(book: any): Promise<string | null> {
         return resolved;
       } else {
         return '__FORBIDDEN_PATH__';
+      }
+    }
+  }
+
+  // Resilient recursive search inside default storage roots (covers books organized into subfolders)
+  const searchRoots = [defaultDir, serverConfig.dirs.books];
+  for (const sRoot of searchRoots) {
+    if (fs.existsSync(sRoot)) {
+      const found = findFileInDirectoryRecursively(sRoot, fileNames);
+      if (found && allowedDirs.some((dir) => isWithinDirectory(found, dir))) {
+        db.query('UPDATE books SET file_path = $1 WHERE id = $2', [found, book.id]).catch(() => {});
+        return path.resolve(found);
       }
     }
   }
@@ -730,7 +798,8 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const ext = path.extname(file.originalname).toLowerCase().replace('.', '') as 'pdf' | 'epub';
+      const cleanOriginalName = fixUploadedFileName(file.originalname);
+      const ext = path.extname(cleanOriginalName || file.originalname).toLowerCase().replace('.', '') as 'pdf' | 'epub';
       const stagedFilePath = file.path;
 
       // Verify magic bytes
@@ -743,17 +812,20 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
       const hash = await computeFileSha256(stagedFilePath);
       const sizeMb = Number((file.size / (1024 * 1024)).toFixed(2));
 
-      // Check if relative path was provided (e.g. from folder upload) and has a meaningful parent folder
-      const relPath = relativePathsMap[file.originalname] || relativePathsMap[String(i)] || '';
+      // Check if relative path was provided (e.g. from folder upload) and preserve nested hierarchy
+      const rawRelPath = relativePathsMap[file.originalname] || relativePathsMap[cleanOriginalName] || relativePathsMap[String(i)] || '';
+      const relPath = sanitizeRelativePath(rawRelPath);
       let adoptFolder = false;
       let folderName: string | null = null;
+      let relativeSubDir = '';
 
       if (relPath) {
         const parts = relPath.replace(/\\/g, '/').split('/').filter(Boolean);
         if (parts.length > 1) {
+          relativeSubDir = parts.slice(0, -1).join('/');
           const candidateFolder = parts[parts.length - 2].trim();
           if (candidateFolder && !GENERIC_FOLDER_NAMES.has(candidateFolder.toLowerCase())) {
-            const baseName = path.basename(file.originalname, path.extname(file.originalname));
+            const baseName = path.basename(cleanOriginalName, path.extname(cleanOriginalName));
             if (
               isRandomOrGenericFileName(baseName) ||
               (/[\u0600-\u06FF]/.test(candidateFolder) && !/[\u0600-\u06FF]/.test(baseName)) ||
@@ -764,13 +836,15 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
             ) {
               adoptFolder = true;
               folderName = candidateFolder;
+            } else {
+              folderName = candidateFolder;
             }
           }
         }
       }
 
       // Extract title & author from folder name if adopted, otherwise from file name
-      const sourceName = adoptFolder && folderName ? folderName : file.originalname;
+      const sourceName = adoptFolder && folderName ? folderName : cleanOriginalName;
       let { title, author } = extractTitleAndAuthor(sourceName);
       let authorDetectedFrom: 'folder' | 'file' | 'document' = adoptFolder && author !== 'مؤلف غير محدد' ? 'folder' : author !== 'مؤلف غير محدد' ? 'file' : 'file';
 
@@ -802,7 +876,7 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
         }
       }
 
-      // Automatic classification (Section 24) with Intro Text analysis or AI Vision mapping
+      // Automatic classification (Section 24) with Intro Text analysis, folder matching, or AI Vision mapping
       let categoryId: string;
       let categoryName: string;
       let confidence: number;
@@ -812,7 +886,7 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
         categoryName = detectedDocMeta.aiCategoryName || categories.find((c: any) => c.id === categoryId)?.name || 'العلوم الشرعية والفكر الإسلامي';
         confidence = detectedDocMeta.aiConfidence || 95;
       } else {
-        const classified = classifyBook(title, author, sourceName, categories, docIntroText);
+        const classified = classifyBook(title, author, sourceName, categories, docIntroText, folderName);
         categoryId = classified.categoryId;
         categoryName = classified.categoryName;
         confidence = classified.confidence;
@@ -827,7 +901,8 @@ router.post('/bulk-stage', authenticateToken, requireRole('admin', 'librarian'),
 
       stagedResults.push({
         tempId: path.basename(file.filename, path.extname(file.filename)),
-        originalFileName: file.originalname,
+        originalFileName: cleanOriginalName,
+        relativeSubDir,
         folderName: folderName || null,
         detectedFrom: adoptFolder ? 'folder' : 'file',
         authorDetectedFrom,
@@ -1245,31 +1320,17 @@ router.post('/bulk-import', authenticateToken, requireRole('admin', 'librarian')
           const isUploadedToStaging = stagedFilePath.includes(stagingDir);
 
           if (isUploadedToStaging) {
-            if (!fs.existsSync(destinationDir)) {
-              fs.mkdirSync(destinationDir, { recursive: true });
+            // Resolve target directory, preserving folder structure if present
+            const subDir = sanitizeRelativePath(item.relativeSubDir || item.folderName || '');
+            const targetDir = subDir ? path.join(destinationDir, subDir) : destinationDir;
+            if (!fs.existsSync(targetDir)) {
+              fs.mkdirSync(targetDir, { recursive: true });
             }
 
-            // Browser-uploaded temporary file: move it to permanent destinationDir using clean original filename
-            let cleanBase = path.basename(originalFileName || item.originalFileName || `${title}.${format}`);
-            cleanBase = cleanBase.replace(/[\\/:*?"<>|]/g, '_').trim();
-            if (!cleanBase.toLowerCase().endsWith(`.${format}`)) {
-              cleanBase = `${cleanBase}.${format}`;
-            }
-
-            let finalFileName = cleanBase;
-            let candidatePath = path.join(destinationDir, finalFileName);
-            if (fs.existsSync(candidatePath)) {
-              try {
-                const existingBuf = fs.readFileSync(candidatePath);
-                const existingHash = crypto.createHash('sha256').update(existingBuf).digest('hex');
-                if (existingHash !== computedHash) {
-                  const extWithDot = `.${format}`;
-                  const nameWithoutExt = cleanBase.slice(0, -extWithDot.length);
-                  finalFileName = `${nameWithoutExt}-${bookId.slice(-4)}${extWithDot}`;
-                  candidatePath = path.join(destinationDir, finalFileName);
-                }
-              } catch {}
-            }
+            // Browser-uploaded temporary file: move it to permanent storage with clean original Arabic filename and (1) conflict resolution
+            const rawCandidateName = path.basename(originalFileName || item.originalFileName || `${title}.${format}`);
+            const cleanBase = fixUploadedFileName(rawCandidateName);
+            const { finalPath: candidatePath } = getSafeUniqueFilePath(targetDir, cleanBase, format, computedHash);
 
             finalFilePath = candidatePath;
             try {
@@ -1775,28 +1836,10 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
       fs.mkdirSync(destinationDir, { recursive: true });
     }
 
-    // Generate a stable canonical book ID and move to destination digital storage keeping original filename
+    // Generate a stable canonical book ID and move to destination digital storage keeping exact original Arabic filename
     const uploadBookId = `dig-upload-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    let cleanBase = path.basename(uploadedFile.originalname || `book.${ext}`);
-    cleanBase = cleanBase.replace(/[\\/:*?"<>|]/g, '_').trim();
-    if (!cleanBase.toLowerCase().endsWith(`.${ext}`)) {
-      cleanBase = `${cleanBase}.${ext}`;
-    }
-
-    let canonicalName = cleanBase;
-    let canonicalPath = path.join(destinationDir, canonicalName);
-    if (fs.existsSync(canonicalPath)) {
-      try {
-        const existingBuf = fs.readFileSync(canonicalPath);
-        const existingHash = crypto.createHash('sha256').update(existingBuf).digest('hex');
-        if (existingHash !== fileHash) {
-          const extWithDot = `.${ext}`;
-          const nameWithoutExt = cleanBase.slice(0, -extWithDot.length);
-          canonicalName = `${nameWithoutExt}-${uploadBookId.slice(-4)}${extWithDot}`;
-          canonicalPath = path.join(destinationDir, canonicalName);
-        }
-      } catch {}
-    }
+    const cleanFileName = fixUploadedFileName(uploadedFile.originalname || `book.${ext}`);
+    const { finalPath: canonicalPath, finalFileName: canonicalName } = getSafeUniqueFilePath(destinationDir, cleanFileName, ext, fileHash);
 
     try {
       fs.renameSync(uploadedFile.path, canonicalPath);
@@ -1837,11 +1880,12 @@ router.post('/upload', authenticateToken, requireRole('admin', 'librarian'), (re
         bookId: uploadBookId,
         fileUrl: `/api/v1/books/${uploadBookId}/file`,
         filePath: canonicalPath,
+        fileName: canonicalName,
         coverUrl: uploadedCover ? `/api/v1/books/files/covers/${uploadedCover.filename}` : null,
         coverPath: uploadedCover ? uploadedCover.path : null,
         fileSize: `${(uploadedFile.size / (1024 * 1024)).toFixed(1)} MB`,
         fileSizeMb: Number((uploadedFile.size / (1024 * 1024)).toFixed(2)),
-        originalName: uploadedFile.originalname,
+        originalName: cleanFileName,
         fileHash,
         sha256: fileHash,
         format: ext,
@@ -1956,6 +2000,15 @@ async function streamDigitalBook(req: Request, res: Response) {
       ? 'application/epub+zip'
       : 'application/pdf';
 
+    if (req.method === 'HEAD') {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+      });
+      return res.end();
+    }
+
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
@@ -2009,8 +2062,9 @@ async function streamDigitalBook(req: Request, res: Response) {
   }
 }
 
-// GET /api/v1/books/:id/file (Canonical Authenticated Central Reader Stream - Section 17)
+// GET & HEAD /api/v1/books/:id/file (Canonical Authenticated Central Reader Stream - Section 17)
 router.get('/:id/file', authenticateToken, streamDigitalBook);
+router.head('/:id/file', authenticateToken, streamDigitalBook);
 
 // POST /api/v1/books/:id/file & POST /api/v1/books/:id/stream (Immune to IDM / Download Extensions)
 router.post('/:id/file', authenticateToken, streamDigitalBook);

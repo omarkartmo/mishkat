@@ -442,11 +442,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
 
           <button
-            onClick={() => setShowAllLoansModal(true)}
+            onClick={() => onNavigate('loans')}
             className="text-xs text-sky-600 dark:text-sky-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
           >
             <History className="w-3.5 h-3.5" />
-            <span>سجل الإعارات الكامل ({myLoans.length})</span>
+            <span>صفحة وسجل الإعارات الكامل ({myLoans.length})</span>
           </button>
         </div>
 

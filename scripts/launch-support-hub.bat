@@ -18,20 +18,20 @@ if %ERRORLEVEL% NEQ 0 (
     echo [OK] Master Support Hub is running on port 4000.
 )
 
-:: 2. Start ngrok tunnel with static domain if not already running
+:: 2. Ensure ngrok tunnel is active with endpoint pooling
 echo.
 echo [2/3] Checking ngrok tunnel with domain: calibrate-reply-aviation.ngrok-free.dev...
 tasklist /FI "IMAGENAME eq ngrok.exe" 2>NUL | find /I /N "ngrok.exe">NUL
 if %ERRORLEVEL% NEQ 0 (
-    echo [INFO] Starting ngrok tunnel...
+    echo [INFO] Starting supervised ngrok tunnel with endpoint pooling...
     set "NGROK_BIN=bin\ngrok.exe"
     if not exist "%NGROK_BIN%" (
         set "NGROK_BIN=ngrok"
     )
-    start "MISHKAT Support Tunnel (ngrok)" "%NGROK_BIN%" http --url=calibrate-reply-aviation.ngrok-free.dev 4000
+    start "MISHKAT Support Tunnel (ngrok)" "%NGROK_BIN%" http 4000 --url=calibrate-reply-aviation.ngrok-free.dev --pooling-enabled
     timeout /t 2 /nobreak >nul
 ) else (
-    echo [OK] ngrok tunnel is already active.
+    echo [OK] ngrok tunnel is already active (supervised).
 )
 
 :: 3. Open Support Dashboard in Browser

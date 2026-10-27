@@ -19,6 +19,7 @@ export const BACKUP_TABLES_ORDER = [
   'physical_copies',
   'loans',
   'loan_requests',
+  'print_requests',
   'reading_progress',
   'physical_bookmarks',
   'book_summaries',
@@ -74,6 +75,11 @@ export const TABLE_COLUMNS_ALLOWLIST: Record<BackupTableName, string[]> = {
     'requested_at', 'status', 'approved_duration_days', 'approved_at',
     'due_date_calculated', 'admin_notes', 'rejection_reason',
     'handed_over_at', 'loan_record_id', 'created_at', 'updated_at',
+  ],
+  print_requests: [
+    'id', 'book_id', 'book_title', 'student_id', 'student_name', 'student_reg_number',
+    'page_from', 'page_to', 'total_pages', 'purpose', 'notes', 'status',
+    'admin_notes', 'created_at', 'updated_at', 'completed_at',
   ],
   reading_progress: [
     'id', 'student_id', 'book_id', 'current_page', 'total_pages',
@@ -137,6 +143,19 @@ export const TABLE_COLUMNS_ALLOWLIST: Record<BackupTableName, string[]> = {
     'id', 'domain', 'category_id', 'is_active', 'added_by', 'created_at',
   ],
 };
+
+const JSONB_COLUMNS = new Set([
+  'table_of_contents',
+  'sample_content',
+  'chapters_summaries',
+  'favorite_quotes',
+  'discovery_details',
+  'diagnostic_context',
+  'affected_device_ids',
+  'value',
+  'metadata',
+  'capabilities',
+]);
 
 export interface BackupMetadata {
   exportedAt: string;
@@ -206,6 +225,9 @@ export function validateBackupPayload(parsed: any): ValidationResult {
   }
   if (!parsed.data.blocked_sites) {
     parsed.data.blocked_sites = [];
+  }
+  if (!parsed.data.print_requests) {
+    parsed.data.print_requests = [];
   }
 
   // 3. Verify all expected tables exist and are arrays
@@ -560,8 +582,22 @@ export async function restoreDatabaseFromBackup(
         if (row[col] !== undefined) {
           activeColumns.push(col);
           let val = row[col];
-          // Serialize JSONB objects/arrays to string for postgres jsonb compatibility
-          if (
+          // Serialize JSONB columns (objects, arrays, strings, primitives) to valid JSON strings for postgres jsonb compatibility
+          if (JSONB_COLUMNS.has(col)) {
+            if (val !== null && val !== undefined) {
+              if (typeof val === 'object' && !(val instanceof Date)) {
+                val = JSON.stringify(val);
+              } else if (typeof val === 'string') {
+                try {
+                  JSON.parse(val);
+                } catch {
+                  val = JSON.stringify(val);
+                }
+              } else {
+                val = JSON.stringify(val);
+              }
+            }
+          } else if (
             val !== null &&
             typeof val === 'object' &&
             !Array.isArray(val) &&
@@ -577,7 +613,16 @@ export async function restoreDatabaseFromBackup(
       if (activeColumns.length > 0) {
         // Safe SQL constructed exclusively from allowlisted column names with parameter bindings
         const sql = `INSERT INTO ${table} (${activeColumns.join(', ')}) VALUES (${placeholders.join(', ')})`;
-        await client.query(sql, values);
+        try {
+          await client.query(sql, values);
+        } catch (insertErr: any) {
+          logger.error(`[BackupService] Failed inserting into ${table}: ${insertErr.message}`, {
+            activeColumns,
+            values,
+            row,
+          });
+          throw insertErr;
+        }
       }
     }
 

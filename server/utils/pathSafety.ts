@@ -143,3 +143,104 @@ export async function computeFileSha256(filePath: string): Promise<string> {
     stream.on('error', (err) => reject(err));
   });
 }
+
+/**
+ * Resolves encoding issues with file and folder names uploaded through multipart/form-data.
+ * Multer decodes header filenames as latin1 (ISO-8859-1) by default on Node.js,
+ * which turns UTF-8 Arabic bytes into mojibake (e.g. "Ø§Ù„Ø¨Ø·Ø§Ù‚Ø©" instead of "البطاقة").
+ * This function cleanly recovers the true UTF-8 string and sanitizes illegal Windows filesystem characters.
+ */
+export function fixUploadedFileName(rawName: string): string {
+  if (!rawName || typeof rawName !== 'string') return '';
+  let name = rawName.trim();
+
+  // Try to fix Multer latin1-interpreted UTF-8 filenames
+  try {
+    const candidate = Buffer.from(name, 'latin1').toString('utf8');
+    if (!candidate.includes('\uFFFD')) {
+      // If candidate contains Arabic characters while rawName did not, it was mojibake
+      if (/[\u0600-\u06FF]/.test(candidate) && !/[\u0600-\u06FF]/.test(name)) {
+        name = candidate;
+      } else if (candidate.length < name.length && /[^\x00-\x7F]/.test(name)) {
+        // UTF-8 bytes expanded to latin1 are strictly longer than the original UTF-8 characters
+        name = candidate;
+      }
+    }
+  } catch {}
+
+  // Strip illegal path characters for Windows file systems (\ / : * ? " < > |)
+  name = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+  return name;
+}
+
+/**
+ * Sanitizes folder relative paths while preserving nested directory hierarchy (e.g. "كتب الفقه/المستوى الأول")
+ */
+export function sanitizeRelativePath(rawRelPath: string): string {
+  if (!rawRelPath || typeof rawRelPath !== 'string') return '';
+  let pathStr = rawRelPath.trim();
+  try {
+    const candidate = Buffer.from(pathStr, 'latin1').toString('utf8');
+    if (!candidate.includes('\uFFFD')) {
+      if (/[\u0600-\u06FF]/.test(candidate) && !/[\u0600-\u06FF]/.test(pathStr)) {
+        pathStr = candidate;
+      } else if (candidate.length < pathStr.length && /[^\x00-\x7F]/.test(pathStr)) {
+        pathStr = candidate;
+      }
+    }
+  } catch {}
+
+  return pathStr
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean)
+    .map((part) => part.replace(/[\\/:*?"<>|]/g, '_').trim())
+    .join('/');
+}
+
+/**
+ * Generates a clean, unique file path avoiding conflicts with human-friendly numbering
+ * e.g., "كتاب الطهارة (1).pdf" instead of random hash suffixes, and checks for hash equality.
+ */
+export function getSafeUniqueFilePath(
+  destinationDir: string,
+  baseFileName: string,
+  ext: string,
+  newFileHash?: string
+): { finalPath: string; finalFileName: string; isDuplicate: boolean } {
+  const cleanExt = ext.replace(/^\./, '').toLowerCase();
+  let nameWithoutExt = baseFileName;
+  if (nameWithoutExt.toLowerCase().endsWith(`.${cleanExt}`)) {
+    nameWithoutExt = nameWithoutExt.slice(0, -(cleanExt.length + 1));
+  }
+  nameWithoutExt = fixUploadedFileName(nameWithoutExt);
+
+  let candidateName = `${nameWithoutExt}.${cleanExt}`;
+  let candidatePath = path.join(destinationDir, candidateName);
+
+  if (!fs.existsSync(candidatePath)) {
+    return { finalPath: candidatePath, finalFileName: candidateName, isDuplicate: false };
+  }
+
+  // Check if existing file is byte-for-byte identical (duplicate content)
+  if (newFileHash) {
+    try {
+      const existingBuf = fs.readFileSync(candidatePath);
+      const existingHash = crypto.createHash('sha256').update(existingBuf).digest('hex');
+      if (existingHash === newFileHash) {
+        return { finalPath: candidatePath, finalFileName: candidateName, isDuplicate: true };
+      }
+    } catch {}
+  }
+
+  // File with same name but different content: find next clean numbered suffix: "اسم الكتاب (1).pdf"
+  let counter = 1;
+  while (fs.existsSync(candidatePath) && counter <= 1000) {
+    candidateName = `${nameWithoutExt} (${counter}).${cleanExt}`;
+    candidatePath = path.join(destinationDir, candidateName);
+    counter++;
+  }
+
+  return { finalPath: candidatePath, finalFileName: candidateName, isDuplicate: false };
+}
+

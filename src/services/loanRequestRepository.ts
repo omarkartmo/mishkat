@@ -149,6 +149,33 @@ export class LoanRequestRepository {
       },
     };
   }
+
+  /**
+   * Cancel loan request by student or admin (POST /api/v1/loan-requests/:id/cancel)
+   */
+  public async cancelLoanRequest(
+    requestId: string,
+    cancelReason?: string
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    error?: ApiError;
+  }> {
+    const res = await apiClient.post(`/loan-requests/${requestId}/cancel`, { cancelReason });
+    if (res.success) {
+      return {
+        success: true,
+        data: res.data,
+      };
+    }
+    return {
+      success: false,
+      error: res.error || {
+        code: 'LOAN_REQUEST_CANCEL_FAILED',
+        message: 'تعذر إلغاء طلب الاستعارة في الخادم المركزي.',
+      },
+    };
+  }
 }
 
 export const loanRequestRepository = new LoanRequestRepository();

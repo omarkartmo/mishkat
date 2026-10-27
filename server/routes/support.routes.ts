@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 import { supportAgentService } from '../services/supportAgentService';
 import { updaterService } from '../services/updaterService';
 import { serverConfig } from '../config';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 
 export const supportRouter = Router();
@@ -245,8 +245,8 @@ supportRouter.post('/test-connection', authenticateToken, requireRole('admin'), 
   }
 });
 
-// POST /api/v1/support/report-problem (Admin direct problem report with screenshot)
-supportRouter.post('/report-problem', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+// POST /api/v1/support/report-problem (Direct problem report with context from any platform screen)
+supportRouter.post('/report-problem', optionalAuth, async (req: Request, res: Response) => {
   try {
     const { problemDescription, screen, screenshot, diagnosticInfo } = req.body;
     if (!problemDescription || !problemDescription.trim()) {
@@ -256,19 +256,24 @@ supportRouter.post('/report-problem', authenticateToken, requireRole('admin'), a
       });
     }
 
+    const user = (req as any).user;
+    const userRole = user?.role || 'user';
+    const userName = user?.name || user?.username || 'anonymous';
+
     const reportId = await supportAgentService.enqueueOutboundReport({
-      sourceType: 'server',
-      clientDeviceId: 'SERVER-ADMIN',
-      userRole: 'admin',
-      component: screen || 'SystemSupportDashboard',
+      sourceType: userRole === 'admin' ? 'server' : 'client',
+      clientDeviceId: userRole === 'admin' ? 'SERVER-ADMIN' : `USER-${user?.id || 'STATION'}`,
+      userRole,
+      component: screen || 'GeneralPlatform',
       errorType: 'manual_report',
-      errorCode: 'ADMIN_REPORTED_PROBLEM',
+      errorCode: userRole === 'admin' ? 'ADMIN_REPORTED_PROBLEM' : 'USER_REPORTED_PROBLEM',
       severity: 'info',
       message: problemDescription.trim(),
       diagnosticContext: {
-        screen: screen || 'SystemSupportDashboard',
-        adminUser: (req as any).user?.name || (req as any).user?.username || 'admin',
-        adminId: (req as any).user?.id,
+        screen: screen || 'GeneralPlatform',
+        reportedBy: userName,
+        userRole,
+        userId: user?.id,
         screenshot: screenshot || null,
         ...(diagnosticInfo || {}),
       },

@@ -22,7 +22,10 @@ import {
   Sparkles,
   Inbox,
   PackageCheck,
+  Printer,
 } from 'lucide-react';
+import { printRequestRepository, DigitalPrintRequest } from '../../services/printRequestRepository';
+import { DigitalPrintPreviewModal } from './DigitalPrintPreviewModal';
 import {
   LoanRecord,
   PhysicalBook,
@@ -43,6 +46,7 @@ interface LoanManagerViewProps {
   onApproveLoanRequest?: (requestId: string, durationDays: number) => void;
   onRejectLoanRequest?: (requestId: string, reason: string) => void;
   onConfirmHandoverLoanRequest?: (requestId: string) => void;
+  onCancelLoanRequest?: (requestId: string, reason?: string) => Promise<void> | void;
   onCreateLoan: (params: {
     bookId: string;
     studentId: string;
@@ -75,6 +79,7 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
   onApproveLoanRequest,
   onRejectLoanRequest,
   onConfirmHandoverLoanRequest,
+  onCancelLoanRequest,
   onCreateLoan,
   onExtendLoan,
   onReturnBook,
@@ -86,13 +91,52 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
   const pendingRequestsCount = loanRequests.filter((r) => r.status === 'pending').length;
   const approvedRequestsCount = loanRequests.filter((r) => r.status === 'approved').length;
 
-  const [activeTab, setActiveTab] = useState<'requests' | 'loans'>(
+  const [activeTab, setActiveTab] = useState<'requests' | 'loans' | 'prints'>(
     pendingRequestsCount > 0 ? 'requests' : 'loans'
   );
-  const [requestsFilter, setRequestsFilter] = useState<'all' | 'pending' | 'approved' | 'handed_over' | 'rejected'>('all');
+  const [requestsFilter, setRequestsFilter] = useState<'all' | 'pending' | 'approved' | 'handed_over' | 'rejected' | 'cancelled'>('all');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [purposeFilter, setPurposeFilter] = useState<string>('all');
+
+  // Print Requests State (Digital Book Pages Printing)
+  const [printRequests, setPrintRequests] = useState<DigitalPrintRequest[]>([]);
+  const [printsFilter, setPrintsFilter] = useState<'all' | 'pending' | 'approved_printing' | 'ready_for_pickup' | 'completed' | 'rejected'>('all');
+  const [isUpdatingPrint, setIsUpdatingPrint] = useState(false);
+  const [previewingPrintRequest, setPreviewingPrintRequest] = useState<DigitalPrintRequest | null>(null);
+
+  const fetchPrintRequests = React.useCallback(async () => {
+    try {
+      const res = await printRequestRepository.getPrintRequests();
+      if (res.success && res.data) {
+        setPrintRequests(res.data);
+      }
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    fetchPrintRequests();
+  }, [fetchPrintRequests]);
+
+  const handleUpdatePrintStatus = async (id: string, status: any, adminNotes?: string) => {
+    try {
+      setIsUpdatingPrint(true);
+      const res = await printRequestRepository.updateStatus(id, status, adminNotes);
+      if (res.success) {
+        setPrintRequests((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, status, admin_notes: adminNotes !== undefined ? adminNotes : r.admin_notes } : r))
+        );
+      } else {
+        alert(res.error?.message || 'تعذر تحديث حالة طلب الطباعة.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'تعذر تحديث حالة طلب الطباعة.');
+    } finally {
+      setIsUpdatingPrint(false);
+    }
+  };
+
+  const pendingPrintsCount = printRequests.filter((r) => r.status === 'pending').length;
 
   // Modals & Approval state
   const [extendingLoan, setExtendingLoan] = useState<LoanRecord | null>(null);
@@ -123,6 +167,18 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
       req.studentName.toLowerCase().includes(search.toLowerCase()) ||
       req.studentRegNumber.toLowerCase().includes(search.toLowerCase()) ||
       req.purpose.toLowerCase().includes(search.toLowerCase());
+
+    return matchesStatus && matchesSearch;
+  });
+
+  // Filtered print requests
+  const filteredPrints = printRequests.filter((req) => {
+    const matchesStatus = printsFilter === 'all' || req.status === printsFilter;
+    const matchesSearch =
+      req.book_title.toLowerCase().includes(search.toLowerCase()) ||
+      req.student_name.toLowerCase().includes(search.toLowerCase()) ||
+      (req.student_reg_number || '').toLowerCase().includes(search.toLowerCase()) ||
+      (req.purpose || '').toLowerCase().includes(search.toLowerCase());
 
     return matchesStatus && matchesSearch;
   });
@@ -197,6 +253,23 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
             </span>
           )}
         </button>
+
+        <button
+          onClick={() => setActiveTab('prints')}
+          className={`flex items-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'prints'
+              ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+          }`}
+        >
+          <Printer className="w-4 h-4 shrink-0 text-amber-400" />
+          <span>طلبات طباعة الكتب الرقمية ({printRequests.length})</span>
+          {pendingPrintsCount > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500 text-slate-950 font-black animate-pulse">
+              {pendingPrintsCount} جديد
+            </span>
+          )}
+        </button>
       </div>
 
       {/* SUB-VIEW 1: LOAN REQUESTS QUEUE */}
@@ -247,6 +320,16 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
               >
                 تم التسليم وخروج الكتاب
               </button>
+              <button
+                onClick={() => setRequestsFilter('cancelled')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                  requestsFilter === 'cancelled'
+                    ? 'bg-slate-700 text-white font-bold'
+                    : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                الملغاة
+              </button>
             </div>
 
             <div className="relative w-full sm:w-64">
@@ -292,12 +375,15 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                                 : req.status === 'handed_over'
                                 ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+                                : req.status === 'cancelled'
+                                ? 'bg-slate-500/10 text-slate-400 border-slate-500/30'
                                 : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                             }`}
                           >
                             {req.status === 'pending' && 'قيد مراجعة أمين المكتبة'}
                             {req.status === 'approved' && 'تمت الموافقة - بانتظار استلام الكتاب من الرف'}
                             {req.status === 'handed_over' && 'تم تأكيد خروج الكتاب وتسليمه للطالب'}
+                            {req.status === 'cancelled' && 'طلب ملغى'}
                             {req.status === 'rejected' && 'طلب مرفوض'}
                           </span>
                           <span className="text-[10px] text-slate-500 font-mono">
@@ -381,9 +467,21 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                     </div>
 
                     {/* Actions based on status */}
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-end gap-2">
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-end gap-2 flex-wrap">
                       {req.status === 'pending' && (
                         <>
+                          <button
+                            onClick={async () => {
+                              const reason = window.prompt('سبب إلغاء الطلب (اختياري):', 'ألغي من قبل إدارة المكتبة');
+                              if (reason !== null && onCancelLoanRequest) {
+                                await onCancelLoanRequest(req.id, reason || 'ألغي من قبل إدارة المكتبة');
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                          >
+                            إلغاء الطلب
+                          </button>
+
                           <button
                             onClick={() => {
                               setRejectingRequest(req);
@@ -414,23 +512,45 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
                       )}
 
                       {req.status === 'approved' && (
-                        <button
-                          onClick={() => {
-                            if (onConfirmHandoverLoanRequest) {
-                              onConfirmHandoverLoanRequest(req.id);
-                            }
-                          }}
-                          className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
-                        >
-                          <PackageCheck className="w-4 h-4" />
-                          <span>تأكيد خروج الكتاب وتسليمه للطالب (تحديث الفهرس)</span>
-                        </button>
+                        <div className="w-full flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              if (onConfirmHandoverLoanRequest) {
+                                onConfirmHandoverLoanRequest(req.id);
+                              }
+                            }}
+                            className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                          >
+                            <PackageCheck className="w-4 h-4" />
+                            <span>تأكيد خروج الكتاب وتسليمه للطالب (تحديث الفهرس)</span>
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              const reason = window.prompt('سبب إلغاء الطلب المعتمد قبل التسليم (اختياري):', 'ألغي قبل الاستلام');
+                              if (reason !== null && onCancelLoanRequest) {
+                                await onCancelLoanRequest(req.id, reason || 'ألغي قبل الاستلام');
+                              }
+                            }}
+                            className="px-3 py-2 bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                            title="إلغاء الطلب المعتمد"
+                          >
+                            إلغاء الطلب
+                          </button>
+                        </div>
                       )}
 
                       {req.status === 'handed_over' && (
                         <span className="text-xs text-emerald-400 flex items-center gap-1">
                           <CheckCircle2 className="w-4 h-4" />
                           <span>الكتاب بحوزة الطالب ومسجل في الإعارات النشطة</span>
+                        </span>
+                      )}
+
+                      {req.status === 'cancelled' && (
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <X className="w-4 h-4 text-slate-500" />
+                          <span>تم إلغاء الطلب: {req.rejectionReason || 'ألغي من قبل الطالب أو الإدارة'}</span>
                         </span>
                       )}
 
@@ -716,6 +836,262 @@ export const LoanManagerView: React.FC<LoanManagerViewProps> = ({
         </div>
       )}
         </div>
+      )}
+
+      {/* SUB-VIEW 3: DIGITAL BOOK PRINT REQUESTS QUEUE */}
+      {activeTab === 'prints' && (
+        <div className="space-y-4">
+          {/* Status Filter & Search */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto text-xs no-scrollbar">
+              <button
+                onClick={() => setPrintsFilter('all')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                  printsFilter === 'all'
+                    ? 'bg-amber-600 text-white font-bold'
+                    : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                الكل ({printRequests.length})
+              </button>
+              <button
+                onClick={() => setPrintsFilter('pending')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                  printsFilter === 'pending'
+                    ? 'bg-amber-600 text-white font-bold'
+                    : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>قيد المراجعة</span>
+                {pendingPrintsCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-slate-950 font-bold">
+                    {pendingPrintsCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setPrintsFilter('approved_printing')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                  printsFilter === 'approved_printing'
+                    ? 'bg-sky-600 text-white font-bold'
+                    : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                قيد الطباعة
+              </button>
+              <button
+                onClick={() => setPrintsFilter('ready_for_pickup')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                  printsFilter === 'ready_for_pickup'
+                    ? 'bg-emerald-600 text-white font-bold'
+                    : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                جاهز للاستلام
+              </button>
+              <button
+                onClick={() => setPrintsFilter('completed')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                  printsFilter === 'completed'
+                    ? 'bg-slate-700 text-white font-bold'
+                    : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                تم التسليم
+              </button>
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="بحث بالطالب أو عنوان الكتاب..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-9 pl-3 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-500"
+              />
+            </div>
+          </div>
+
+          {/* Prints List */}
+          {filteredPrints.length === 0 ? (
+            <div className="text-center py-16 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-2">
+              <Printer className="w-12 h-12 text-slate-600 mx-auto" />
+              <h3 className="text-base font-bold text-slate-300">لا توجد طلبات طباعة مطابقة</h3>
+              <p className="text-xs text-slate-500">
+                عندما يطلب الطلبة طباعة صفحات من الكتب الرقمية ستظهر هنا لمعاينتها وتنفيذ الطباعة
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredPrints.map((req) => (
+                <div
+                  key={req.id}
+                  className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 space-y-4 shadow-md transition-all flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span
+                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                            req.status === 'pending'
+                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse'
+                              : req.status === 'approved_printing'
+                              ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+                              : req.status === 'ready_for_pickup'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                              : req.status === 'completed'
+                              ? 'bg-slate-800 text-slate-400 border-slate-700'
+                              : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                          }`}
+                        >
+                          {req.status === 'pending' && 'قيد مراجعة أمين المكتبة ⏳'}
+                          {req.status === 'approved_printing' && 'قيد الطباعة 🖨️'}
+                          {req.status === 'ready_for_pickup' && 'جاهز للاستلام بالمكتبة ✓'}
+                          {req.status === 'completed' && 'تم التسليم للطالب'}
+                          {req.status === 'rejected' && 'مرفوض ✕'}
+                        </span>
+                        <h4 className="font-bold text-sm text-slate-100 mt-2">{req.book_title}</h4>
+                      </div>
+
+                      <div className="text-left shrink-0">
+                        <span className="px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 font-mono text-xs font-bold block">
+                          ص {req.page_from} - {req.page_to}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          ({req.total_pages} صفحة)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Student Info */}
+                    <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 text-xs space-y-1">
+                      <div className="flex items-center justify-between text-slate-300">
+                        <span className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-sky-400" />
+                          <span>الطالب: <strong className="text-white">{req.student_name}</strong></span>
+                        </span>
+                        {req.student_reg_number && (
+                          <span className="font-mono text-slate-400 text-[11px]">{req.student_reg_number}</span>
+                        )}
+                      </div>
+                      <div className="text-slate-400 text-[11px] flex items-center justify-between pt-1 border-t border-slate-900">
+                        <span>الغرض: {req.purpose || 'بحث صفي'}</span>
+                        <span className="font-mono">{new Date(req.created_at).toLocaleDateString('ar-EG')}</span>
+                      </div>
+                      {req.notes && (
+                        <div className="text-amber-300/80 text-[11px] italic pt-1">
+                          ملاحظة الطالب: {req.notes}
+                        </div>
+                      )}
+                      {req.admin_notes && (
+                        <div className="text-sky-300/80 text-[11px] pt-1">
+                          ملاحظة المكتبة: {req.admin_notes}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-end gap-2">
+                    {req.status === 'pending' && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={isUpdatingPrint}
+                          onClick={() => handleUpdatePrintStatus(req.id, 'rejected', 'عذراً، تعذر تنفيذ الطباعة')}
+                          className="px-3 py-1.5 rounded-xl text-xs text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 transition-colors cursor-pointer"
+                        >
+                          رفض
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isUpdatingPrint}
+                          onClick={() => setPreviewingPrintRequest(req)}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white transition-colors cursor-pointer flex items-center gap-1.5 shadow-md hover:shadow-sky-500/20"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>معاينة وطباعة 🖨️</span>
+                        </button>
+                      </>
+                    )}
+
+                    {req.status === 'approved_printing' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewingPrintRequest(req)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-sky-400" />
+                          <span>معاينة / طباعة</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isUpdatingPrint}
+                          onClick={() => handleUpdatePrintStatus(req.id, 'ready_for_pickup')}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>جاهز للاستلام بالمكتبة</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {req.status === 'ready_for_pickup' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewingPrintRequest(req)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-sky-400" />
+                          <span>معاينة / طباعة</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isUpdatingPrint}
+                          onClick={() => handleUpdatePrintStatus(req.id, 'completed')}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <PackageCheck className="w-3.5 h-3.5" />
+                          <span>تم تسليم الأوراق للطالب</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {req.status === 'completed' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewingPrintRequest(req)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-sky-400" />
+                          <span>معاينة / إعادة طباعة</span>
+                        </button>
+                        <span className="text-[11px] text-emerald-400 font-semibold">
+                          تمت الطباعة والتسليم بنجاح ✓
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Digital Book Print Preview & Execution Modal */}
+      {previewingPrintRequest && (
+        <DigitalPrintPreviewModal
+          isOpen={!!previewingPrintRequest}
+          request={previewingPrintRequest}
+          onClose={() => setPreviewingPrintRequest(null)}
+          onStatusUpdated={handleUpdatePrintStatus}
+        />
       )}
 
       {/* New Loan Modal */}

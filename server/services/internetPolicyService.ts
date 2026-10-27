@@ -1,3 +1,6 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { db } from '../db/pool';
 import crypto from 'crypto';
 import { exec } from 'child_process';
@@ -233,21 +236,33 @@ export class InternetPolicyService {
       const mode = modeOverride !== undefined ? modeOverride : await this.getPolicyMode();
 
       const executePowerShell = async (psScript: string) => {
-        const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
-        return execPromise(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`);
+        const tempPs1 = path.join(os.tmpdir(), `mishkat_proxy_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.ps1`);
+        fs.writeFileSync(tempPs1, psScript, 'utf8');
+        try {
+          return await execPromise(`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tempPs1}"`);
+        } finally {
+          try { fs.unlinkSync(tempPs1); } catch {}
+        }
       };
 
       // If Server is excluded, or if Policy is OPEN: clear AutoConfigURL so admin has full direct internet
       if (excludeServer || mode === 'OPEN') {
         const clearScript = `
 $ErrorActionPreference = 'SilentlyContinue'
-# Remove machine-wide Group Policy proxy (clears for ALL user accounts)
-$policyPath = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
-Remove-ItemProperty -Path $policyPath -Name AutoConfigUrl -ErrorAction SilentlyContinue 2>$null
 
-# Legacy cleanup: remove any HKCU entries left from previous versions
-Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -ErrorAction SilentlyContinue 2>$null
-Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
+# 1. Remove machine-wide Group Policy proxy (HKLM)
+$policyPath = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+Remove-ItemProperty -Path $policyPath -Name AutoConfigUrl -Force -ErrorAction SilentlyContinue 2>$null
+
+# 2. Remove Current User Session proxy (HKCU)
+$userPath = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+Remove-ItemProperty -Path $userPath -Name AutoConfigURL -Force -ErrorAction SilentlyContinue 2>$null
+Set-ItemProperty -Path $userPath -Name ProxyEnable -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
+
+# 3. Flush DNS immediately
+ipconfig /flushdns 2>$null | Out-Null
+
+# 4. Notify WinINet (Options 39 and 37) so currently open browsers remove proxy instantly
 try {
   $sig = @'
   [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
@@ -269,28 +284,39 @@ try {
         const pacUrl = `http://127.0.0.1:${port}/api/v1/internet-policy/proxy.pac?v=${Date.now()}`;
         const setScript = `
 $ErrorActionPreference = 'SilentlyContinue'
-# Machine-wide Group Policy proxy (applies to ALL user accounts on this machine)
-# This works correctly when running as Windows Service (LocalSystem) — unlike HKCU which only affects the service account
+
+# 1. Set Machine-wide Group Policy proxy (HKLM - for all users and background services)
 $policyPath = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
 New-Item -Path $policyPath -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
-Set-ItemProperty -Path $policyPath -Name AutoConfigUrl -Value '${pacUrl}' -Type String -ErrorAction SilentlyContinue 2>$null
+Set-ItemProperty -Path $policyPath -Name AutoConfigUrl -Value '${pacUrl}' -Type String -Force -ErrorAction SilentlyContinue 2>$null
 
-# Legacy cleanup: remove any HKCU entries left from previous versions
-Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name AutoConfigURL -ErrorAction SilentlyContinue 2>$null
-Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
+# 2. Set Current User Session proxy (HKCU - guarantees user session browsers and Windows Settings apply PAC immediately)
+$userPath = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+New-Item -Path $userPath -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+Set-ItemProperty -Path $userPath -Name AutoConfigURL -Value '${pacUrl}' -Type String -Force -ErrorAction SilentlyContinue 2>$null
+Set-ItemProperty -Path $userPath -Name ProxyEnable -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
 
-# Enforce disabling QUIC in Chrome & Edge via HKLM machine policy so traffic cannot bypass PAC via UDP 443
+# 3. Disable QUIC in Chrome & Edge via machine policy & user policy so traffic cannot bypass PAC via UDP 443
 try {
   New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Google\\Chrome' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
-  Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
+  Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
   New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
-  Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -ErrorAction SilentlyContinue 2>$null
+  Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
+
+  New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome' -Name 'QuicAllowed' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
+  New-Item -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Force -ErrorAction SilentlyContinue 2>$null | Out-Null
+  Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Microsoft\\Edge' -Name 'QuicAllowed' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue 2>$null
 } catch {}
 
 try {
   netsh advfirewall firewall add rule name="MISHKAT Block QUIC (UDP 443)" dir=out action=block protocol=UDP remoteport=443 2>&1 | Out-Null
 } catch {}
 
+# 4. Flush DNS immediately
+ipconfig /flushdns 2>$null | Out-Null
+
+# 5. Notify WinINet (Options 39 and 37) so currently open browsers apply new proxy settings instantly
 try {
   $sig = @'
   [DllImport("wininet.dll", SetLastError = true, CharSet=CharSet.Auto)]
@@ -320,9 +346,9 @@ try {
       return { configured: false, autoConfigUrl: null };
     }
     try {
-      // Check HKLM Group Policy path first (machine-wide, takes precedence), then fall back to HKCU (legacy)
+      // Check HKCU (current user session) and HKLM Group Policy path
       const { stdout } = await execPromise(
-        'powershell -NoProfile -NonInteractive -Command "$v = (Get-ItemProperty -Path \'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\' -ErrorAction SilentlyContinue).AutoConfigUrl; if (-not $v) { $v = (Get-ItemProperty -Path \'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\' -ErrorAction SilentlyContinue).AutoConfigURL }; if ($v) { Write-Output $v }"'
+        'powershell -NoProfile -NonInteractive -Command "$v = (Get-ItemProperty -Path \'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\' -ErrorAction SilentlyContinue).AutoConfigURL; if (-not $v) { $v = (Get-ItemProperty -Path \'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\' -ErrorAction SilentlyContinue).AutoConfigUrl }; if ($v) { Write-Output $v }"'
       );
       const url = (stdout || '').trim();
       return { configured: !!url, autoConfigUrl: url || null };

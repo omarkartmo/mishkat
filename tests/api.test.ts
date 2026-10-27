@@ -245,6 +245,38 @@ describe('3. Student Isolation & IDOR Protection', () => {
     expect(studentBBookIds).not.toContain(testBookId);
   });
 
+  it('should accept reading progress with composite IDs exceeding 50 chars without length overflow error', async () => {
+    const longBookId = `book-long-id-for-testing-reading-prog-${Date.now().toString(36)}`;
+    const createBookRes = await request(app)
+      .post('/api/v1/books')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        id: longBookId,
+        type: 'digital',
+        title: 'كتاب تجريبي لاختبار معرّف القراءة الطويل',
+        author: 'مؤلف تجريبي معتمد',
+        categoryId: 'cat-islamic',
+        format: 'pdf',
+      });
+    expect(createBookRes.status).toBe(201);
+    const createdBookId = createBookRes.body.data.id;
+
+    const res = await request(app)
+      .post('/api/v1/reading-progress')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        bookId: createdBookId,
+        currentPage: 50,
+        totalPages: 200,
+        percentage: 25,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.bookId).toBe(createdBookId);
+    expect(res.body.data.id.length).toBeGreaterThan(50);
+  });
+
   it('should isolate favorites per student in GET /favorites', async () => {
     const favRes = await request(app)
       .post('/api/v1/favorites/toggle')

@@ -171,7 +171,7 @@ router.post('/:id/approve', authenticateToken, requireRole('admin', 'librarian')
     await db.query(`
       INSERT INTO notifications (
         id, recipient_id, recipient_role, title, message, type, target_tab, target_entity_id, is_read, created_at
-      ) VALUES ($1, $2, 'student', $3, $4, 'loan_request_approved', 'student_portal', $5, false, $6)
+      ) VALUES ($1, $2, 'student', $3, $4, 'loan_request_approved', 'loans', $5, false, $6)
     `, [
       `notif-${Date.now()}`,
       reqRecord.student_id,
@@ -223,6 +223,85 @@ router.post('/:id/reject', authenticateToken, requireRole('admin', 'librarian'),
     await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'REJECT_LOAN_REQUEST', 'loan_request', id, { rejectionReason }, req);
 
     res.json({ success: true, data: { message: 'تم رفض طلب الاستعارة وإشعار الطالب.' } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// POST /api/v1/loan-requests/:id/cancel (Student cancels their request, or Admin cancels directly)
+router.post('/:id/cancel', authenticateToken, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { cancelReason } = req.body || {};
+
+  try {
+    const { rows: existing } = await db.query('SELECT * FROM loan_requests WHERE id = $1', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'طلب الاستعارة غير موجود.' } });
+    }
+    const r = existing[0];
+
+    const isOwner = req.user!.role === 'student' && r.student_id === req.user!.id;
+    const isStaff = req.user!.role === 'admin' || req.user!.role === 'librarian';
+
+    if (!isOwner && !isStaff) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'ليس لديك صلاحية لإلغاء هذا الطلب.' } });
+    }
+
+    if (r.status === 'handed_over') {
+      return res.status(400).json({ success: false, error: { code: 'CANNOT_CANCEL', message: 'لا يمكن إلغاء طلب تم تسليم الكتاب فيه بالفعل.' } });
+    }
+
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    const finalReason = cancelReason || (isOwner ? 'تم إلغاء الطلب من قبل الطالب' : 'تم إلغاء الطلب من قبل إدارة المكتبة');
+
+    await db.query(`
+      UPDATE loan_requests
+      SET status = 'cancelled',
+          rejection_reason = $1
+      WHERE id = $2
+    `, [finalReason, id]);
+
+    // Send notifications
+    if (isOwner) {
+      // Notify staff
+      await db.query(`
+        INSERT INTO notifications (
+          id, recipient_id, recipient_role, title, message, type, target_tab, target_entity_id, is_read, created_at
+        ) VALUES ($1, 'admin', 'admin', $2, $3, 'loan_request_cancelled', 'loans', $4, false, $5)
+      `, [
+        `notif-${Date.now()}`,
+        'إلغاء طلب استعارة',
+        `قام الطالب ${r.student_name} بإلغاء طلب استعارة كتاب "${r.book_title}".`,
+        id,
+        nowStr,
+      ]);
+    } else {
+      // Notify student
+      await db.query(`
+        INSERT INTO notifications (
+          id, recipient_id, recipient_role, title, message, type, target_tab, target_entity_id, is_read, created_at
+        ) VALUES ($1, $2, 'student', $3, $4, 'loan_request_cancelled', 'loans', $5, false, $6)
+      `, [
+        `notif-${Date.now()}`,
+        r.student_id,
+        'إلغاء طلب الاستعارة',
+        `تم إلغاء طلب استعارة كتاب "${r.book_title}". ${cancelReason ? `السبب: ${cancelReason}` : ''}`,
+        id,
+        nowStr,
+      ]);
+    }
+
+    await recordAuditLog(req.user!.id, req.user!.name, req.user!.role, 'CANCEL_LOAN_REQUEST', 'loan_request', id, { cancelReason: finalReason }, req);
+
+    res.json({
+      success: true,
+      data: {
+        id,
+        status: 'cancelled',
+        rejection_reason: finalReason,
+        message: 'تم إلغاء طلب الاستعارة بنجاح.',
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
   }
