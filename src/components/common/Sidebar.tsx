@@ -252,7 +252,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="space-y-1">
                 <NavItem
                   icon={<ArrowLeftRight className="w-4 h-4 text-indigo-500" />}
-                  label="تسيير الإعارات والتمديد"
+                  label="تسيير الإعارات والتمديد والطباعة"
                   active={activeTab === 'loans'}
                   onClick={() => onSelectTab('loans')}
                   isCollapsed={isCollapsed}

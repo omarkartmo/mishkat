@@ -22,8 +22,6 @@ import {
   ArrowRight,
   Bookmark,
   Printer,
-  Copy,
-  Check,
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -122,14 +120,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const lastWheelTransitionRef = useRef<number>(0);
   const accumulatedWheelDeltaRef = useRef<number>(0);
 
-  const textLayerRef = useRef<HTMLDivElement | null>(null);
   const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [selectedTextPopup, setSelectedTextPopup] = useState<{
-    text: string;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [isCopied, setIsCopied] = useState(false);
 
   // Touchpad pinch-to-zoom, Ctrl+Wheel zoom, and Continuous Vertical Scroll Down/Up between pages
   useEffect(() => {
@@ -257,7 +248,6 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
   // Note creation form state
   const [newNoteContent, setNewNoteContent] = useState('');
-  const [selectedQuote, setSelectedQuote] = useState('');
 
   // Load digital book file securely from canonical MISHKAT API
   const loadBook = useCallback(async () => {
@@ -497,18 +487,6 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           }
         });
 
-        // Enable quoting selected text in EPUB mode
-        rendition.on('selected', (cfiRange: string) => {
-          try {
-            rendition.getRange(cfiRange).then((range: Range) => {
-              const text = range?.toString()?.trim();
-              if (text && text.length >= 2) {
-                setSelectedQuote(text);
-                setShowNotes(true);
-              }
-            });
-          } catch {}
-        });
       } catch (e) {
         console.error('[BookReaderModal] EPUB render error:', e);
       }
@@ -567,28 +545,6 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
     const cacheKey = `${targetPage}_${scale}`;
 
-    // Helper to render text layer for selection
-    const updateTextLayer = async (page: any, viewport: any) => {
-      if (!textLayerRef.current) return;
-      try {
-        const textLayerDiv = textLayerRef.current;
-        textLayerDiv.innerHTML = '';
-        textLayerDiv.style.width = `${viewport.width}px`;
-        textLayerDiv.style.height = `${viewport.height}px`;
-        const textContent = await page.getTextContent();
-        const textLayer = new pdfjsLib.TextLayer({
-          textContentSource: textContent,
-          container: textLayerDiv,
-          viewport: viewport,
-        });
-        await textLayer.render();
-      } catch (err: any) {
-        if (err?.name !== 'RenderingCancelledException') {
-          console.warn('[BookReaderModal] TextLayer render error:', err);
-        }
-      }
-    };
-
     // 1. Instant Cache Hit: Blit pre-rendered canvas in 1-2ms without any blink!
     if (renderedCanvasCacheRef.current.has(cacheKey)) {
       const cached = renderedCanvasCacheRef.current.get(cacheKey)!;
@@ -601,15 +557,6 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         }
         context.drawImage(cached, 0, 0);
       }
-
-      // Update text layer for selection
-      let page = pageCacheRef.current.get(targetPage);
-      if (!page) {
-        page = await pdfDoc.getPage(targetPage);
-        pageCacheRef.current.set(targetPage, page);
-      }
-      const viewport = page.getViewport({ scale });
-      updateTextLayer(page, viewport);
 
       // Pre-fetch adjacent pages in background while user reads
       if (targetPage + 1 <= numPages) prefetchRenderPage(targetPage + 1);
@@ -671,9 +618,6 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
         }
       }
 
-      // Render TextLayer for text selection and quotes
-      await updateTextLayer(page, viewport);
-
       // Save rendered canvas copy to cache for instant backward/forward re-visitation
       try {
         if (renderedCanvasCacheRef.current.size >= 12) {
@@ -703,65 +647,6 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       }
     }
   }, [pdfDoc, scale, numPages, prefetchRenderPage]);
-
-  // Global mouseup & selection handler for text quote popup in reader
-  useEffect(() => {
-    const handleMouseUp = () => {
-      setTimeout(() => {
-        const selection = window.getSelection();
-        const text = selection?.toString()?.trim();
-        if (text && text.length >= 2) {
-          const range = selection?.getRangeAt(0);
-          if (range) {
-            const rect = range.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-              setSelectedTextPopup({
-                text,
-                x: rect.left + rect.width / 2,
-                y: Math.max(20, rect.top - 12),
-              });
-              return;
-            }
-          }
-        }
-        setSelectedTextPopup(null);
-      }, 30);
-    };
-
-    const handleSelectionChange = () => {
-      const selection = window.getSelection();
-      if (!selection || !selection.toString().trim()) {
-        setSelectedTextPopup(null);
-      }
-    };
-
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('selectionchange', handleSelectionChange);
-    return () => {
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('selectionchange', handleSelectionChange);
-    };
-  }, []);
-
-  const handleQuoteSelectedText = () => {
-    if (!selectedTextPopup?.text) return;
-    setSelectedQuote(selectedTextPopup.text);
-    setShowNotes(true);
-    setSelectedTextPopup(null);
-    setTimeout(() => {
-      noteTextareaRef.current?.focus();
-    }, 150);
-  };
-
-  const handleCopySelectedText = () => {
-    if (!selectedTextPopup?.text) return;
-    navigator.clipboard.writeText(selectedTextPopup.text);
-    setIsCopied(true);
-    setTimeout(() => {
-      setIsCopied(false);
-      setSelectedTextPopup(null);
-    }, 1200);
-  };
 
   // Touch navigation handlers for phones (RTL horizontal swipe & 2-finger pinch zoom)
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -908,12 +793,10 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
       bookTitle: book.title,
       pageNumber: currentPage,
       chapter: epubCurrentChapter || undefined,
-      quote: selectedQuote.trim() || undefined,
       content: newNoteContent.trim(),
     });
 
     setNewNoteContent('');
-    setSelectedQuote('');
   };
 
   const bookNotes = notes.filter((n) => n.bookId === book.id);
@@ -1165,13 +1048,6 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
               <span className="text-slate-300 font-semibold block text-[11px]">
                 تدوين ملاحظة في (صفحة {currentPage}):
               </span>
-              <input
-                type="text"
-                value={selectedQuote}
-                onChange={(e) => setSelectedQuote(e.target.value)}
-                placeholder="اقتباس نصي من الصفحة (اختياري)..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500 text-xs"
-              />
               <textarea
                 ref={noteTextareaRef}
                 rows={3}
@@ -1231,7 +1107,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          className="flex-1 overflow-auto flex flex-col items-center justify-start p-2 sm:p-6 bg-slate-950 select-text relative touch-pan-y"
+          className="flex-1 overflow-auto flex flex-col items-center justify-start p-2 sm:p-6 bg-slate-950 select-none relative touch-pan-y"
         >
           {isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400 py-20">
@@ -1275,7 +1151,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
             /* Real PDF.js HTML5 Canvas Renderer (Section 12) */
             <div
               dir="ltr"
-              className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white my-auto shrink-0 transition-all duration-150 select-text"
+              className="relative flex flex-col items-center shadow-2xl rounded-lg overflow-hidden bg-white my-auto shrink-0 transition-all duration-150 select-none"
               style={{
                 direction: 'ltr',
                 textAlign: 'left',
@@ -1301,59 +1177,10 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
                   maxWidth: isMobile ? 'none' : '100%',
                 }}
               />
-              {/* Selectable Text Layer overlay for highlighting & quoting */}
-              <div
-                ref={textLayerRef}
-                className="textLayer absolute inset-0 select-text cursor-text z-10"
-                style={{
-                  direction: 'ltr',
-                  textAlign: 'left',
-                }}
-              />
             </div>
           )}
         </div>
       </div>
-
-      {/* Floating Selection Quote Tooltip */}
-      {selectedTextPopup && (
-        <div
-          style={{
-            position: 'fixed',
-            left: `${selectedTextPopup.x}px`,
-            top: `${selectedTextPopup.y}px`,
-            transform: 'translate(-50%, -100%)',
-            zIndex: 100,
-          }}
-          className="bg-slate-900/95 border border-indigo-500/50 shadow-2xl rounded-2xl px-2.5 py-1.5 flex items-center gap-2 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
-        >
-          <button
-            type="button"
-            onClick={handleQuoteSelectedText}
-            className="px-2.5 py-1 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 transition-all shadow-md cursor-pointer select-none"
-          >
-            <MessageSquarePlus className="w-3.5 h-3.5" />
-            <span>اقتباس في الملاحظات</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleCopySelectedText}
-            className="px-2 py-1 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors cursor-pointer flex items-center gap-1 select-none"
-          >
-            {isCopied ? (
-              <>
-                <Check className="w-3 h-3 text-emerald-400" />
-                <span className="text-emerald-400">تم النسخ</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3 h-3 text-slate-400" />
-                <span>نسخ</span>
-              </>
-            )}
-          </button>
-        </div>
-      )}
 
       {/* Student Digital Book Print Request Modal */}
       <StudentPrintRequestModal
